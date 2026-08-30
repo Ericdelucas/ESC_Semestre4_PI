@@ -1,0 +1,193 @@
+{
+  "main": {
+    "id": "b1588ee25c89c4a2",
+    "type": "split",
+    "children": [
+      {
+        "id": "f46d3f6b0d01dfb5",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "6656069af4ee68e8",
+            "type": "leaf",
+            "state": {
+              "type": "pdf",
+              "state": {
+                "file": "templeit_PI/PI_4CCOMP_202602_CTI_Ciencia_de_Dados_v3-1.pdf"
+              },
+              "icon": "lucide-file-text",
+              "title": "PI_4CCOMP_202602_CTI_Ciencia_de_Dados_v3-1"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "4495d51aabbafe1a",
+    "type": "split",
+    "children": [
+      {
+        "id": "0f6896aeda8b495c",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "b92d55ee0c230e02",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Explorador de arquivos"
+            }
+          },
+          {
+            "id": "4f3a405fa46ad010",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Procurar"
+            }
+          },
+          {
+            "id": "bdfbc3d29e687698",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-bookmark",
+              "title": "Marcadores"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "e6a9213997d8c5ed",
+    "type": "split",
+    "children": [
+      {
+        "id": "3657db61c184f4cf",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "996e9934883af1bf",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "templeit_PI/PI_4CCOMP_202602_CTI_Ciencia_de_Dados_v3-1.pdf",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Links inversos"
+            }
+          },
+          {
+            "id": "a2bc9db7c55ff94e",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "templeit_PI/PI_4CCOMP_202602_CTI_Ciencia_de_Dados_v3-1.pdf",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Links de saída"
+            }
+          },
+          {
+            "id": "88b8fe9478d942e9",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Etiquetas"
+            }
+          },
+          {
+            "id": "624776358c23e031",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "Todas as propriedades"
+            }
+          },
+          {
+            "id": "d61cfbd985fd28ac",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "templeit_PI/PI_4CCOMP_202602_CTI_Ciencia_de_Dados_v3-1.pdf",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Sumário"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Abrir a troca rápida": false,
+      "graph:Abrir visualização em gráfico": false,
+      "canvas:Criar novo canvas": false,
+      "daily-notes:Abrir a nota de hoje": false,
+      "templates:Inserir modelo": false,
+      "command-palette:Abrir paleta de comandos": false,
+      "bases:Criar nova base": false
+    }
+  },
+  "active": "6656069af4ee68e8",
+  "lastOpenFiles": [
+    "Oque_fazer/00_O_que_fazer.md"
+  ]
+}
