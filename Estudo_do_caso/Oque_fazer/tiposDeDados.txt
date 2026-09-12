@@ -1,0 +1,74 @@
+BP (Balanço Patrimonial)
+BAL - Amortização - Intangível
+BAL - Amortização Acumulada
+BAL - At Fiscal Diferido
+BAL - Ativo Circulante
+BAL - Capital Social
+BAL - Contas a Pagar - Parte Relacionada
+BAL - Contas a Receber - Clientes
+BAL - Contas a Receber - Partes Relacionadas
+BAL - Contas a Receber - SWAP
+BAL - Créditos Tributários
+BAL - Depreciação Acumulada
+BAL - Diferido
+BAL - Disponível
+BAL - Dividendos Antecipados
+BAL - Emprést
+BAL - Empréstimos
+BAL - Encargos Sociais e Trabalhistas
+BAL - Estoques Diversos
+BAL - Exigível a Longo Prazo
+BAL - Fornecedores
+BAL - Impostos
+BAL - Investimentos - Imobilizado
+BAL - Investimentos - Intangível
+BAL - Obrigações com o Poder Concedente
+BAL - Outorga da Concessão
+BAL - Outros Créditos
+BAL - Outros Créditos LP
+BAL - Outros Débitos
+BAL - Outros deb
+BAL - Passivo Circulante
+BAL - Patrimônio Líquido
+BAL - Permanente
+BAL - Prov para Contingências
+BAL - Provisão Manutenção
+BAL - Realizável a Longo Prazo
+BAL - Reserva de Retenção de Lucros
+BAL - Reservas Legais
+BAL - Reservas de Capital
+BAL - Resultado Acumulado
+BAL - Resultado do Período
+BAL - Total do Ativo
+BAL - Total do Passivo
+BAL - Tributos a pagar
+
+DRE (Demonstração do Resultado)
+DRE - Custos
+DRE - Depreciação e Amortização
+DRE - Despesas Financeiras
+DRE - EBITDA
+DRE - Imposto de Renda e Contribuição Social
+DRE - Outros Resultados Operacionais
+DRE - Receita
+DRE - Receitas Financeiras
+DRE - Resultado Antes do Imposto de Renda
+DRE - Resultado Financeiro
+DRE - Resultado Líquido
+DRE - Resultado Líquido após Equivalência
+DRE - Resultado Operacional
+DRE - Tributos
+
+DFC (Demonstração dos Fluxos de Caixa)
+FLU - Custos
+FLU - Despesas Financeiras
+FLU - Distribuição para Acionista
+FLU - Entradas
+FLU - Geração de Caixa
+FLU - Imposto de Renda e Contribuição Social
+FLU - Investimentos
+FLU - Receita
+FLU - Resultado Financeiro
+FLU - Saldo Final
+FLU - Saldo Inicial
+FLU - Tributos
