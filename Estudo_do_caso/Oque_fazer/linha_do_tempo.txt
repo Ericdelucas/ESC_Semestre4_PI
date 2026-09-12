@@ -1,0 +1,129 @@
+Bal- total do ativo + total do passivo
+
+ 
+
+1-Monta bal e os DRE e fluxo caixa de todos os cenário e anos
+
+ 
+
+2-Pegue os índices de liquides e EBITIDA e EVA e analise
+
+ 
+
+3- Ranking dos cenários (top 10 ) liquidez e endividamento (melhores
+
+anos e piores indices )
+
+ 
+
+ 
+
+Demonstrativos
+
+Índices com demonstrativos
+
+Ranking dos cenários
+
+Categorizaar com margem alta
+
+EBITIDA  EVA
+
+ 
+
+Alta rentabilidade, e alta liquidez, e baixa liquidez(indices),
+
+retorno moderado(EVA, EBITIDA), baixo risco(endividamento), alto risco
+
+
+
+oq dá para fazer com esses dados?
+
+faz uma linha do tempo e como faz essas coisas q o professor pediu 
+
+Para atender às solicitações do professor, os dados brutos de cada cenário devem ser convertidos em demonstrativos financeiros integrados (BP, DRE e DFC), seguidos do cálculo das métricas de geração de valor (EBITDA, EVA e liquidez) para ranquear e classificar os cenários por perfil de risco e retorno.
+
+O Que Pode Ser Extraído dos Dados
+
+Viabilidade Financeira e Solvência: Verificação de quais cenários mantêm liquidez suficiente para cobrir os compromissos de curto e longo prazo.
+
+Criação Real de Valor (EVA): Identificação dos cenários em que o retorno operacional supera o custo do capital investido.
+
+Eficiência Operacional (EBITDA): Comparação da geração bruta de caixa das operações sem interferências tributárias ou de estrutura de capital.
+
+Matriz de Risco vs. Retorno: Cruzamento do nível de endividamento com os índices de rentabilidade para identificar os cenários mais eficientes e os mais vulneráveis.
+
+Linha do Tempo de Execução do Projeto
+
+Fase	Período Recomendado	Atividade Chave	Entregável Final
+1. Modelagem dos Demonstrativos	Dias 1–2	Padronizar DRE, Balanço Patrimonial e DFC de todos os cenários e anos.	Demonstrativos Financeiros integrados.
+2. Métricas & Indicadores	Dias 3–4	Calcular Liquidez, EBITDA, EVA e Grau de Endividamento por ano/cenário.	Tabela Consolidada de Indicadores.
+3. Ranking Top 10	Dia 5	Ordenar os cenários pelos melhores e piores índices de liquidez e endividamento.	Tabelas de Ranking Top 10.
+4. Categorização de Risco	Dia 6	Agrupar cenários nos perfis (Alta Rentabilidade, Baixa Liquidez, Alto/Baixo Risco).	Matriz de Perfil Financeiro.
+5. Análise & Conclusão	Dia 7	Redigir o diagnóstico dos cenários mais seguros versus os de maior retorno.	Relatório/Apresentação Final.
+Como Executar Cada Requisito
+
+1. Montagem dos Demonstrativos (BP, DRE e DFC)
+
+DRE: Receita Bruta → (-) Deduções → Receita Líquida → (-) CPV → Lucro Bruto → (-) Despesas Operacionais → EBITDA → (-) Depreciação/Amortização → EBIT → Resultado Financeiro → Impostos → Lucro Líquido.
+
+Balanço Patrimonial: Garantir o equilíbrio patrimonial em todos os anos:
+
+Ativo Total=Passivo Circulante+Passivo N 
+a
+~
+ o Circulante+Patrim 
+o
+^
+ nio L 
+ı
+ˊ
+ quido
+DFC (Método Indireto): Ajustar o Lucro Líquido somando Depreciações/Amortizações e aplicando as variações do Capital de Giro (ΔAtivo Circulante Operacional−ΔPassivo Circulante Operacional).
+
+2. Cálculo dos Indicadores Solicitados
+
+Liquidez Corrente:  
+Passivo Circulante
+Ativo Circulante
+​
+  (Valores >1,0 indicam folga no curto prazo).
+
+EBITDA: Lucro Operacional (EBIT) + Depreciação + Amortização.
+
+EVA (Economic Value Added):
+
+EVA=NOPAT−(Capital Investido×WACC)
+(Onde NOPAT=EBIT×(1−t) e WACC é o custo médio de capital).
+
+Endividamento:  
+Ativo Total
+Passivo Exig 
+ı
+ˊ
+ vel Total
+​
+  ou  
+EBITDA
+D 
+ı
+ˊ
+ vida L 
+ı
+ˊ
+ quida
+​
+ .
+
+3. Ranking e Categorização
+
+Ranking Top 10: Ordene os cenários com a função de classificação do Excel/Python criando duas listas Top 10: maior Liquidez Corrente e menor Endividamento (melhores anos) x menor Liquidez e maior Endividamento (piores anos).
+
+Categorização por Perfil:
+
+Alta Rentabilidade & Baixo Risco: EVA positivo elevado, Liquidez Corrente >1,5 e Endividamento <50%.
+
+Alto Risco: Endividamento >70% ou Liquidez Corrente <1,0.
+
+Retorno Moderado & Baixa Liquidez: Margem e EVA moderados com aperto na liquidez de curto prazo.
+
+Se você tiver a planilha ou os valores brutos dos cenários em mãos, pode compartilhar o arquivo ou colar os dados aqui para realizarmos a montagem das tabelas e os cálculos dos índices diretamente.
