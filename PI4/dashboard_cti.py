@@ -7,6 +7,7 @@ Execute:  python dashboard_cti.py
 from __future__ import annotations
 
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -216,6 +217,39 @@ METRICAS_NUVEM: dict[str, tuple[str, bool]] = {
 
 CORES_COMPARA = [COR, COR_ALERTA, "#3D6B5A"]
 
+# (x, y_paper, texto, cor) — y_paper defasado para as caixas não colidirem
+MARCOS_HORIZONTE: tuple[tuple[float, float, str, str], ...] = (
+    (9.5, 1.16, "Anos 8–11: ciclo pleno / alta de caixa", COR_SUAVE),
+    (12.0, 1.04, "Ano 12: encerramento de contrato / liquidação de ativos", COR_ALERTA),
+)
+
+
+def nome_amigavel(cena: object) -> str:
+    """Total Cen_00006 → Cenário 6 (rótulo executivo; o código interno segue no filtro)."""
+    achado = re.search(r"(\d+)", str(cena))
+    if achado is None:
+        return str(cena)
+    return f"Cenário {int(achado.group(1))}"
+
+
+def anotar_marcos_negocio(fig: go.Figure) -> go.Figure:
+    for x, y_paper, texto, cor in MARCOS_HORIZONTE:
+        fig.add_annotation(
+            x=x,
+            y=y_paper,
+            yref="paper",
+            text=texto,
+            showarrow=False,
+            font={"size": 11, "color": cor},
+            bgcolor="rgba(17, 17, 17, 0.55)",
+            bordercolor=cor,
+            borderpad=4,
+            align="center",
+            xanchor="center",
+        )
+    fig.update_layout(margin={"t": 132})
+    return fig
+
 
 @st.cache_data(show_spinner=False)
 def resumo_envelope(ind: pd.DataFrame, coluna: str, maior_e_melhor: bool) -> pd.DataFrame:
@@ -245,7 +279,7 @@ def recorte_label(ano_sel: str | int) -> str:
 
 
 def titulo_filtro(assunto: str, cena_sel: str, ano_sel: str | int) -> str:
-    return f"{assunto} — Cenário Foco: {cena_sel} | Recorte: {recorte_label(ano_sel)}"
+    return f"{assunto} — Cenário Foco: {nome_amigavel(cena_sel)} | Recorte: {recorte_label(ano_sel)}"
 
 
 def ancorar_ano_temporal(
@@ -301,19 +335,12 @@ def figura_envelope(
     titulo: str | None = None,
     ano_destaque: int | None = None,
     cena_destaque: str | None = None,
+    mostrar_pontos: bool = False,
+    mostrar_media: bool = False,
 ) -> go.Figure:
     env = resumo_envelope(ind, coluna, maior_e_melhor)
     fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=ind["ano_num"],
-            y=ind[coluna],
-            mode="markers",
-            marker={"size": 5, "color": COR_SUAVE, "opacity": 0.07},
-            name="Todos os cenários",
-            hoverinfo="skip",
-        )
-    )
+    # 1) faixa ao fundo
     fig.add_trace(
         go.Scatter(
             x=env["ano_num"],
@@ -333,9 +360,26 @@ def figura_envelope(
             fill="tonexty",
             fillcolor="rgba(31, 78, 69, 0.18)",
             name="Faixa 5–95%",
+            showlegend=True,
             hoverinfo="skip",
         )
     )
+    # 2) pontos na frente da faixa (só se o seletor estiver ligado)
+    if mostrar_pontos:
+        rng = np.random.default_rng(42)
+        x_nuvem = ind["ano_num"].to_numpy(dtype=float) + rng.uniform(-0.22, 0.22, len(ind))
+        fig.add_trace(
+            go.Scatter(
+                x=x_nuvem,
+                y=ind[coluna],
+                mode="markers",
+                marker={"size": 8, "color": COR_SUAVE, "opacity": 0.38},
+                name="Todos os cenários",
+                showlegend=True,
+                hoverinfo="skip",
+            )
+        )
+    # 3) linhas centrais por cima
     fig.add_trace(
         go.Scatter(
             x=env["ano_num"],
@@ -343,17 +387,20 @@ def figura_envelope(
             mode="lines+markers",
             line={"color": COR, "width": 3},
             name="Mais provável (mediana)",
+            showlegend=True,
         )
     )
-    fig.add_trace(
-        go.Scatter(
-            x=env["ano_num"],
-            y=env["media"],
-            mode="lines",
-            line={"color": COR, "width": 1.5, "dash": "dot"},
-            name="Média",
+    if mostrar_media:
+        fig.add_trace(
+            go.Scatter(
+                x=env["ano_num"],
+                y=env["media"],
+                mode="lines",
+                line={"color": COR, "width": 1.5, "dash": "dot"},
+                name="Média",
+                showlegend=True,
+            )
         )
-    )
     fig.add_trace(
         go.Scatter(
             x=env["ano_num"],
@@ -361,6 +408,7 @@ def figura_envelope(
             mode="lines+markers",
             line={"color": COR_ALERTA, "width": 2},
             name="Pessimista (pior caso)",
+            showlegend=True,
         )
     )
     fig.add_trace(
@@ -370,6 +418,7 @@ def figura_envelope(
             mode="lines+markers",
             line={"color": COR_OK, "width": 2},
             name="Otimista (melhor caso)",
+            showlegend=True,
         )
     )
     fig.update_layout(
@@ -379,6 +428,7 @@ def figura_envelope(
         yaxis_title=rotulo,
         hovermode="x unified",
         legend_title_text="",
+        legend={"traceorder": "normal"},
     )
     if ano_destaque is not None:
         fig.add_vline(
@@ -404,11 +454,11 @@ def figura_envelope(
                             "symbol": "diamond",
                             "line": {"width": 2, "color": "#111111"},
                         },
-                        name=f"Âncora · {cena_destaque} · Ano {ano_destaque}",
-                        hovertemplate=f"{cena_destaque}<br>Ano {ano_destaque}: %{{y}}<extra></extra>",
+                        name=f"Âncora · {nome_amigavel(cena_destaque)} · Ano {ano_destaque}",
+                        hovertemplate=f"{nome_amigavel(cena_destaque)}<br>Ano {ano_destaque}: %{{y}}<extra></extra>",
                     )
                 )
-    return fig
+    return anotar_marcos_negocio(fig)
 
 
 def figura_histograma_ano(
@@ -530,7 +580,7 @@ def banner_auditoria_filtro(cena_sel: str, ano_sel: str | int) -> None:
     letter-spacing: 0.01em;
     line-height: 1.45;
 ">
-📌 Exibindo dados de: Cenário {cena_sel} | Ano {ano_txt}
+📌 Exibindo dados de: {nome_amigavel(cena_sel)} | Ano {ano_txt}
 </div>
 """,
         unsafe_allow_html=True,
@@ -544,7 +594,8 @@ def expander_auditoria_base(df: pd.DataFrame, cena_sel: str, ano_sel: str | int)
     n = len(bruto)
     with st.expander("🔍 Conferir dados brutos (Auditoria)"):
         st.caption(
-            f"{n:,} registros encontrados na base para **{cena_sel}** · recorte **{recorte_label(ano_sel)}**."
+            f"{n:,} registros encontrados para **{nome_amigavel(cena_sel)}** "
+            f"(código `{cena_sel}`) · recorte **{recorte_label(ano_sel)}**."
         )
         if n == 0:
             st.warning("Nenhuma linha da base corresponde a este recorte.")
@@ -575,7 +626,12 @@ with st.sidebar:
 
     cenas = sorted(ind["CENA"].dropna().unique().tolist())
     cena_padrao = cenas[0] if cenas else None
-    cena_sel = st.selectbox("Cenário em foco", options=cenas, index=0 if cena_padrao else 0)
+    cena_sel = st.selectbox(
+        "Cenário em foco",
+        options=cenas,
+        index=0 if cena_padrao else 0,
+        format_func=nome_amigavel,
+    )
 
     st.markdown("---")
     st.markdown(
@@ -597,7 +653,8 @@ k = foco_ano[
     ["NCG", "Saldo_Tesouraria", "Ciclo_Financeiro", "PMR", "PME", "PMP", "liquidez", "rentabilidade", "risco"]
 ].mean(numeric_only=True)
 
-st.subheader(f"Cenário em foco: `{cena_sel}`")
+st.subheader(f"Cenário em foco: {nome_amigavel(cena_sel)}")
+st.caption(f"Código interno da base: `{cena_sel}`")
 banner_auditoria_filtro(cena_sel, ano_sel)
 if ano_sel == "Todos":
     st.write("Valores médios ao longo dos 12 anos do horizonte.")
@@ -641,6 +698,7 @@ with aba1:
     )
     fig_ncg.update_layout(legend_title_text="", hovermode="x unified")
     fig_ncg = ancorar_ano_temporal(fig_ncg, foco, ["NCG", "Saldo_Tesouraria"], ano_sel)
+    fig_ncg = anotar_marcos_negocio(fig_ncg)
     st.plotly_chart(fig_ncg, width="stretch", theme="streamlit")
 
     st.markdown("#### De onde vem a NCG")
@@ -686,6 +744,7 @@ with aba2:
     )
     fig_prazos.update_layout(legend_title_text="", hovermode="x unified")
     fig_prazos = ancorar_ano_temporal(fig_prazos, foco, ["PMR", "PME", "PMP", "Ciclo_Financeiro"], ano_sel)
+    fig_prazos = anotar_marcos_negocio(fig_prazos)
     st.plotly_chart(fig_prazos, width="stretch", theme="streamlit")
 
     st.markdown(
@@ -721,13 +780,14 @@ with aba3:
 
     rank_view = rank_view.copy()
     rank_view["liquidez_plot"] = rank_view["liquidez"].fillna(0)
+    rank_view["Cenario"] = rank_view["CENA"].map(nome_amigavel)
 
     fig_scatter = px.scatter(
         rank_view,
         x="risco",
         y="rentabilidade",
         size="liquidez_plot",
-        hover_name="CENA",
+        hover_name="Cenario",
         hover_data={"liquidez": ":.2f", "liquidez_plot": False},
         color="Ciclo_Financeiro",
         color_continuous_scale="Tealgrn",
@@ -740,6 +800,21 @@ with aba3:
         },
         title=titulo_filtro("Mapa risco × retorno (tamanho = liquidez)", cena_sel, ano_sel),
     )
+    risco_plot = rank_view["risco"].dropna()
+    if not risco_plot.empty:
+        q_lo = float(risco_plot.quantile(0.02))
+        q_hi = float(risco_plot.quantile(0.98))
+        amplitude = q_hi - q_lo
+        if amplitude < 1e-3:
+            centro = float(risco_plot.median())
+            xmin, xmax = centro - 0.012, centro + 0.012
+        else:
+            margem = max(amplitude * 0.18, 0.004)
+            xmin, xmax = q_lo - margem, q_hi + margem
+        fig_scatter.update_xaxes(range=[xmin, xmax], tickformat=".3f", nticks=7)
+    else:
+        fig_scatter.update_xaxes(tickformat=".3f")
+    fig_scatter.update_yaxes(tickformat=".2%")
     st.plotly_chart(fig_scatter, width="stretch", theme="streamlit")
 
     contagem = {
@@ -764,6 +839,7 @@ with aba3:
     st.plotly_chart(fig_cat, width="stretch", theme="streamlit")
 
     show = rank_view.sort_values("rentabilidade", ascending=False).head(20).copy()
+    show["Cenario"] = show["CENA"].map(nome_amigavel)
     show["rentabilidade"] = show["rentabilidade"].map(fmt_pct)
     show["liquidez"] = show["liquidez"].map(lambda x: f"{x:.2f}x" if pd.notna(x) else "—")
     show["risco"] = show["risco"].map(lambda x: f"{x:.2%}" if pd.notna(x) else "—")
@@ -772,7 +848,7 @@ with aba3:
     st.dataframe(
         show[
             [
-                "CENA",
+                "Cenario",
                 "rentabilidade",
                 "liquidez",
                 "risco",
@@ -792,8 +868,8 @@ with aba3:
 with aba_risco:
     st.markdown("#### Envelope de probabilidade (todos os cenários)")
     st.caption(
-        "Cada ponto é um cenário. A faixa sombreada cobre 90% dos casos (percentis 5 e 95). "
-        "A mediana é o caminho mais típico; as linhas de extremo são o pior e o melhor caso."
+        "A faixa sombreada cobre 90% dos casos (percentis 5 e 95). "
+        "A mediana é o caminho mais típico. Pontos individuais e a média ficam desligados por padrão."
     )
     rotulo_nuvem = st.selectbox(
         "Métrica da nuvem",
@@ -803,19 +879,27 @@ with aba_risco:
     )
     col_nuvem, maior_melhor = METRICAS_NUVEM[rotulo_nuvem]
     ano_nuvem = None if ano_sel == "Todos" else int(ano_sel)
-    st.plotly_chart(
-        figura_envelope(
-            ind,
-            col_nuvem,
-            rotulo_nuvem,
-            maior_melhor,
-            titulo=titulo_filtro(f"Faixa de risco — {rotulo_nuvem}", cena_sel, ano_sel),
-            ano_destaque=ano_nuvem,
-            cena_destaque=cena_sel,
-        ),
-        width="stretch",
-        theme="streamlit",
-    )
+    col_graf, col_camadas = st.columns([4, 1])
+    with col_camadas:
+        st.markdown("**Camadas**")
+        ver_pontos = st.checkbox("Pontos de todos os cenários", value=False, key="camada_pontos")
+        ver_media = st.checkbox("Linha da média", value=False, key="camada_media")
+    with col_graf:
+        st.plotly_chart(
+            figura_envelope(
+                ind,
+                col_nuvem,
+                rotulo_nuvem,
+                maior_melhor,
+                titulo=titulo_filtro(f"Faixa de risco — {rotulo_nuvem}", cena_sel, ano_sel),
+                ano_destaque=ano_nuvem,
+                cena_destaque=cena_sel,
+                mostrar_pontos=ver_pontos,
+                mostrar_media=ver_media,
+            ),
+            width="stretch",
+            theme="streamlit",
+        )
 
     env = resumo_envelope(ind, col_nuvem, maior_melhor)
     e1, e2, e3, e4 = st.columns(4)
@@ -859,6 +943,7 @@ with aba_comp:
         options=cenas,
         default=padrao_comp,
         max_selections=3,
+        format_func=nome_amigavel,
         key="cenas_comparar",
     )
     if len(escolhidos) < 2:
@@ -871,19 +956,21 @@ with aba_comp:
             key="metrica_comparar",
         )
         col_comp, _maior = METRICAS_NUVEM[rotulo_comp]
-        trilhas = ind[ind["CENA"].isin(escolhidos)].sort_values(["CENA", "ano_num"])
+        trilhas = ind[ind["CENA"].isin(escolhidos)].sort_values(["CENA", "ano_num"]).copy()
+        trilhas["Cenario"] = trilhas["CENA"].map(nome_amigavel)
         fig_comp = px.line(
             trilhas,
             x="ano_num",
             y=col_comp,
-            color="CENA",
+            color="Cenario",
             markers=True,
             color_discrete_sequence=CORES_COMPARA,
-            labels={"ano_num": "Ano", col_comp: rotulo_comp, "CENA": "Cenário"},
+            labels={"ano_num": "Ano", col_comp: rotulo_comp, "Cenario": "Cenário"},
             title=titulo_filtro(f"{rotulo_comp}: comparação no horizonte", cena_sel, ano_sel),
         )
         fig_comp.update_layout(hovermode="x unified", legend_title_text="")
         fig_comp = ancorar_ano_temporal(fig_comp, trilhas, [col_comp], ano_sel)
+        fig_comp = anotar_marcos_negocio(fig_comp)
         st.plotly_chart(fig_comp, width="stretch", theme="streamlit")
 
         cols_kpi = st.columns(len(escolhidos))
@@ -894,7 +981,8 @@ with aba_comp:
             m = recorte[
                 ["NCG", "Saldo_Tesouraria", "liquidez", "Ciclo_Financeiro", "disponivel", "geracao_caixa"]
             ].mean(numeric_only=True)
-            col_ui.markdown(f"**`{cena}`**")
+            col_ui.markdown(f"**{nome_amigavel(cena)}**")
+            col_ui.caption(f"`{cena}`")
             col_ui.metric("Caixa disponível", fmt_rs(m["disponivel"]))
             col_ui.metric("Geração de caixa", fmt_rs(m["geracao_caixa"]))
             col_ui.metric("NCG", fmt_rs(m["NCG"]))
@@ -916,6 +1004,7 @@ with aba_comp:
             .set_index("CENA")
             .reindex(escolhidos)
         )
+        resumo_comp.index = [nome_amigavel(c) for c in resumo_comp.index]
         linhas_fmt = {
             "Caixa disponível": resumo_comp["caixa"].map(fmt_rs),
             "Geração de caixa": resumo_comp["geracao_caixa"].map(fmt_rs),
@@ -942,7 +1031,7 @@ with aba4:
 6. **Como o caixa se espalha num ano (ex.: Ano 9)?** → histograma da mesma aba, com o filtro de ano.  
 7. **Como dois ou três cenários se comparam?** → aba Comparar cenários.
 
-O banner âmbar e os títulos dos gráficos repetem o **Cenário em foco** e o **Ano do horizonte**. A linha tracejada e o losango marcam o ano filtrado. Em **Conferir dados brutos** estão as linhas exatas do `Cti.csv` desse recorte.
+Os títulos usam **Cenário 6** (não `Total Cen_00006`). Na Faixa de risco, as caixas **Pontos de todos os cenários** e **Linha da média** ligam camadas extras. As faixas dos Anos 8–11 e do Ano 12 no gráfico marcam ciclo pleno e encerramento de contrato.
 
 ### Fórmulas (iguais às do notebook)
 
@@ -957,7 +1046,7 @@ Saldos de passivo no `Cti.csv` vêm com sinal de crédito (−). Sem o valor abs
 | PMP | (Fornecedores / abs(Custos)) × 365 |
 | Ciclo Financeiro | PMR + PME − PMP |
 
-Cenário atual em destaque: **{cena_sel}** · Rentabilidade {fmt_pct(k["rentabilidade"])} · Risco {fmt_pct(k["risco"]) if pd.notna(k["risco"]) else "—"}.
+Cenário atual em destaque: **{nome_amigavel(cena_sel)}** · Rentabilidade {fmt_pct(k["rentabilidade"])} · Risco {fmt_pct(k["risco"]) if pd.notna(k["risco"]) else "—"}.
 """
     )
 
