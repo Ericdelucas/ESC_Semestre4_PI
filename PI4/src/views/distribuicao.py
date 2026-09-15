@@ -7,8 +7,9 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from src.components.charts import figura_histograma_caixa_final
-from src.components.resilience import safe_render
+from src.components.resilience import resilient_view, safe_render
 from src.config import COR, COR_OK, COR_SUAVE, COR_VERMELHO
+from src.config.i18n import t
 from src.data.formatting import fmt_rs
 
 
@@ -17,7 +18,7 @@ def _boxplot(serie_cx: pd.Series, qs: pd.Series, ano_enc: int) -> None:
     fig_box.add_trace(
         go.Box(
             y=serie_cx,
-            name=f"Caixa Ano {ano_enc}",
+            name=t("dist.box_name", ano=ano_enc),
             marker_color=COR_SUAVE,
             boxmean=True,
             hovertemplate="%{y}<extra></extra>",
@@ -32,32 +33,29 @@ def _boxplot(serie_cx: pd.Series, qs: pd.Series, ano_enc: int) -> None:
             annotation_position="right",
         )
     fig_box.update_layout(
-        title="Boxplot / percentis — cauda de risco do caixa final",
-        yaxis_title="Caixa de encerramento (R$)",
+        title=t("dist.box_title"),
+        yaxis_title=t("dist.box_y"),
         showlegend=False,
     )
     st.plotly_chart(fig_box, width="stretch", theme="streamlit")
 
 
+@resilient_view("aba Distribuição & Probabilidades")
 def render(ranking: pd.DataFrame, ano_enc: int, n_cenarios: int, p_ruina: float) -> None:
-    st.markdown("### Distribuição & Probabilidades")
-    st.caption("Leitura de cauda de risco para credores e concessão — foco no encerramento do horizonte.")
+    st.markdown(t("dist.title"))
+    st.caption(t("dist.caption"))
 
     alerta1, alerta2, alerta3 = st.columns(3)
-    alerta1.metric(
-        f"Probabilidade de caixa negativo no Ano {ano_enc}",
-        f"{p_ruina:.1f}%",
-        help="Fração dos cenários com saldo de caixa de encerramento negativo.",
-    )
-    alerta2.metric("Cenários em ruína de caixa", f"{int((ranking['caixa_ano12'] < 0).sum()):,}")
-    alerta3.metric("Mediana do caixa no Ano 12", fmt_rs(float(ranking["caixa_ano12"].median())))
+    alerta1.metric(t("dist.prob", ano=ano_enc), f"{p_ruina:.1f}%")
+    alerta2.metric(t("dist.ruin"), f"{int((ranking['caixa_ano12'] < 0).sum()):,}")
+    alerta3.metric(t("dist.median"), fmt_rs(float(ranking["caixa_ano12"].median())))
 
     if p_ruina > 10:
-        st.error(f"Alerta de liquidez: {p_ruina:.1f}% dos cenários encerram o Ano {ano_enc} com caixa insuficiente.")
+        st.error(t("dist.alert_hi", p=p_ruina, ano=ano_enc))
     elif p_ruina > 0:
-        st.warning(f"Há cauda de risco: {p_ruina:.1f}% dos cenários terminam com caixa negativo no Ano {ano_enc}.")
+        st.warning(t("dist.alert_mid", p=p_ruina, ano=ano_enc))
     else:
-        st.success(f"Nenhum cenário encerra o Ano {ano_enc} com caixa negativo nesta base.")
+        st.success(t("dist.alert_ok", ano=ano_enc))
 
     serie_cx = ranking["caixa_ano12"].dropna()
 
@@ -80,4 +78,4 @@ def render(ranking: pd.DataFrame, ano_enc: int, n_cenarios: int, p_ruina: float)
         col_ui.metric(nome, fmt_rs(float(qs[q])))
 
     safe_render("boxplot de percentis", _boxplot, serie_cx, qs, ano_enc)
-    st.caption("P5/P95 ajudam credores a ler extremos: quanto de caixa resta nos piores e melhores 5% dos cenários.")
+    st.caption(t("dist.foot"))

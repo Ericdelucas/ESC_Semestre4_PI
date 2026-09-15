@@ -6,16 +6,20 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.config import CSV_PATH
+from src.config import CACHE_DIR, CSV_PATH
 
 
 def parse_valor_br(serie: pd.Series) -> pd.Series:
-    s = serie.astype("string").str.replace(".", "", regex=False).str.replace(",", ".", regex=False)
+    s = (
+        serie.astype(str)
+        .str.replace(".", "", regex=False)
+        .str.replace(",", ".", regex=False)
+    )
     return pd.to_numeric(s, errors="coerce")
 
 
 def normalizar_conta(serie: pd.Series) -> pd.Series:
-    return serie.astype("string").str.replace(r"\s+", " ", regex=True).str.strip()
+    return serie.astype(str).str.replace(r"\s+", " ", regex=True).str.strip()
 
 
 def magnitude(serie: pd.Series) -> pd.Series:
@@ -24,11 +28,31 @@ def magnitude(serie: pd.Series) -> pd.Series:
 
 
 def load_cti_csv(path: Path | None = None) -> pd.DataFrame:
-    csv_path = path or CSV_PATH
-    df = pd.read_csv(csv_path, header=None, names=["ANO", "CENA", "CONTA", "VALOR"])
+    """Lê Cti.csv. Preferencialmente reutiliza Parquet em cache/ se estiver atualizado."""
+    csv_path = Path(path) if path is not None else CSV_PATH
+    CACHE_DIR.mkdir(exist_ok=True)
+    parquet_path = CACHE_DIR / "cti_limpo.parquet"
+
+    if (
+        parquet_path.exists()
+        and csv_path.exists()
+        and parquet_path.stat().st_mtime >= csv_path.stat().st_mtime
+    ):
+        return pd.read_parquet(parquet_path)
+
+    # object + engine C: menos RAM que dtype="string"/ArrowStringArray no CSV grande
+    df = pd.read_csv(
+        csv_path,
+        header=None,
+        names=["ANO", "CENA", "CONTA", "VALOR"],
+        dtype=str,
+        engine="c",
+        low_memory=False,
+    )
     df["CONTA"] = normalizar_conta(df["CONTA"])
     df["VALOR"] = parse_valor_br(df["VALOR"])
-    df["ano_num"] = df["ANO"].astype(str).str.extract(r"(\d+)")[0].astype("Int64")
+    df["ano_num"] = df["ANO"].str.extract(r"(\d+)", expand=False).astype("Int64")
+    df.to_parquet(parquet_path, index=False)
     return df
 
 

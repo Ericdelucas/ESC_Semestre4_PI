@@ -7,46 +7,58 @@ import plotly.express as px
 import streamlit as st
 
 from src.components.charts import ancorar_ano_temporal, titulo_filtro
-from src.components.resilience import safe_render
+from src.components.resilience import resilient_view, safe_render
 from src.config import CORES_COMPARA, METRICAS_NUVEM
-from src.data.analytics import cenas_padrao_comparacao
-from src.data.formatting import fmt_dias, fmt_pct, fmt_rs
+from src.config.i18n import get_lang, t
+from src.data.formatting import cenas_padrao_comparacao, cena_rotulo, fmt_dias, fmt_pct, fmt_rs
 
 
+@resilient_view("aba Comparar cenários")
 def render(ind: pd.DataFrame, cenas: list[str], cena_sel: str, ano_sel: str | int) -> None:
-    st.markdown("#### Comparador lado a lado")
-    st.caption("Escolha **2 ou 3** cenários para ver a mesma métrica no horizonte e os KPIs na mesma tela.")
+    st.markdown(t("cmp.title"))
+    st.caption(t("cmp.caption"))
     padrao_comp = [c for c in cenas_padrao_comparacao(cenas) if c in cenas]
     escolhidos = st.multiselect(
-        "Cenários para comparar",
+        t("cmp.select"),
         options=cenas,
         default=padrao_comp,
         max_selections=3,
-        key="cenas_comparar",
+        format_func=cena_rotulo,
+        key=f"cenas_comparar_{get_lang()}",
     )
     if len(escolhidos) < 2:
-        st.info("Selecione pelo menos dois cenários (máximo três).")
+        st.info(t("cmp.need2"))
         return
 
-    rotulo_comp = st.selectbox(
-        "Métrica do gráfico",
-        options=list(METRICAS_NUVEM.keys()),
+    metric_keys = list(METRICAS_NUVEM.keys())
+    metric_labels = [t(k) for k in metric_keys]
+    label_to_key = dict(zip(metric_labels, metric_keys, strict=True))
+    escolhido = st.selectbox(
+        t("cmp.metric"),
+        options=metric_labels,
         index=0,
-        key="metrica_comparar",
+        key=f"metrica_comparar_{get_lang()}",
     )
-    col_comp, _maior = METRICAS_NUVEM[rotulo_comp]
-    trilhas = ind[ind["CENA"].isin(escolhidos)].sort_values(["CENA", "ano_num"])
+    metric_key = label_to_key[escolhido]
+    col_comp, _maior = METRICAS_NUVEM[metric_key]
+    rotulo_comp = t(metric_key)
+    trilhas = ind[ind["CENA"].isin(escolhidos)].sort_values(["CENA", "ano_num"]).copy()
+    trilhas["rótulo"] = trilhas["CENA"].map(cena_rotulo)
 
     def _linha() -> None:
         fig_comp = px.line(
             trilhas,
             x="ano_num",
             y=col_comp,
-            color="CENA",
+            color="rótulo",
             markers=True,
             color_discrete_sequence=CORES_COMPARA,
-            labels={"ano_num": "Ano", col_comp: rotulo_comp, "CENA": "Cenário"},
-            title=titulo_filtro(f"{rotulo_comp}: comparação no horizonte", cena_sel, ano_sel),
+            labels={
+                "ano_num": t("chart.year"),
+                col_comp: rotulo_comp,
+                "rótulo": t("scenario.prefix"),
+            },
+            title=titulo_filtro(t("cmp.chart", metric=rotulo_comp), cena_sel, ano_sel),
         )
         fig_comp.update_layout(hovermode="x unified", legend_title_text="")
         fig_comp = ancorar_ano_temporal(fig_comp, trilhas, [col_comp], ano_sel)
@@ -63,13 +75,13 @@ def render(ind: pd.DataFrame, cenas: list[str], cena_sel: str, ano_sel: str | in
             m = recorte[
                 ["NCG", "Saldo_Tesouraria", "liquidez", "Ciclo_Financeiro", "disponivel", "geracao_caixa"]
             ].mean(numeric_only=True)
-            col_ui.markdown(f"**`{cena}`**")
-            col_ui.metric("Caixa disponível", fmt_rs(m["disponivel"]))
-            col_ui.metric("Geração de caixa", fmt_rs(m["geracao_caixa"]))
-            col_ui.metric("NCG", fmt_rs(m["NCG"]))
-            col_ui.metric("Saldo de tesouraria", fmt_rs(m["Saldo_Tesouraria"]))
-            col_ui.metric("Liquidez corrente", f"{m['liquidez']:.2f}x" if pd.notna(m["liquidez"]) else "—")
-            col_ui.metric("Ciclo financeiro", fmt_dias(m["Ciclo_Financeiro"]))
+            col_ui.markdown(f"**{cena_rotulo(cena)}**")
+            col_ui.metric(t("cmp.row.cash"), fmt_rs(m["disponivel"]))
+            col_ui.metric(t("cmp.row.gen"), fmt_rs(m["geracao_caixa"]))
+            col_ui.metric(t("cmp.row.ncg"), fmt_rs(m["NCG"]))
+            col_ui.metric(t("cmp.row.treasury"), fmt_rs(m["Saldo_Tesouraria"]))
+            col_ui.metric(t("cmp.row.liq"), f"{m['liquidez']:.2f}x" if pd.notna(m["liquidez"]) else "—")
+            col_ui.metric(t("cmp.row.cycle"), fmt_dias(m["Ciclo_Financeiro"]))
 
         resumo_comp = (
             trilhas.groupby("CENA", as_index=False)
@@ -86,15 +98,14 @@ def render(ind: pd.DataFrame, cenas: list[str], cena_sel: str, ano_sel: str | in
             .reindex(escolhidos)
         )
         linhas_fmt = {
-            "Caixa disponível": resumo_comp["caixa"].map(fmt_rs),
-            "Geração de caixa": resumo_comp["geracao_caixa"].map(fmt_rs),
-            "NCG": resumo_comp["NCG"].map(fmt_rs),
-            "Saldo de tesouraria": resumo_comp["tesouraria"].map(fmt_rs),
-            "Liquidez corrente": resumo_comp["liquidez"].map(lambda x: f"{x:.2f}x" if pd.notna(x) else "—"),
-            "Ciclo financeiro": resumo_comp["ciclo"].map(fmt_dias),
-            "Rentabilidade": resumo_comp["rentabilidade"].map(fmt_pct),
+            t("cmp.row.cash"): resumo_comp["caixa"].map(fmt_rs),
+            t("cmp.row.gen"): resumo_comp["geracao_caixa"].map(fmt_rs),
+            t("cmp.row.ncg"): resumo_comp["NCG"].map(fmt_rs),
+            t("cmp.row.treasury"): resumo_comp["tesouraria"].map(fmt_rs),
+            t("cmp.row.liq"): resumo_comp["liquidez"].map(lambda x: f"{x:.2f}x" if pd.notna(x) else "—"),
+            t("cmp.row.cycle"): resumo_comp["ciclo"].map(fmt_dias),
+            t("cmp.row.profit"): resumo_comp["rentabilidade"].map(fmt_pct),
         }
         st.dataframe(pd.DataFrame(linhas_fmt).T, width="stretch")
     except Exception as exc:  # noqa: BLE001
-        st.error("Não foi possível carregar a tabela comparativa no momento.")
-        st.caption(f"{type(exc).__name__}: {exc}")
+        st.error(str(exc))

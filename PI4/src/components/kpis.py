@@ -7,6 +7,7 @@ import pandas as pd
 import streamlit as st
 
 from src.config import COR, CORES_SELO
+from src.config.i18n import t, translate_selo
 from src.data.formatting import fmt_dias, fmt_pct, fmt_rs
 
 
@@ -14,6 +15,7 @@ def card_selo_html(nome: str, qtd: int, ativo: bool) -> str:
     cor = CORES_SELO.get(nome, COR)
     borda = "3px solid #111" if ativo else f"1px solid {cor}"
     fundo = f"{cor}22" if not ativo else f"{cor}44"
+    rotulo = translate_selo(nome)
     return f"""
 <div style="
     border:{borda};
@@ -22,8 +24,8 @@ def card_selo_html(nome: str, qtd: int, ativo: bool) -> str:
     padding:0.65rem 0.75rem;
     min-height:4.6rem;
 ">
-  <div style="font-size:0.78rem;font-weight:700;color:{cor};line-height:1.25;">{nome}</div>
-  <div style="font-size:1.15rem;font-weight:700;margin-top:0.35rem;">{qtd} cenários</div>
+  <div style="font-size:0.78rem;font-weight:700;color:{cor};line-height:1.25;">{rotulo}</div>
+  <div style="font-size:1.15rem;font-weight:700;margin-top:0.35rem;">{t("map.scenarios_n", n=qtd)}</div>
 </div>
 """
 
@@ -31,33 +33,33 @@ def card_selo_html(nome: str, qtd: int, ativo: bool) -> str:
 def kpis_por_persona(persona: str, k: pd.Series, ranking: pd.DataFrame) -> list[tuple[str, str]]:
     n = ranking.shape[0]
     p_ruina = float((ranking["caixa_ano12"] < 0).mean() * 100) if n else 0.0
-    if persona == "CFO & Credores":
+    if persona == "cfo":
         return [
-            ("NCG", fmt_rs(k["NCG"])),
-            ("Saldo de Tesouraria", fmt_rs(k["Saldo_Tesouraria"])),
-            ("Risco (Passivo/Ativo)", fmt_pct(k["risco"]) if pd.notna(k["risco"]) else "—"),
-            ("Prob. caixa negativo Ano 12", f"{p_ruina:.1f}%"),
+            (t("kpi.ncg"), fmt_rs(k["NCG"])),
+            (t("kpi.treasury"), fmt_rs(k["Saldo_Tesouraria"])),
+            (t("kpi.risk"), fmt_pct(k["risco"]) if pd.notna(k["risco"]) else "—"),
+            (t("kpi.ruin_prob"), f"{p_ruina:.1f}%"),
         ]
-    if persona == "Acionistas":
+    if persona == "acionistas":
         resultado = k["resultado"] if "resultado" in k.index else np.nan
         return [
-            ("Rentabilidade", fmt_pct(k["rentabilidade"]) if pd.notna(k["rentabilidade"]) else "—"),
-            ("Resultado líquido (média)", fmt_rs(resultado) if pd.notna(resultado) else "—"),
-            ("Ciclo Financeiro", fmt_dias(k["Ciclo_Financeiro"])),
-            ("Liquidez corrente", f"{k['liquidez']:.2f}x" if pd.notna(k["liquidez"]) else "—"),
+            (t("kpi.profitability"), fmt_pct(k["rentabilidade"]) if pd.notna(k["rentabilidade"]) else "—"),
+            (t("kpi.result"), fmt_rs(resultado) if pd.notna(resultado) else "—"),
+            (t("kpi.cycle"), fmt_dias(k["Ciclo_Financeiro"])),
+            (t("kpi.liquidity"), f"{k['liquidez']:.2f}x" if pd.notna(k["liquidez"]) else "—"),
         ]
-    if persona == "Poder Concedente":
+    if persona == "concedente":
         return [
-            ("Saldo de Tesouraria", fmt_rs(k["Saldo_Tesouraria"])),
-            ("Ciclo Financeiro", fmt_dias(k["Ciclo_Financeiro"])),
-            ("Liquidez corrente", f"{k['liquidez']:.2f}x" if pd.notna(k["liquidez"]) else "—"),
-            ("Prob. caixa negativo Ano 12", f"{p_ruina:.1f}%"),
+            (t("kpi.treasury"), fmt_rs(k["Saldo_Tesouraria"])),
+            (t("kpi.cycle"), fmt_dias(k["Ciclo_Financeiro"])),
+            (t("kpi.liquidity"), f"{k['liquidez']:.2f}x" if pd.notna(k["liquidez"]) else "—"),
+            (t("kpi.ruin_prob"), f"{p_ruina:.1f}%"),
         ]
     return [
-        ("NCG", fmt_rs(k["NCG"])),
-        ("Saldo de Tesouraria", fmt_rs(k["Saldo_Tesouraria"])),
-        ("Ciclo Financeiro", fmt_dias(k["Ciclo_Financeiro"])),
-        ("Liquidez corrente", f"{k['liquidez']:.2f}x" if pd.notna(k["liquidez"]) else "—"),
+        (t("kpi.ncg"), fmt_rs(k["NCG"])),
+        (t("kpi.treasury"), fmt_rs(k["Saldo_Tesouraria"])),
+        (t("kpi.cycle"), fmt_dias(k["Ciclo_Financeiro"])),
+        (t("kpi.liquidity"), f"{k['liquidez']:.2f}x" if pd.notna(k["liquidez"]) else "—"),
     ]
 
 

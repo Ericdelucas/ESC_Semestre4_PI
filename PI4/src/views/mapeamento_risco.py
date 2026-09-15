@@ -8,10 +8,11 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from src.components.kpis import card_selo_html
-from src.components.resilience import safe_render
+from src.components.resilience import resilient_view, safe_render
 from src.config import COR_ANCORA, CORES_SELO, SELOS_NEGOCIO
-from src.data.analytics import cena_rotulo, cenas_por_percentil, melhor_entre
-from src.data.formatting import fmt_dias, fmt_pct, fmt_rs
+from src.config.i18n import get_lang, t, translate_selo
+from src.data.analytics import cenas_por_percentil
+from src.data.formatting import cena_rotulo, cena_sort_key, fmt_dias, fmt_pct, fmt_rs, melhor_entre
 
 
 def _scatter(
@@ -19,31 +20,35 @@ def _scatter(
     ranking: pd.DataFrame,
     cena_destaque: str | None,
 ) -> None:
+    view = rank_view.copy()
+    view["selo_i18n"] = view["selo"].map(translate_selo)
+    cores_i18n = {translate_selo(k): v for k, v in CORES_SELO.items()}
+    ordem = [translate_selo(s) for s in SELOS_NEGOCIO]
     fig = px.scatter(
-        rank_view,
+        view,
         x="risco",
         y="rentabilidade",
         size="liquidez_plot",
-        color="selo",
+        color="selo_i18n",
         hover_name="rotulo",
         hover_data={
             "liquidez": ":.2f",
             "liquidez_plot": False,
             "Ciclo_Financeiro": ":.1f",
-            "selo": True,
+            "selo_i18n": True,
             "risco": ":.3f",
             "rentabilidade": ":.3f",
         },
-        color_discrete_map=CORES_SELO,
+        color_discrete_map=cores_i18n,
         size_max=26,
-        category_orders={"selo": SELOS_NEGOCIO},
+        category_orders={"selo_i18n": ordem},
         labels={
-            "risco": "Risco (Passivo / Ativo)",
-            "rentabilidade": "Rentabilidade (Resultado / Receita)",
-            "liquidez_plot": "Liquidez (≥0)",
-            "selo": "Selo",
+            "risco": t("map.x"),
+            "rentabilidade": t("map.y"),
+            "liquidez_plot": t("map.size"),
+            "selo_i18n": t("map.selo"),
         },
-        title=f"Matriz Risco × Retorno · {len(rank_view):,} cenários visíveis",
+        title=t("map.chart_title", n=f"{len(rank_view):,}"),
     )
     if cena_destaque is not None:
         ponto = ranking.loc[ranking["CENA"] == cena_destaque]
@@ -56,18 +61,17 @@ def _scatter(
                     marker={
                         "size": 18,
                         "color": COR_ANCORA,
-                        "symbol": "diamond",
-                        "line": {"width": 2, "color": "#111"},
+                        "symbol": "star",
+                        "line": {"width": 1.5, "color": "#111"},
                     },
-                    name=f"Destaque · {cena_rotulo(cena_destaque)}",
-                    hovertemplate="%{text}<extra></extra>",
-                    text=ponto["rotulo"],
+                    name=f"★ {cena_rotulo(cena_destaque)}",
+                    hovertemplate="%{x:.3f}, %{y:.3f}<extra></extra>",
                 )
             )
-    fig.update_layout(legend_title_text="Selo de negócio", hovermode="closest")
     st.plotly_chart(fig, width="stretch", theme="streamlit")
 
 
+@resilient_view("aba Mapeamento de Risco × Retorno")
 def render(
     ranking: pd.DataFrame,
     persona: str,
@@ -75,11 +79,8 @@ def render(
     mapa_rotulo: dict[str, str],
     n_cenarios: int,
 ) -> None:
-    st.markdown("### Matriz Risco × Retorno")
-    st.caption(
-        f"Distribuição consolidada dos {n_cenarios:,} cenários simulados para avaliação "
-        "de rentabilidade, liquidez e endividamento."
-    )
+    st.markdown(t("map.title"))
+    st.caption(t("map.caption", n=f"{n_cenarios:,}"))
 
     if "selo_filtro" not in st.session_state:
         st.session_state["selo_filtro"] = None
@@ -94,7 +95,7 @@ def render(
                 unsafe_allow_html=True,
             )
             if st.button(
-                "Filtrar" if not ativo else "Remover filtro",
+                t("map.clear") if ativo else t("map.filter"),
                 key=f"btn_selo_{i}",
                 width="stretch",
             ):
@@ -102,58 +103,60 @@ def render(
                 st.rerun()
 
     if st.session_state["selo_filtro"] is not None:
-        st.caption(f"Filtro ativo: **{st.session_state['selo_filtro']}**")
+        st.caption(t("map.active", selo=translate_selo(st.session_state["selo_filtro"])))
 
-    destaque_persona = {
-        "CFO & Credores": "Ênfase em risco e liquidez (solvência).",
-        "Acionistas": "Ênfase em rentabilidade (eixo Y).",
-        "Poder Concedente": "Ênfase em selos de pressão de investimento e caixa de encerramento.",
-        "Visão Geral": "Visão equilibrada risco × retorno.",
-    }
-    st.caption(destaque_persona.get(persona, ""))
+    st.caption(t(f"map.focus.{persona}"))
 
     rank_view = ranking.copy()
     if st.session_state["selo_filtro"] is not None:
         rank_view = rank_view.loc[rank_view["selo"] == st.session_state["selo_filtro"]]
 
-    opcoes_busca = ["(nenhum)"] + sorted(ranking["rotulo"].tolist())
-    busca = st.selectbox("Buscar e destacar cenário", options=opcoes_busca, index=0, key="busca_cena_matriz")
-    cena_destaque = mapa_rotulo.get(busca) if busca != "(nenhum)" else None
+    nenhum = t("map.none")
+    opcoes_busca = [nenhum] + [
+        cena_rotulo(c) for c in sorted(ranking["CENA"].tolist(), key=cena_sort_key)
+    ]
+    busca = st.selectbox(
+        t("map.search"),
+        options=opcoes_busca,
+        index=0,
+        key=f"busca_cena_matriz_{get_lang()}",
+    )
+    cena_destaque = mapa_rotulo.get(busca) if busca != nenhum else None
 
     rank_view = rank_view.copy()
     rank_view["liquidez_plot"] = rank_view["liquidez"].clip(lower=0).fillna(0)
     safe_render("gráfico de dispersão risco × retorno", _scatter, rank_view, ranking, cena_destaque)
 
-    with st.expander("Comparador side-by-side (Cenário A vs Cenário B)", expanded=False):
+    with st.expander(t("map.comp_exp"), expanded=False):
         try:
             perc = cenas_por_percentil(ranking, "caixa_ano12", [0.05, 0.50])
             padrao_a = perc.get(0.05, cenas[0] if cenas else None)
             padrao_b = perc.get(0.50, cenas[1] if len(cenas) > 1 else padrao_a)
-            rotulos_ord = sorted(ranking["rotulo"].tolist())
+            rotulos_ord = [cena_rotulo(c) for c in sorted(ranking["CENA"].tolist(), key=cena_sort_key)]
             rotulo_a_default = cena_rotulo(padrao_a) if padrao_a else rotulos_ord[0]
             rotulo_b_default = cena_rotulo(padrao_b) if padrao_b else rotulos_ord[min(1, len(rotulos_ord) - 1)]
             c_a, c_b = st.columns(2)
             with c_a:
                 sel_a = st.selectbox(
-                    "Cenário A (ex.: pior caso P5 de caixa)",
+                    t("map.comp_a"),
                     options=rotulos_ord,
                     index=rotulos_ord.index(rotulo_a_default) if rotulo_a_default in rotulos_ord else 0,
-                    key="comp_a",
+                    key=f"comp_a_{get_lang()}",
                 )
             with c_b:
                 sel_b = st.selectbox(
-                    "Cenário B (ex.: base P50 de caixa)",
+                    t("map.comp_b"),
                     options=rotulos_ord,
                     index=rotulos_ord.index(rotulo_b_default) if rotulo_b_default in rotulos_ord else 0,
-                    key="comp_b",
+                    key=f"comp_b_{get_lang()}",
                 )
             ra = ranking.loc[ranking["CENA"] == mapa_rotulo[sel_a]].iloc[0]
             rb = ranking.loc[ranking["CENA"] == mapa_rotulo[sel_b]].iloc[0]
             metricas_cmp = [
-                ("Rentabilidade (%)", "rentabilidade", True, fmt_pct),
-                ("Risco (Passivo/Ativo)", "risco", False, fmt_pct),
-                ("Liquidez acumulada", "liquidez_acumulada", True, fmt_rs),
-                ("Ciclo Financeiro (dias)", "Ciclo_Financeiro", False, fmt_dias),
+                (t("map.m.profit"), "rentabilidade", True, fmt_pct),
+                (t("map.m.risk"), "risco", False, fmt_pct),
+                (t("map.m.liq"), "liquidez_acumulada", True, fmt_rs),
+                (t("map.m.cycle"), "Ciclo_Financeiro", False, fmt_dias),
             ]
             linhas = []
             for nome, col, maior_melhor, fmt in metricas_cmp:
@@ -161,13 +164,12 @@ def render(
                 vencedor = melhor_entre(va, vb, maior_melhor=maior_melhor)
                 linhas.append(
                     {
-                        "Métrica": nome,
-                        "Cenário A": fmt(va) + (" ✓" if vencedor == "A" else ""),
-                        "Cenário B": fmt(vb) + (" ✓" if vencedor == "B" else ""),
+                        t("map.metric"): nome,
+                        t("map.scene_a"): fmt(va) + (" ✓" if vencedor == "A" else ""),
+                        t("map.scene_b"): fmt(vb) + (" ✓" if vencedor == "B" else ""),
                     }
                 )
-            st.caption(f"**A:** {sel_a} · **B:** {sel_b} · ✓ = mais seguro/rentável na métrica")
+            st.caption(t("map.comp_cap", a=sel_a, b=sel_b))
             st.dataframe(pd.DataFrame(linhas), width="stretch", hide_index=True)
         except Exception as exc:  # noqa: BLE001
-            st.error("Não foi possível carregar o comparador side-by-side no momento.")
-            st.caption(f"{type(exc).__name__}: {exc}")
+            st.error(str(exc))

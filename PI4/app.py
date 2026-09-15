@@ -1,98 +1,84 @@
 """
-Painel financeiro CTI — entrada principal (< 100 linhas).
+Painel financeiro CTI — orquestrador (< 100 linhas).
 
 Execute:
   py -m streamlit run app.py
-  py -m streamlit run dashboard_cti.py
 """
 
 from __future__ import annotations
 
 import streamlit as st
 
-from src.components.headers import banner_auditoria_filtro, expander_auditoria_base, render_titulo
-from src.components.kpis import kpis_por_persona, render_kpi_row
+from src.components.bootstrap import carregar_estado, montar_contexto, render_cabecalho
+from src.components.headers import expander_auditoria_base
 from src.components.resilience import safe_render
-from src.components.sidebar import render_persona, render_sidebar
-from src.config import CSV_PATH
-from src.data.analytics import cena_rotulo, montar_indicadores, probabilidade_caixa_negativo
-from src.data.formatting import texto_ciclo, texto_ncg, texto_tesouraria
-from src.data.loaders import load_cti_csv
-from src.views import capital_giro, comparar, como_ler, distribuicao, faixa_risco, mapeamento_risco, prazos_ciclo
+from src.components.sidebar import render_language_selector, render_persona, render_sidebar
+from src.config import NAV_KEYS
+from src.config.i18n import get_lang, t
+from src.views import (
+    capital_giro as view_capital_giro,
+    comparar as view_comparar,
+    como_ler as view_como_ler,
+    distribuicao as view_distribuicao,
+    faixa_risco as view_faixa_risco,
+    mapeamento_risco as view_mapeamento_risco,
+    prazos_ciclo as view_prazos_ciclo,
+)
 
-st.set_page_config(page_title="CTI · Painel Financeiro", page_icon="📊", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(layout="wide", page_title="Dashboard CTI", page_icon="📊")
 
-
-@st.cache_data(show_spinner="Carregando base CTI…")
-def _carregar_base():
-    return load_cti_csv(CSV_PATH)
-
-
-@st.cache_data(show_spinner="Calculando indicadores…")
-def _montar_indicadores(df):
-    return montar_indicadores(df)
+# Chaves estáveis — rótulos vêm do i18n (troca de idioma não perde a seção).
+VIEW_RENDERERS = {
+    "capital_giro": lambda ctx: view_capital_giro.render(ctx.foco, ctx.foco_ano, ctx.cena_sel, ctx.ano_sel),
+    "prazos": lambda ctx: view_prazos_ciclo.render(ctx.foco, ctx.k, ctx.cena_sel, ctx.ano_sel),
+    "mapeamento": lambda ctx: view_mapeamento_risco.render(
+        ctx.ranking, ctx.persona, ctx.cenas, ctx.mapa_rotulo, ctx.n_cenarios
+    ),
+    "distribuicao": lambda ctx: view_distribuicao.render(
+        ctx.ranking, ctx.ano_enc, ctx.n_cenarios, ctx.p_ruina
+    ),
+    "faixa": lambda ctx: view_faixa_risco.render(ctx.ind, ctx.cena_sel, ctx.ano_sel, ctx.anos),
+    "comparar": lambda ctx: view_comparar.render(ctx.ind, ctx.cenas, ctx.cena_sel, ctx.ano_sel),
+    "como_ler": lambda ctx: view_como_ler.render(
+        ctx.n_cenarios, ctx.cena_sel, ctx.k, ctx.ano_enc, ctx.p_ruina
+    ),
+}
 
 
 def main() -> None:
-    render_titulo()
-    if not CSV_PATH.exists():
-        st.error(f"Arquivo não encontrado: {CSV_PATH}")
+    render_language_selector()
+    estado = carregar_estado()
+    if estado is None:
         st.stop()
+    df, ind, ranking = estado
 
-    df = safe_render("base de dados", _carregar_base)
-    if df is None:
-        st.stop()
-    resultado = safe_render("indicadores financeiros", _montar_indicadores, df)
-    if resultado is None:
-        st.stop()
-    ind, ranking = resultado
-    ranking = ranking.copy()
-    ranking["rotulo"] = ranking["CENA"].map(cena_rotulo)
-    mapa_rotulo = dict(zip(ranking["rotulo"], ranking["CENA"], strict=False))
-    n_cenarios = int(ranking["CENA"].nunique())
-    ano_enc = int(ranking["ano_encerramento"].iloc[0]) if len(ranking) else 12
-    p_ruina = probabilidade_caixa_negativo(ranking)
-
-    ano_sel, cena_sel, anos, cenas = render_sidebar(df, ind, n_cenarios)
+    ano_sel, cena_sel, anos, cenas = render_sidebar(df, ind, int(ranking["CENA"].nunique()))
     persona = render_persona()
-    foco = ind[ind["CENA"] == cena_sel].sort_values("ano_num")
-    foco_ano = foco if ano_sel == "Todos" else foco[foco["ano_num"] == ano_sel]
-    k = foco_ano[["NCG", "Saldo_Tesouraria", "Ciclo_Financeiro", "PMR", "PME", "PMP", "liquidez", "rentabilidade", "risco", "resultado"]].mean(numeric_only=True)
+    ctx = montar_contexto(
+        df, ind, ranking, ano_sel=ano_sel, cena_sel=cena_sel, anos=anos, cenas=cenas, persona=persona
+    )
+    render_cabecalho(ctx)
 
-    st.subheader(f"Cenário em foco: `{cena_sel}`")
-    safe_render("banner de auditoria", banner_auditoria_filtro, cena_sel, ano_sel)
-    st.write("Valores médios ao longo dos 12 anos." if ano_sel == "Todos" else f"Valores do **Ano {ano_sel}**.")
-    render_kpi_row(kpis_por_persona(persona, k, ranking))
-    if persona == "Visão Geral":
-        st.info(texto_ncg(k["NCG"]))
-        a, b = st.columns(2)
-        a.success(texto_tesouraria(k["Saldo_Tesouraria"]))
-        b.warning(texto_ciclo(k["Ciclo_Financeiro"]))
-    elif persona == "CFO & Credores":
-        st.info("Foco em solvência, giro e capacidade de honrar dívida no curto prazo.")
-    elif persona == "Acionistas":
-        st.info("Foco em retorno, resultado e liquidez que sustenta distribuição.")
-    else:
-        st.info("Foco em continuidade operacional, caixa de encerramento e sustentabilidade do horizonte.")
-    safe_render("auditoria da base", expander_auditoria_base, df, cena_sel, ano_sel)
+    lang = get_lang()
+    if "nav_key" not in st.session_state:
+        st.session_state["nav_key"] = NAV_KEYS[0]
+    labels = [t(f"nav.{k}") for k in NAV_KEYS]
+    label_to_key = dict(zip(labels, NAV_KEYS, strict=True))
+    default_label = t(f"nav.{st.session_state['nav_key']}")
+    secao_label = st.segmented_control(
+        "nav",
+        options=labels,
+        default=default_label if default_label in labels else labels[0],
+        key=f"nav_secao_{lang}",
+        label_visibility="collapsed",
+    )
+    nav_key = label_to_key.get(secao_label or default_label, NAV_KEYS[0])
+    st.session_state["nav_key"] = nav_key
 
-    abas = st.tabs(["Capital de giro", "Prazos e ciclo", "Mapeamento de Risco × Retorno", "Distribuição & Probabilidades", "Faixa de risco", "Comparar cenários", "Como ler estes números"])
-    with abas[0]:
-        safe_render("aba Capital de giro", capital_giro.render, foco, foco_ano, cena_sel, ano_sel)
-    with abas[1]:
-        safe_render("aba Prazos e ciclo", prazos_ciclo.render, foco, k, cena_sel, ano_sel)
-    with abas[2]:
-        safe_render("aba Mapeamento de Risco × Retorno", mapeamento_risco.render, ranking, persona, cenas, mapa_rotulo, n_cenarios)
-    with abas[3]:
-        safe_render("aba Distribuição & Probabilidades", distribuicao.render, ranking, ano_enc, n_cenarios, p_ruina)
-    with abas[4]:
-        safe_render("aba Faixa de risco", faixa_risco.render, ind, cena_sel, ano_sel, anos)
-    with abas[5]:
-        safe_render("aba Comparar cenários", comparar.render, ind, cenas, cena_sel, ano_sel)
-    with abas[6]:
-        safe_render("aba Como ler", como_ler.render, n_cenarios, cena_sel, k, ano_enc, p_ruina)
-    st.markdown("---")
-    st.caption("CTI · Dashboard modular · dados: Cti.csv")
+    st.space("small")
+    safe_render("auditoria da base", expander_auditoria_base, ctx.df, ctx.cena_sel, ctx.ano_sel)
+    VIEW_RENDERERS[nav_key](ctx)
+    st.caption(t("app.footer"))
 
 
 main()

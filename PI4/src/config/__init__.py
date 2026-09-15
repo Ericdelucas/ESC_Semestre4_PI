@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 CSV_PATH = ROOT / "Cti.csv"
+CACHE_DIR = ROOT / "cache"
 VENV_PY = ROOT / ".venv" / "bin" / "python"
 
 COR = "#1F4E45"
@@ -39,18 +40,28 @@ CORES_SELO = {
 }
 
 PERSONAS = [
-    "Visão Geral",
-    "CFO & Credores",
-    "Acionistas",
-    "Poder Concedente",
+    "geral",
+    "cfo",
+    "acionistas",
+    "concedente",
 ]
 
 METRICAS_NUVEM: dict[str, tuple[str, bool]] = {
-    "Caixa disponível": ("disponivel", True),
-    "Geração de caixa": ("geracao_caixa", True),
-    "Saldo de tesouraria": ("Saldo_Tesouraria", True),
-    "NCG": ("NCG", False),
+    "metric.cash_available": ("disponivel", True),
+    "metric.cash_generation": ("geracao_caixa", True),
+    "metric.treasury": ("Saldo_Tesouraria", True),
+    "metric.ncg": ("NCG", False),
 }
+
+NAV_KEYS = [
+    "capital_giro",
+    "prazos",
+    "mapeamento",
+    "distribuicao",
+    "faixa",
+    "comparar",
+    "como_ler",
+]
 
 CORES_COMPARA = [COR, COR_ALERTA, "#3D6B5A"]
 
