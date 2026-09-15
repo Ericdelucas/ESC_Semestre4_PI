@@ -5,12 +5,17 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from src.components.charts import recorte_label
 from src.config import COR_ANCORA
+from src.config.i18n import t
+from src.data.formatting import cena_rotulo
+
+
+def recorte_label(ano_sel: str | int) -> str:
+    return t("filter.all") if ano_sel == "Todos" else t("filter.year_n", n=ano_sel)
 
 
 def banner_auditoria_filtro(cena_sel: str, ano_sel: str | int) -> None:
-    ano_txt = "Todos" if ano_sel == "Todos" else str(ano_sel)
+    ano_txt = t("filter.all") if ano_sel == "Todos" else str(ano_sel)
     st.markdown(
         f"""
 <div style="
@@ -25,7 +30,7 @@ def banner_auditoria_filtro(cena_sel: str, ano_sel: str | int) -> None:
     letter-spacing: 0.01em;
     line-height: 1.45;
 ">
-📌 Exibindo dados de: Cenário {cena_sel} | Ano {ano_txt}
+📌 {t("banner.showing", cena=cena_rotulo(cena_sel), ano=ano_txt)}
 </div>
 """,
         unsafe_allow_html=True,
@@ -37,19 +42,22 @@ def expander_auditoria_base(df: pd.DataFrame, cena_sel: str, ano_sel: str | int)
     if ano_sel != "Todos":
         bruto = bruto.loc[bruto["ano_num"] == ano_sel]
     n = len(bruto)
-    with st.expander("🔍 Conferir dados brutos (Auditoria)"):
+    with st.expander(t("audit.title")):
         st.caption(
-            f"{n:,} registros encontrados na base para **{cena_sel}** · recorte **{recorte_label(ano_sel)}**."
+            t(
+                "audit.found",
+                n=f"{n:,}",
+                cena=cena_rotulo(cena_sel),
+                recorte=recorte_label(ano_sel),
+            )
         )
         if n == 0:
-            st.warning("Nenhuma linha da base corresponde a este recorte.")
+            st.warning(t("audit.empty"))
             return
         visao = bruto[["ANO", "CENA", "CONTA", "VALOR"]].copy()
         st.dataframe(visao, width="stretch", hide_index=True)
 
 
 def render_titulo() -> None:
-    st.title("Painel financeiro CTI")
-    st.caption(
-        "Leitura executiva dos cenários de planejamento · capital de giro, risco × retorno e probabilidade de caixa"
-    )
+    st.title(t("app.title"))
+    st.caption(t("app.caption"))

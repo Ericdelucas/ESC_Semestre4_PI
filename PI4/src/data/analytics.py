@@ -1,25 +1,67 @@
-"""Pipeline analítico (notebooks → código): indicadores, ranking, envelopes e capital de giro."""
+"""Pipeline analítico: agregações e estatísticas descritivas (sem regras de UI)."""
 
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
 
-from src.config import CONTAS_RECEBER, PECAS_CONTAS, SELOS_NEGOCIO
-from src.data.loaders import magnitude, soma_contas
+from src.config import CONTAS_RECEBER, PECAS_CONTAS
+from src.data.classifiers import classificar_cenarios
+from src.data.loaders import magnitude
+
+
+def _mapa_contas() -> dict[str, str]:
+    """CONTA original → nome canônico da coluna no wide."""
+    mapa: dict[str, str] = {c: "contas_receber" for c in CONTAS_RECEBER}
+    for nome, contas in PECAS_CONTAS.items():
+        for c in contas:
+            mapa[c] = nome
+    return mapa
 
 
 def montar_indicadores(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Calcula NCG, prazos, liquidez, risco e selos de negócio por cenário."""
-    contas_receber = soma_contas(df, CONTAS_RECEBER).rename(columns={"valor": "contas_receber"})
+    """Calcula NCG, prazos, liquidez e risco; delega selos a classifiers.
 
-    base = contas_receber.copy()
-    for nome, contas in PECAS_CONTAS.items():
-        tmp = soma_contas(df, contas).rename(columns={"valor": nome})
-        base = base.merge(tmp, on=["ANO", "ano_num", "CENA"], how="outer")
+    Usa um único pivot (em vez de dezenas de merges) sobre as contas necessárias.
+    """
+    mapa = _mapa_contas()
+    needed = set(mapa)
+    slim = df.loc[df["CONTA"].isin(needed), ["ANO", "ano_num", "CENA", "CONTA", "VALOR"]].copy()
+    slim["campo"] = slim["CONTA"].map(mapa)
+    wide = (
+        slim.groupby(["ANO", "ano_num", "CENA", "campo"], as_index=False)["VALOR"]
+        .sum()
+        .pivot(index=["ANO", "ano_num", "CENA"], columns="campo", values="VALOR")
+        .reset_index()
+        .fillna(0)
+    )
+    wide.columns.name = None
+    for col in [
+        "contas_receber",
+        "estoques",
+        "creditos_tributarios",
+        "fornecedores",
+        "encargos_sociais",
+        "tributos_a_pagar",
+        "disponivel",
+        "emprestimos_cp",
+        "ativo_circ",
+        "passivo_circ",
+        "total_ativo",
+        "total_passivo",
+        "dre_receita",
+        "dre_custos",
+        "resultado",
+        "ebitda",
+        "geracao_caixa",
+        "investimentos",
+        "distribuicao",
+        "saldo_final",
+    ]:
+        if col not in wide.columns:
+            wide[col] = 0.0
 
-    base = base.fillna(0)
-
+    base = wide
     base["ACO"] = (
         magnitude(base["contas_receber"])
         + magnitude(base["estoques"])
@@ -80,54 +122,6 @@ def montar_indicadores(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     return base, ranking
 
 
-def classificar_cenarios(ranking: pd.DataFrame) -> pd.DataFrame:
-    """Atribui selos de negócio (quartis + regras de ruína/investimento/distribuição)."""
-    out = ranking.copy()
-    q_rent = out["rentabilidade"].quantile([0.25, 0.50, 0.75])
-    q_liq = out["liquidez"].quantile([0.25, 0.50, 0.75])
-    q_risco = out["risco"].quantile([0.25, 0.75])
-    q_inv = out["pressao_invest"].quantile(0.75)
-    q_dist = out["dist_abs"].quantile(0.75)
-    q_disp = out["liquidez_acumulada"].quantile(0.25)
-
-    out["Alta rentabilidade"] = out["rentabilidade"] >= q_rent[0.75]
-    out["Retorno moderado"] = out["rentabilidade"].between(q_rent[0.25], q_rent[0.75], inclusive="left")
-    out["Alta liquidez"] = out["liquidez"] >= q_liq[0.75]
-    out["Baixa liquidez"] = out["liquidez"] <= q_liq[0.25]
-    out["Baixo risco"] = out["risco"] <= q_risco[0.25]
-    out["Alto risco"] = out["risco"] >= q_risco[0.75]
-
-    def classificar_selo(row: pd.Series) -> str:
-        if pd.notna(row["caixa_ano12"]) and row["caixa_ano12"] < 0:
-            return "Encerramento com Caixa Insuficiente"
-        if row["dist_abs"] >= q_dist and row["liquidez_acumulada"] <= q_disp:
-            return "Elevada Distribuição & Baixa Disponibilidade"
-        if row["pressao_invest"] >= q_inv:
-            return "Forte Pressão de Investimentos"
-        if row["Alta rentabilidade"] and row["Alta liquidez"]:
-            return "Alta Rentabilidade & Alta Liquidez"
-        if row["Alta rentabilidade"] and row["Baixa liquidez"]:
-            return "Alta Rentabilidade & Baixa Liquidez"
-        if row["Retorno moderado"] and row["Baixo risco"]:
-            return "Retorno Moderado & Baixo Risco"
-        if row["Alta rentabilidade"]:
-            return (
-                "Alta Rentabilidade & Alta Liquidez"
-                if row["liquidez"] >= q_liq[0.5]
-                else "Alta Rentabilidade & Baixa Liquidez"
-            )
-        if row["Baixo risco"]:
-            return "Retorno Moderado & Baixo Risco"
-        if row["pressao_invest"] >= out["pressao_invest"].median():
-            return "Forte Pressão de Investimentos"
-        return "Retorno Moderado & Baixo Risco"
-
-    out["selo"] = out.apply(classificar_selo, axis=1)
-    # Garante cobertura das 6 categorias no domínio
-    _ = SELOS_NEGOCIO
-    return out
-
-
 def resumo_envelope(ind: pd.DataFrame, coluna: str, maior_e_melhor: bool) -> pd.DataFrame:
     g = ind.groupby("ano_num")[coluna]
     out = pd.DataFrame(
@@ -169,13 +163,6 @@ def resumo_estatistico(serie: pd.Series) -> dict[str, float]:
     }
 
 
-def cena_rotulo(cena: str) -> str:
-    digitos = "".join(ch for ch in str(cena) if ch.isdigit())
-    if digitos:
-        return f"Cenário {int(digitos)}"
-    return str(cena)
-
-
 def cenas_por_percentil(ranking: pd.DataFrame, coluna: str, qs: list[float]) -> dict[float, str]:
     serie = ranking[coluna].dropna()
     out: dict[float, str] = {}
@@ -184,37 +171,6 @@ def cenas_por_percentil(ranking: pd.DataFrame, coluna: str, qs: list[float]) -> 
         idx = (ranking[coluna] - alvo).abs().idxmin()
         out[q] = str(ranking.loc[idx, "CENA"])
     return out
-
-
-def melhor_entre(a: float, b: float, *, maior_melhor: bool) -> str:
-    if pd.isna(a) and pd.isna(b):
-        return ""
-    if pd.isna(a):
-        return "B"
-    if pd.isna(b):
-        return "A"
-    if maior_melhor:
-        if a > b:
-            return "A"
-        if b > a:
-            return "B"
-    else:
-        if a < b:
-            return "A"
-        if b < a:
-            return "B"
-    return ""
-
-
-def cenas_padrao_comparacao(cenas: list[str]) -> list[str]:
-    escolhidas: list[str] = []
-    for alvo in ("00001", "00500"):
-        match = next((c for c in cenas if alvo in str(c)), None)
-        if match is not None:
-            escolhidas.append(match)
-    if len(escolhidas) < 2:
-        return cenas[:2]
-    return escolhidas[:2]
 
 
 def probabilidade_caixa_negativo(ranking: pd.DataFrame) -> float:
