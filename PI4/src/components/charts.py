@@ -7,16 +7,33 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 from src.config import COR, COR_ALERTA, COR_ANCORA, COR_OK, COR_SUAVE, COR_VERMELHO
+from src.config.i18n import t
 from src.data.analytics import resumo_envelope
-from src.data.formatting import fmt_rs
+from src.data.formatting import cena_rotulo, fmt_rs
 
 
 def recorte_label(ano_sel: str | int) -> str:
-    return "Todos" if ano_sel == "Todos" else f"Ano {ano_sel}"
+    return t("filter.all") if ano_sel == "Todos" else t("filter.year_n", n=ano_sel)
 
 
 def titulo_filtro(assunto: str, cena_sel: str, ano_sel: str | int) -> str:
-    return f"{assunto} — Cenário Foco: {cena_sel} | Recorte: {recorte_label(ano_sel)}"
+    return f"{assunto} — {cena_rotulo(cena_sel)} | {recorte_label(ano_sel)}"
+
+
+def serie_temporal_plotavel(dados: pd.DataFrame, y_cols: list[str]) -> pd.DataFrame:
+    """Normaliza ano_num (Int64/NA) e remove linhas inválidas antes do Plotly."""
+    faltando = [c for c in ["ano_num", *y_cols] if c not in dados.columns]
+    if faltando:
+        raise KeyError(f"Colunas ausentes para o gráfico: {faltando}")
+    out = dados.loc[:, ["ano_num", *y_cols]].copy()
+    out["ano_num"] = pd.to_numeric(out["ano_num"], errors="coerce")
+    out = out.dropna(subset=["ano_num"]).sort_values("ano_num")
+    out["ano_num"] = out["ano_num"].astype(int)
+    for col in y_cols:
+        out[col] = pd.to_numeric(out[col], errors="coerce")
+    if out.empty:
+        raise ValueError("Sem pontos válidos no horizonte para este cenário/recorte.")
+    return out
 
 
 def ancorar_ano_temporal(
@@ -196,9 +213,9 @@ def figura_histograma_caixa_final(serie_cx: pd.Series, ano_enc: int, n_cenarios:
     if not serie_cx.dropna().empty:
         fig.add_vline(x=float(serie_cx.median()), line_color=COR, annotation_text="Mediana")
     fig.update_layout(
-        title=f"Distribuição da liquidez final (Ano {ano_enc}) · {n_cenarios:,} cenários",
-        xaxis_title="Caixa de encerramento (R$)",
-        yaxis_title="Probabilidade",
+        title=t("dist.hist_title", ano=ano_enc, n=f"{n_cenarios:,}"),
+        xaxis_title=t("dist.box_y"),
+        yaxis_title=t("dist.prob_axis"),
         showlegend=False,
         bargap=0.05,
     )

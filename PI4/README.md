@@ -10,14 +10,11 @@ py -m pip install -r requirements_dashboard.txt
 py -m streamlit run app.py
 ```
 
-Compatível também com `py -m streamlit run dashboard_cti.py` ou `py dashboard_cti.py`.
-
 ## Estrutura
 
 ```
 PI4/
   app.py                 # entrada (< 100 linhas): roteamento das abas
-  dashboard_cti.py       # wrapper de compatibilidade
   Cti.csv                # base
   src/
     config.py            # constantes e caminhos
