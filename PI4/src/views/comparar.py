@@ -7,15 +7,18 @@ import plotly.express as px
 import streamlit as st
 
 from src.components.charts import ancorar_ano_temporal, titulo_filtro
+from src.components.headers import heading_with_help
+from src.components.kpis import render_metric_card
 from src.components.resilience import resilient_view, safe_render
 from src.config import CORES_COMPARA, METRICAS_NUVEM
+from src.config.glossary import help_text
 from src.config.i18n import get_lang, t
 from src.data.formatting import cenas_padrao_comparacao, cena_rotulo, fmt_dias, fmt_pct, fmt_rs
 
 
 @resilient_view("aba Comparar cenários")
 def render(ind: pd.DataFrame, cenas: list[str], cena_sel: str, ano_sel: str | int) -> None:
-    st.markdown(t("cmp.title"))
+    heading_with_help(t("cmp.title"), "cmp_overview")
     st.caption(t("cmp.caption"))
     padrao_comp = [c for c in cenas_padrao_comparacao(cenas) if c in cenas]
     escolhidos = st.multiselect(
@@ -25,6 +28,7 @@ def render(ind: pd.DataFrame, cenas: list[str], cena_sel: str, ano_sel: str | in
         max_selections=3,
         format_func=cena_rotulo,
         key=f"cenas_comparar_{get_lang()}",
+        help=help_text("cmp_select"),
     )
     if len(escolhidos) < 2:
         st.info(t("cmp.need2"))
@@ -38,6 +42,7 @@ def render(ind: pd.DataFrame, cenas: list[str], cena_sel: str, ano_sel: str | in
         options=metric_labels,
         index=0,
         key=f"metrica_comparar_{get_lang()}",
+        help=help_text("metric_picker"),
     )
     metric_key = label_to_key[escolhido]
     col_comp, _maior = METRICAS_NUVEM[metric_key]
@@ -76,12 +81,17 @@ def render(ind: pd.DataFrame, cenas: list[str], cena_sel: str, ano_sel: str | in
                 ["NCG", "Saldo_Tesouraria", "liquidez", "Ciclo_Financeiro", "disponivel", "geracao_caixa"]
             ].mean(numeric_only=True)
             col_ui.markdown(f"**{cena_rotulo(cena)}**")
-            col_ui.metric(t("cmp.row.cash"), fmt_rs(m["disponivel"]))
-            col_ui.metric(t("cmp.row.gen"), fmt_rs(m["geracao_caixa"]))
-            col_ui.metric(t("cmp.row.ncg"), fmt_rs(m["NCG"]))
-            col_ui.metric(t("cmp.row.treasury"), fmt_rs(m["Saldo_Tesouraria"]))
-            col_ui.metric(t("cmp.row.liq"), f"{m['liquidez']:.2f}x" if pd.notna(m["liquidez"]) else "—")
-            col_ui.metric(t("cmp.row.cycle"), fmt_dias(m["Ciclo_Financeiro"]))
+            with col_ui:
+                render_metric_card(t("cmp.row.cash"), fmt_rs(m["disponivel"]), help_text("cash_available"))
+                render_metric_card(t("cmp.row.gen"), fmt_rs(m["geracao_caixa"]), help_text("cash_generation"))
+                render_metric_card(t("cmp.row.ncg"), fmt_rs(m["NCG"]), help_text("ncg"))
+                render_metric_card(t("cmp.row.treasury"), fmt_rs(m["Saldo_Tesouraria"]), help_text("treasury"))
+                render_metric_card(
+                    t("cmp.row.liq"),
+                    f"{m['liquidez']:.2f}x" if pd.notna(m["liquidez"]) else "—",
+                    help_text("liquidity"),
+                )
+                render_metric_card(t("cmp.row.cycle"), fmt_dias(m["Ciclo_Financeiro"]), help_text("cycle"))
 
         resumo_comp = (
             trilhas.groupby("CENA", as_index=False)

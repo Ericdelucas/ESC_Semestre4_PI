@@ -8,6 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from src.config import CSV_PATH, PERSONAS
+from src.config.glossary import help_text
 from src.config.i18n import LANG_OPTIONS, get_lang, set_lang, t
 from src.data.formatting import cena_rotulo, cena_sort_key
 
@@ -48,6 +49,7 @@ def render_sidebar(df: pd.DataFrame, ind: pd.DataFrame, n_cenarios: int) -> tupl
             index=0,
             format_func=lambda x: t("filter.all") if x == "__all__" else str(x),
             key="filtro_ano",
+            help=help_text("sidebar_year"),
         )
         ano_sel: str | int = "Todos" if ano_choice == "__all__" else int(ano_choice)
 
@@ -60,6 +62,7 @@ def render_sidebar(df: pd.DataFrame, ind: pd.DataFrame, n_cenarios: int) -> tupl
             options=rotulos,
             index=0,
             key=f"filtro_cena_{get_lang()}",
+            help=help_text("sidebar_scenario"),
         )
         cena_sel = rotulo_para_cena[rotulo_sel]
 
@@ -85,6 +88,7 @@ def render_persona() -> str:
         options=labels,
         default=default_label if default_label in labels else labels[0],
         key=f"persona_visao_{lang}",
+        help=help_text("persona"),
     )
     persona_id = label_to_id.get(escolha or default_label, PERSONAS[0])
     st.session_state["persona_id"] = persona_id

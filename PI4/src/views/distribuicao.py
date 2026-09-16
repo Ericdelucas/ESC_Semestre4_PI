@@ -7,8 +7,11 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from src.components.charts import figura_histograma_caixa_final
+from src.components.headers import heading_with_help
+from src.components.kpis import render_metric_card
 from src.components.resilience import resilient_view, safe_render
 from src.config import COR, COR_OK, COR_SUAVE, COR_VERMELHO
+from src.config.glossary import PERCENTIL_HELP, help_text
 from src.config.i18n import t
 from src.data.formatting import fmt_rs
 
@@ -42,13 +45,24 @@ def _boxplot(serie_cx: pd.Series, qs: pd.Series, ano_enc: int) -> None:
 
 @resilient_view("aba Distribuição & Probabilidades")
 def render(ranking: pd.DataFrame, ano_enc: int, n_cenarios: int, p_ruina: float) -> None:
-    st.markdown(t("dist.title"))
+    heading_with_help(t("dist.title"), "dist_overview")
     st.caption(t("dist.caption"))
 
     alerta1, alerta2, alerta3 = st.columns(3)
-    alerta1.metric(t("dist.prob", ano=ano_enc), f"{p_ruina:.1f}%")
-    alerta2.metric(t("dist.ruin"), f"{int((ranking['caixa_ano12'] < 0).sum()):,}")
-    alerta3.metric(t("dist.median"), fmt_rs(float(ranking["caixa_ano12"].median())))
+    with alerta1:
+        render_metric_card(t("dist.prob", ano=ano_enc), f"{p_ruina:.1f}%", help_text("ruin_prob"))
+    with alerta2:
+        render_metric_card(
+            t("dist.ruin"),
+            f"{int((ranking['caixa_ano12'] < 0).sum()):,}",
+            help_text("ruin_count"),
+        )
+    with alerta3:
+        render_metric_card(
+            t("dist.median"),
+            fmt_rs(float(ranking["caixa_ano12"].median())),
+            help_text("median_cash"),
+        )
 
     if p_ruina > 10:
         st.error(t("dist.alert_hi", p=p_ruina, ano=ano_enc))
@@ -75,7 +89,8 @@ def render(ranking: pd.DataFrame, ano_enc: int, n_cenarios: int, p_ruina: float)
         [(0.05, "P5"), (0.25, "P25"), (0.50, "P50"), (0.75, "P75"), (0.95, "P95")],
         strict=True,
     ):
-        col_ui.metric(nome, fmt_rs(float(qs[q])))
+        with col_ui:
+            render_metric_card(nome, fmt_rs(float(qs[q])), help_text(PERCENTIL_HELP[nome]))
 
     safe_render("boxplot de percentis", _boxplot, serie_cx, qs, ano_enc)
     st.caption(t("dist.foot"))

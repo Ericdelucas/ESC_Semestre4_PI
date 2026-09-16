@@ -7,12 +7,14 @@ __all__ = [
     "banner_auditoria_filtro",
     "card_selo_html",
     "expander_auditoria_base",
+    "heading_with_help",
     "figura_envelope",
     "figura_histograma_ano",
     "figura_histograma_caixa_final",
     "kpis_por_persona",
     "recorte_label",
     "render_kpi_row",
+    "render_metric_card",
     "render_persona",
     "render_sidebar",
     "render_titulo",
@@ -33,11 +35,11 @@ def __getattr__(name: str):
         from src.components import charts as mod
 
         return getattr(mod, name)
-    if name in {"banner_auditoria_filtro", "expander_auditoria_base", "render_titulo"}:
+    if name in {"banner_auditoria_filtro", "expander_auditoria_base", "heading_with_help", "render_titulo"}:
         from src.components import headers as mod
 
         return getattr(mod, name)
-    if name in {"card_selo_html", "kpis_por_persona", "render_kpi_row"}:
+    if name in {"card_selo_html", "kpis_por_persona", "render_kpi_row", "render_metric_card"}:
         from src.components import kpis as mod
 
         return getattr(mod, name)

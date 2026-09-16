@@ -7,9 +7,11 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
+from src.components.headers import heading_with_help
 from src.components.kpis import card_selo_html
 from src.components.resilience import resilient_view, safe_render
 from src.config import COR_ANCORA, CORES_SELO, SELOS_NEGOCIO
+from src.config.glossary import help_text
 from src.config.i18n import get_lang, t, translate_selo
 from src.data.analytics import cenas_por_percentil
 from src.data.formatting import cena_rotulo, cena_sort_key, fmt_dias, fmt_pct, fmt_rs, melhor_entre
@@ -46,6 +48,8 @@ def _scatter(
             "risco": t("map.x"),
             "rentabilidade": t("map.y"),
             "liquidez_plot": t("map.size"),
+            "liquidez": t("kpi.liquidity"),
+            "Ciclo_Financeiro": t("kpi.cycle"),
             "selo_i18n": t("map.selo"),
         },
         title=t("map.chart_title", n=f"{len(rank_view):,}"),
@@ -79,7 +83,7 @@ def render(
     mapa_rotulo: dict[str, str],
     n_cenarios: int,
 ) -> None:
-    st.markdown(t("map.title"))
+    heading_with_help(t("map.title"), "risk_return")
     st.caption(t("map.caption", n=f"{n_cenarios:,}"))
 
     if "selo_filtro" not in st.session_state:
@@ -120,6 +124,7 @@ def render(
         options=opcoes_busca,
         index=0,
         key=f"busca_cena_matriz_{get_lang()}",
+        help=help_text("map_search"),
     )
     cena_destaque = mapa_rotulo.get(busca) if busca != nenhum else None
 
@@ -142,6 +147,7 @@ def render(
                     options=rotulos_ord,
                     index=rotulos_ord.index(rotulo_a_default) if rotulo_a_default in rotulos_ord else 0,
                     key=f"comp_a_{get_lang()}",
+                    help=help_text("map_comp"),
                 )
             with c_b:
                 sel_b = st.selectbox(
@@ -149,6 +155,7 @@ def render(
                     options=rotulos_ord,
                     index=rotulos_ord.index(rotulo_b_default) if rotulo_b_default in rotulos_ord else 0,
                     key=f"comp_b_{get_lang()}",
+                    help=help_text("map_comp"),
                 )
             ra = ranking.loc[ranking["CENA"] == mapa_rotulo[sel_a]].iloc[0]
             rb = ranking.loc[ranking["CENA"] == mapa_rotulo[sel_b]].iloc[0]

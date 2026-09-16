@@ -6,8 +6,11 @@ import pandas as pd
 import streamlit as st
 
 from src.components.charts import figura_envelope, figura_histograma_ano, titulo_filtro
+from src.components.headers import heading_with_help
+from src.components.kpis import render_metric_card
 from src.components.resilience import resilient_view, safe_render
 from src.config import METRICAS_NUVEM
+from src.config.glossary import NUVEM_HELP, help_join, help_text
 from src.config.i18n import get_lang, t
 from src.data.analytics import resumo_envelope
 from src.data.formatting import fmt_rs
@@ -20,7 +23,7 @@ def render(
     ano_sel: str | int,
     anos: list[int],
 ) -> None:
-    st.markdown(t("faixa.title"))
+    heading_with_help(t("faixa.title"), "faixa_envelope")
     st.caption(t("faixa.caption"))
 
     metric_keys = list(METRICAS_NUVEM.keys())
@@ -31,6 +34,7 @@ def render(
         options=metric_labels,
         index=0,
         key=f"metrica_nuvem_{get_lang()}",
+        help=help_text("metric_picker"),
     )
     metric_key = label_to_key[escolhido]
     col_nuvem, maior_melhor = METRICAS_NUVEM[metric_key]
@@ -57,26 +61,42 @@ def render(
     try:
         env = resumo_envelope(ind, col_nuvem, maior_melhor)
         e1, e2, e3, e4 = st.columns(4)
-        e1.metric(t("faixa.median"), fmt_rs(float(env["mediana"].mean())))
-        e2.metric(t("faixa.mean"), fmt_rs(float(env["media"].mean())))
-        e3.metric(
-            t("faixa.worst"),
-            fmt_rs(float(env["pessimista"].min() if maior_melhor else env["pessimista"].max())),
-        )
-        e4.metric(
-            t("faixa.best"),
-            fmt_rs(float(env["otimista"].max() if maior_melhor else env["otimista"].min())),
-        )
+        gloss_metrica = NUVEM_HELP.get(metric_key, "cash_available")
+        with e1:
+            render_metric_card(
+                t("faixa.median"),
+                fmt_rs(float(env["mediana"].mean())),
+                help_join(gloss_metrica, "faixa_median"),
+            )
+        with e2:
+            render_metric_card(
+                t("faixa.mean"),
+                fmt_rs(float(env["media"].mean())),
+                help_join(gloss_metrica, "faixa_mean"),
+            )
+        with e3:
+            render_metric_card(
+                t("faixa.worst"),
+                fmt_rs(float(env["pessimista"].min() if maior_melhor else env["pessimista"].max())),
+                help_join(gloss_metrica, "faixa_worst"),
+            )
+        with e4:
+            render_metric_card(
+                t("faixa.best"),
+                fmt_rs(float(env["otimista"].max() if maior_melhor else env["otimista"].min())),
+                help_join(gloss_metrica, "faixa_best"),
+            )
     except Exception as exc:  # noqa: BLE001
         st.error(str(exc))
 
-    st.markdown(t("faixa.hist"))
+    heading_with_help(t("faixa.hist"), "faixa_hist_year")
     if ano_sel == "Todos":
         ano_hist = st.selectbox(
             t("faixa.hist_year"),
             options=anos,
             index=anos.index(9) if 9 in anos else 0,
             key="ano_histograma",
+            help=help_text("faixa_hist_year"),
         )
         st.caption(t("faixa.hist_all"))
     else:
