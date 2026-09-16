@@ -6,6 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from src.config import COR_ANCORA
+from src.config.glossary import help_text
 from src.config.i18n import t
 from src.data.formatting import cena_rotulo
 
@@ -61,3 +62,9 @@ def expander_auditoria_base(df: pd.DataFrame, cena_sel: str, ano_sel: str | int)
 def render_titulo() -> None:
     st.title(t("app.title"))
     st.caption(t("app.caption"))
+
+
+def heading_with_help(title: str, gloss_key: str) -> None:
+    """Título de seção com tooltip nativo (ⓘ) a partir do glossário."""
+    body = title.lstrip("#").strip()
+    st.subheader(body, help=help_text(gloss_key))
