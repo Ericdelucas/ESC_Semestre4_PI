@@ -50,7 +50,7 @@ def ancorar_ano_temporal(
         line_dash="dash",
         line_color=COR_ANCORA,
         line_width=2,
-        annotation_text=f"Filtro: Ano {ano}",
+        annotation_text=t("chart.filter", ano=ano),
         annotation_position="top",
         annotation_font={"color": COR_ANCORA, "size": 12},
     )
@@ -70,9 +70,9 @@ def ancorar_ano_temporal(
                     "symbol": "diamond",
                     "line": {"width": 2, "color": "#111111"},
                 },
-                name=f"Âncora do filtro (Ano {ano})",
+                name=t("chart.anchor", ano=ano),
                 showlegend=primeira,
-                hovertemplate=f"{col}<br>Ano {ano}: %{{y}}<extra></extra>",
+                hovertemplate=f"{t('chart.year')} {ano}: %{{y}}<extra></extra>",
             )
         )
         primeira = False
@@ -97,7 +97,7 @@ def figura_envelope(
             y=ind[coluna],
             mode="markers",
             marker={"size": 5, "color": COR_SUAVE, "opacity": 0.07},
-            name="Todos os cenários",
+            name=t("chart.all"),
             hoverinfo="skip",
         )
     )
@@ -110,17 +110,17 @@ def figura_envelope(
             line={"width": 0},
             fill="tonexty",
             fillcolor="rgba(31, 78, 69, 0.18)",
-            name="Faixa 5–95%",
+            name=t("chart.band"),
             hoverinfo="skip",
         )
     )
-    fig.add_trace(go.Scatter(x=env["ano_num"], y=env["mediana"], mode="lines+markers", line={"color": COR, "width": 3}, name="Mais provável (mediana)"))
-    fig.add_trace(go.Scatter(x=env["ano_num"], y=env["media"], mode="lines", line={"color": COR, "width": 1.5, "dash": "dot"}, name="Média"))
-    fig.add_trace(go.Scatter(x=env["ano_num"], y=env["pessimista"], mode="lines+markers", line={"color": COR_ALERTA, "width": 2}, name="Pessimista (pior caso)"))
-    fig.add_trace(go.Scatter(x=env["ano_num"], y=env["otimista"], mode="lines+markers", line={"color": COR_OK, "width": 2}, name="Otimista (melhor caso)"))
+    fig.add_trace(go.Scatter(x=env["ano_num"], y=env["mediana"], mode="lines+markers", line={"color": COR, "width": 3}, name=t("chart.median")))
+    fig.add_trace(go.Scatter(x=env["ano_num"], y=env["media"], mode="lines", line={"color": COR, "width": 1.5, "dash": "dot"}, name=t("chart.mean")))
+    fig.add_trace(go.Scatter(x=env["ano_num"], y=env["pessimista"], mode="lines+markers", line={"color": COR_ALERTA, "width": 2}, name=t("chart.pessimistic")))
+    fig.add_trace(go.Scatter(x=env["ano_num"], y=env["otimista"], mode="lines+markers", line={"color": COR_OK, "width": 2}, name=t("chart.optimistic")))
     fig.update_layout(
         title=titulo or f"Faixa de risco — {rotulo} nos 12 anos ({ind['CENA'].nunique():,} cenários)",
-        xaxis_title="Ano",
+        xaxis_title=t("chart.year"),
         yaxis_title=rotulo,
         hovermode="x unified",
         legend_title_text="",
@@ -131,7 +131,7 @@ def figura_envelope(
             line_dash="dash",
             line_color=COR_ANCORA,
             line_width=2,
-            annotation_text=f"Filtro: Ano {ano_destaque}",
+            annotation_text=t("chart.filter", ano=ano_destaque),
             annotation_position="top",
             annotation_font={"color": COR_ANCORA, "size": 12},
         )
@@ -144,8 +144,8 @@ def figura_envelope(
                         y=ancora[coluna],
                         mode="markers",
                         marker={"size": 16, "color": COR_ANCORA, "symbol": "diamond", "line": {"width": 2, "color": "#111111"}},
-                        name=f"Âncora · {cena_destaque} · Ano {ano_destaque}",
-                        hovertemplate=f"{cena_destaque}<br>Ano {ano_destaque}: %{{y}}<extra></extra>",
+                        name=f"{cena_rotulo(cena_destaque)} | {t('chart.anchor', ano=ano_destaque)}",
+                        hovertemplate=f"{cena_rotulo(cena_destaque)}<br>{t('chart.year')} {ano_destaque}: %{{y}}<extra></extra>",
                     )
                 )
     return fig
@@ -167,18 +167,18 @@ def figura_histograma_ano(
         histnorm="probability",
         color_discrete_sequence=[COR_SUAVE],
         title=titulo or f"Distribuição de {rotulo} no Ano {ano} ({len(serie):,} cenários)",
-        labels={coluna: rotulo, "probability": "Probabilidade"},
+        labels={coluna: rotulo, "probability": t("dist.prob_axis")},
     )
-    fig.update_layout(yaxis_title="Probabilidade (fração dos cenários)", bargap=0.05)
+    fig.update_layout(yaxis_title=t("chart.probability"), bargap=0.05)
     if serie.empty:
         return fig
     marcas = [
-        (float(serie.median()), COR, "Mediana"),
-        (float(serie.mean()), COR, "Média"),
-        (float(serie.min()), COR_ALERTA, "Pior caso"),
-        (float(serie.max()), COR_OK, "Melhor caso"),
+        (float(serie.median()), COR, t("chart.median")),
+        (float(serie.mean()), COR, t("chart.mean")),
+        (float(serie.min()), COR_ALERTA, t("chart.worst")),
+        (float(serie.max()), COR_OK, t("chart.best")),
     ]
-    dash = {"Mediana": "solid", "Média": "dot", "Pior caso": "dash", "Melhor caso": "dash"}
+    dash = {t("chart.median"): "solid", t("chart.mean"): "dot", t("chart.worst"): "dash", t("chart.best"): "dash"}
     for valor, cor, nome in marcas:
         fig.add_vline(
             x=valor,
@@ -204,14 +204,14 @@ def figura_histograma_caixa_final(serie_cx: pd.Series, ano_enc: int, n_cenarios:
                 y=counts / counts.sum() if counts.sum() else counts,
                 marker_color=cores_barras,
                 width=(edges[1] - edges[0]) * 0.92 if len(edges) > 1 else None,
-                hovertemplate="Caixa ≈ %{x}<br>Prob. ≈ %{y:.2%}<extra></extra>",
-                name="Distribuição",
+                hovertemplate=t("metric.cash_available") + " %{x}<br>" + t("dist.prob_axis") + " %{y:.2%}<extra></extra>",
+                name=t("nav.distribuicao"),
             )
         ]
     )
     fig.add_vline(x=0, line_dash="dash", line_color=COR_VERMELHO, annotation_text="Zero")
     if not serie_cx.dropna().empty:
-        fig.add_vline(x=float(serie_cx.median()), line_color=COR, annotation_text="Mediana")
+        fig.add_vline(x=float(serie_cx.median()), line_color=COR, annotation_text=t("chart.median"))
     fig.update_layout(
         title=t("dist.hist_title", ano=ano_enc, n=f"{n_cenarios:,}"),
         xaxis_title=t("dist.box_y"),

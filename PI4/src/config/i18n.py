@@ -41,10 +41,10 @@ TEXTS: dict[str, dict[str, str]] = {
         "filter.year_n": "Ano {n}",
         "scenario.prefix": "Cenário",
         "persona.label": "Visão do stakeholder",
-        "persona.geral": "Visão Geral",
+        "persona.geral": "CEO",
         "persona.cfo": "CFO & Credores",
         "persona.acionistas": "Acionistas",
-        "persona.concedente": "Poder Concedente",
+        "persona.concedente": "Poder concedente",
         "nav.capital_giro": "Capital de giro",
         "nav.prazos": "Prazos e ciclo",
         "nav.mapeamento": "Mapeamento de Risco × Retorno",
@@ -242,7 +242,7 @@ Cenário atual: **{cena}** · Rentabilidade {rent} · Risco {risco} · Prob. cai
         "filter.year_n": "Year {n}",
         "scenario.prefix": "Scenario",
         "persona.label": "Stakeholder view",
-        "persona.geral": "Overview",
+        "persona.geral": "CEO",
         "persona.cfo": "CFO & Creditors",
         "persona.acionistas": "Shareholders",
         "persona.concedente": "Granting Authority",
@@ -261,7 +261,7 @@ Cenário atual: **{cena}** · Rentabilidade {rent} · Risco {risco} · Prob. cai
         "audit.title": "🔍 Review raw data (Audit)",
         "audit.found": "{n} records found for **{cena}** · slice **{recorte}**.",
         "audit.empty": "No rows match this filter.",
-        "kpi.ncg": "NWC",
+        "kpi.ncg": "WCR",
         "kpi.treasury": "Treasury Balance",
         "kpi.cycle": "Cash Conversion Cycle",
         "kpi.liquidity": "Current Liquidity",
@@ -275,7 +275,7 @@ Cenário atual: **{cena}** · Rentabilidade {rent} · Risco {risco} · Prob. cai
         "txt.ncg.na": "No data",
         "txt.ncg.pos": "Operations consume cash: receivables/inventory tie up more resources than suppliers fund.",
         "txt.ncg.neg": "Operations generate cash: suppliers and obligations help fund working capital.",
-        "txt.ncg.zero": "Balanced NWC.",
+        "txt.ncg.zero": "Balanced WCR.",
         "txt.treasury.na": "No data",
         "txt.treasury.ok": "Available cash covers (or exceeds) short-term loans — lower day-to-day bank dependence.",
         "txt.treasury.bad": "Short-term loans exceed cash on hand — the firm relies on banks to fund routine needs.",
@@ -284,15 +284,15 @@ Cenário atual: **{cena}** · Rentabilidade {rent} · Risco {risco} · Prob. cai
         "txt.cycle.mod": "Moderate positive cycle ({dias}): there is still a funding gap between paying and collecting.",
         "txt.cycle.neg": "Negative cycle ({dias}): the firm collects before it pays — a cash-friendly position.",
         "cap.evolution": "#### Evolution over time (selected scenario)",
-        "cap.ncg_source": "#### Where NWC comes from",
+        "cap.ncg_source": "#### Where WCR comes from",
         "chart.evolution": "Time Evolution",
-        "chart.ncg_comp": "NWC Composition",
+        "chart.ncg_comp": "WCR Composition",
         "chart.year": "Year",
         "chart.indicator": "Indicator",
         "chart.component": "Component",
         "comp.aco": "Operating current assets (receivables + inventory + tax credits)",
         "comp.pco": "Operating current liabilities (suppliers + payroll + taxes)",
-        "comp.ncg": "NWC (= OCA − OCL)",
+        "comp.ncg": "WCR (= OCA − OCL)",
         "prazos.title": "#### Average terms (days)",
         "prazos.pmr": "DSO — collect from customers",
         "prazos.pme": "DIO — inventory turnover",
@@ -370,7 +370,7 @@ Cenário atual: **{cena}** · Rentabilidade {rent} · Risco {risco} · Prob. cai
         "cmp.chart": "{metric}: horizon comparison",
         "cmp.row.cash": "Available cash",
         "cmp.row.gen": "Cash generation",
-        "cmp.row.ncg": "NWC",
+        "cmp.row.ncg": "WCR",
         "cmp.row.treasury": "Treasury balance",
         "cmp.row.liq": "Current liquidity",
         "cmp.row.cycle": "Cash conversion cycle",
@@ -378,7 +378,7 @@ Cenário atual: **{cena}** · Rentabilidade {rent} · Risco {risco} · Prob. cai
         "metric.cash_available": "Available cash",
         "metric.cash_generation": "Cash generation",
         "metric.treasury": "Treasury balance",
-        "metric.ncg": "NWC",
+        "metric.ncg": "WCR",
         "selo.alta_alta": "High Profitability & High Liquidity",
         "selo.alta_baixa": "High Profitability & Low Liquidity",
         "selo.mod_baixo": "Moderate Return & Low Risk",
@@ -390,7 +390,7 @@ Cenário atual: **{cena}** · Rentabilidade {rent} · Risco {risco} · Prob. cai
         "fmt.days": "days",
         "como_ler.body": """### What this dashboard answers
 
-1. **Do operations consume or generate cash?** → look at **NWC**.
+1. **Do operations consume or generate cash?** → look at **WCR**.
 2. **Do we depend on banks short term?** → look at **Treasury Balance**.
 3. **How many days do we fund operations?** → look at the **Cash Conversion Cycle**.
 4. **How do the {n} scenarios spread in risk vs return?** → **Risk vs Return Matrix**.
@@ -404,7 +404,7 @@ Use **Stakeholder view** to prioritize top KPIs.
 
 | Indicator | Formula |
 |---|---|
-| NWC | OCA − abs(OCL) |
+| WCR | OCA − abs(OCL) |
 | Treasury Balance | Cash − ST Loans |
 | DSO | (Receivables / Revenue) × 365 |
 | DIO | (Inventory / abs(COGS)) × 365 |
@@ -416,7 +416,7 @@ Current scenario: **{cena}** · Profitability {rent} · Risk {risco} · Prob. ne
         "ai.title": "🤖 CTI AI Assistant",
         "ai.caption": "Virtual financial advisor with RAG over simulated scenarios and CTI manuals.",
         "ai.placeholder": "Ask about risk scenarios or CTI reports...",
-        "ai.welcome": "Hello. I am CTI's virtual advisor. Ask about NWC, treasury, the cash cycle, risk badges or the chance of negative cash across the 1,200 scenarios.",
+        "ai.welcome": "Hello. I am CTI's virtual advisor. Ask about WCR, treasury, the cash cycle, risk badges or the chance of negative cash across the 1,200 scenarios.",
         "ai.sources": "Sources",
         "ai.no_key": "Without `GOOGLE_API_KEY` the assistant only retrieves excerpts. For generated answers, paste the key above, in `.env` or `.streamlit/secrets.toml`.",
         "ai.clear": "Clear chat",
@@ -427,6 +427,10 @@ Current scenario: **{cena}** · Profitability {rent} · Risk {risco} · Prob. ne
         "ai.extra_focus": "Screen context: focus scenario {cena}; {n} scenarios in the dataset; prob. negative cash Year {ano}: {p_ruina}%; slice profitability {rent}.",
     },
 }
+
+
+TEXTS['pt'].update({'nav.resumo': 'Resumo do perfil', 'metric.distributions': 'Distribuição aos acionistas', 'metric.investments': 'Investimentos', 'chart.all': 'Todos os cenários', 'chart.band': 'Faixa P5-P95', 'chart.median': 'Mediana', 'chart.mean': 'Média', 'chart.worst': 'Mínimo', 'chart.best': 'Máximo', 'chart.pessimistic': 'Extremo desfavorável', 'chart.optimistic': 'Extremo favorável', 'chart.filter': 'Filtro: Ano {ano}', 'chart.anchor': 'Ano selecionado: {ano}', 'chart.probability': 'Probabilidade (fração dos cenários)', 'error.render': 'Não foi possível exibir esta seção.', 'error.detail': 'Detalhes técnicos'})
+TEXTS['en'].update({'nav.resumo': 'Role overview', 'metric.distributions': 'Shareholder distributions', 'metric.investments': 'Investments', 'chart.all': 'All scenarios', 'chart.band': 'P5-P95 band', 'chart.median': 'Median', 'chart.mean': 'Mean', 'chart.worst': 'Minimum', 'chart.best': 'Maximum', 'chart.pessimistic': 'Unfavorable extreme', 'chart.optimistic': 'Favorable extreme', 'chart.filter': 'Filter: Year {ano}', 'chart.anchor': 'Selected year: {ano}', 'chart.probability': 'Probability (share of scenarios)', 'error.render': 'This section could not be displayed.', 'error.detail': 'Technical details', 'kpi.liquidity': 'Current ratio', 'cmp.row.liq': 'Current ratio', 'kpi.ncg': 'Working capital requirement', 'metric.ncg': 'Working capital requirement', 'cmp.row.ncg': 'Working capital requirement', 'cap.ncg_source': '#### Components of the working capital requirement', 'chart.ncg_comp': 'Working capital requirement components', 'comp.ncg': 'WCR (= OCA - OCL)', 'kpi.profitability': 'Net profit margin'})
 
 
 def get_lang() -> str:

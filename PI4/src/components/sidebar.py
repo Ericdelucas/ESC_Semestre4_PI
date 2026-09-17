@@ -54,17 +54,10 @@ def render_sidebar(df: pd.DataFrame, ind: pd.DataFrame, n_cenarios: int) -> tupl
         ano_sel: str | int = "Todos" if ano_choice == "__all__" else int(ano_choice)
 
         cenas = sorted(ind["CENA"].dropna().unique().tolist(), key=cena_sort_key)
-        rotulo_para_cena = {cena_rotulo(c): c for c in cenas}
-        rotulos = list(rotulo_para_cena.keys())
-        # Chave por idioma evita mismatch de rótulo PT/EN no widget
-        rotulo_sel = st.selectbox(
-            t("sidebar.scenario"),
-            options=rotulos,
-            index=0,
-            key=f"filtro_cena_{get_lang()}",
-            help=help_text("sidebar_scenario"),
+        cena_sel = st.selectbox(
+            t("sidebar.scenario"), options=cenas, format_func=cena_rotulo,
+            key="filtro_cena", help=help_text("sidebar_scenario"),
         )
-        cena_sel = rotulo_para_cena[rotulo_sel]
 
         st.markdown("---")
         st.markdown(
@@ -77,19 +70,15 @@ def render_sidebar(df: pd.DataFrame, ind: pd.DataFrame, n_cenarios: int) -> tupl
 
 
 def render_persona() -> str:
-    lang = get_lang()
-    labels = [t(f"persona.{p}") for p in PERSONAS]
-    label_to_id = dict(zip(labels, PERSONAS, strict=True))
-    if "persona_id" not in st.session_state:
+    if st.session_state.get("persona_id") not in PERSONAS:
         st.session_state["persona_id"] = PERSONAS[0]
-    default_label = t(f"persona.{st.session_state['persona_id']}")
-    escolha = st.segmented_control(
-        t("persona.label"),
-        options=labels,
-        default=default_label if default_label in labels else labels[0],
-        key=f"persona_visao_{lang}",
+    current = st.session_state["persona_id"]
+    choice = st.segmented_control(
+        t("persona.label"), options=PERSONAS,
+        format_func=lambda role: t(f"persona.{role}"),
+        default=current, key="persona_original",
         help=help_text("persona"),
     )
-    persona_id = label_to_id.get(escolha or default_label, PERSONAS[0])
-    st.session_state["persona_id"] = persona_id
-    return persona_id
+    role = choice if choice in PERSONAS else current
+    st.session_state["persona_id"] = role
+    return role
