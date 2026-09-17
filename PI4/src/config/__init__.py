@@ -7,6 +7,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 CSV_PATH = ROOT / "Cti.csv"
 CACHE_DIR = ROOT / "cache"
+DOCS_DIR = ROOT / "documentos"
+REPO_DOCS_DIR = ROOT.parent / "documentos"
 VENV_PY = ROOT / ".venv" / "bin" / "python"
 
 COR = "#1F4E45"
@@ -60,6 +62,7 @@ NAV_KEYS = [
     "distribuicao",
     "faixa",
     "comparar",
+    "assistente",
     "como_ler",
 ]
 

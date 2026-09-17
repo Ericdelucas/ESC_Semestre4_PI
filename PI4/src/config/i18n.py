@@ -51,6 +51,7 @@ TEXTS: dict[str, dict[str, str]] = {
         "nav.distribuicao": "Distribuição & Probabilidades",
         "nav.faixa": "Faixa de risco",
         "nav.comparar": "Comparar cenários",
+        "nav.assistente": "🤖 Assistente IA",
         "nav.como_ler": "Como ler estes números",
         "header.focus": "Cenário em foco: **{cena}**",
         "header.avg_all": "Valores médios ao longo dos 12 anos.",
@@ -212,6 +213,18 @@ Use o seletor de **Visão do stakeholder** para priorizar os KPIs do topo.
 
 Cenário atual: **{cena}** · Rentabilidade {rent} · Risco {risco} · Prob. caixa negativo Ano {ano}: **{p_ruina:.1f}%**.
 """,
+        "ai.title": "🤖 Assistente de IA CTI",
+        "ai.caption": "Consultor financeiro virtual com RAG sobre os cenários simulados e os manuais da CTI.",
+        "ai.placeholder": "Faça uma pergunta sobre os cenários de risco ou relatórios da CTI...",
+        "ai.welcome": "Olá. Sou o consultor virtual da CTI. Pergunte sobre NCG, tesouraria, ciclo, selos de risco ou a probabilidade de caixa negativo nos 1.200 cenários.",
+        "ai.sources": "Fontes consultadas",
+        "ai.no_key": "Sem `GOOGLE_API_KEY` o assistente só recupera trechos. Para respostas geradas, coloque a chave no campo acima, no `.env` ou em `.streamlit/secrets.toml`.",
+        "ai.clear": "Limpar conversa",
+        "ai.thinking": "Consultando cenários e manuais…",
+        "ai.api_key": "Chave da API Gemini",
+        "ai.api_key_help": "Obtenha em Google AI Studio. A chave fica só nesta sessão, no .env ou nos secrets do Streamlit.",
+        "ai.indexed": "Índice RAG: {n_docs} trechos · {n_cen} cenários · backend {backend}",
+        "ai.extra_focus": "Contexto da tela: cenário em foco {cena}; {n} cenários na base; prob. caixa negativo Ano {ano}: {p_ruina}%; rentabilidade do recorte {rent}.",
     },
     "en": {
         "lang.label": "Language / Idioma",
@@ -239,6 +252,7 @@ Cenário atual: **{cena}** · Rentabilidade {rent} · Risco {risco} · Prob. cai
         "nav.distribuicao": "Distribution & Probabilities",
         "nav.faixa": "Risk Band",
         "nav.comparar": "Compare Scenarios",
+        "nav.assistente": "🤖 AI Assistant",
         "nav.como_ler": "How to Read These Numbers",
         "header.focus": "Focus scenario: **{cena}**",
         "header.avg_all": "Average values over the 12-year horizon.",
@@ -399,6 +413,18 @@ Use **Stakeholder view** to prioritize top KPIs.
 
 Current scenario: **{cena}** · Profitability {rent} · Risk {risco} · Prob. negative cash Year {ano}: **{p_ruina:.1f}%**.
 """,
+        "ai.title": "🤖 CTI AI Assistant",
+        "ai.caption": "Virtual financial advisor with RAG over simulated scenarios and CTI manuals.",
+        "ai.placeholder": "Ask about risk scenarios or CTI reports...",
+        "ai.welcome": "Hello. I am CTI's virtual advisor. Ask about NWC, treasury, the cash cycle, risk badges or the chance of negative cash across the 1,200 scenarios.",
+        "ai.sources": "Sources",
+        "ai.no_key": "Without `GOOGLE_API_KEY` the assistant only retrieves excerpts. For generated answers, paste the key above, in `.env` or `.streamlit/secrets.toml`.",
+        "ai.clear": "Clear chat",
+        "ai.thinking": "Consulting scenarios and manuals…",
+        "ai.api_key": "Gemini API key",
+        "ai.api_key_help": "Get it from Google AI Studio. The key stays in this session, .env or Streamlit secrets.",
+        "ai.indexed": "RAG index: {n_docs} chunks · {n_cen} scenarios · {backend} backend",
+        "ai.extra_focus": "Screen context: focus scenario {cena}; {n} scenarios in the dataset; prob. negative cash Year {ano}: {p_ruina}%; slice profitability {rent}.",
     },
 }
 
