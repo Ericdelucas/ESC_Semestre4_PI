@@ -8,7 +8,6 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from src.components.headers import banner_auditoria_filtro, render_titulo
 from src.components.kpis import kpis_por_persona, render_kpi_row
 from src.components.resilience import safe_render
 from src.config import CACHE_DIR, CSV_PATH
@@ -101,18 +100,7 @@ def montar_contexto(
     else:
         ano_num = int(ano_sel)
         foco_ano = foco.loc[pd.to_numeric(foco["ano_num"], errors="coerce") == ano_num]
-    kpi_cols = [
-        "NCG",
-        "Saldo_Tesouraria",
-        "Ciclo_Financeiro",
-        "PMR",
-        "PME",
-        "PMP",
-        "liquidez",
-        "rentabilidade",
-        "risco",
-        "resultado",
-    ]
+    kpi_cols = list(dict.fromkeys(["NCG", "Saldo_Tesouraria", "Ciclo_Financeiro", "PMR", "PME", "PMP", "liquidez", "rentabilidade", "risco", "resultado", "disponivel", "geracao_caixa", "distribuicao", "investimentos"]))
     base_kpi = foco_ano if not foco_ano.empty else foco
     k = base_kpi[kpi_cols].mean(numeric_only=True)
     return AppContext(
@@ -136,23 +124,12 @@ def montar_contexto(
 
 def render_cabecalho(ctx: AppContext) -> None:
     """Título, banner, KPIs e textos por persona (auditoria fica no orquestrador)."""
-    render_titulo()
-    st.subheader(t("header.focus", cena=cena_rotulo(ctx.cena_sel)))
-    safe_render("banner de auditoria", banner_auditoria_filtro, ctx.cena_sel, ctx.ano_sel)
-    st.write(
-        t("header.avg_all")
-        if ctx.ano_sel == "Todos"
-        else t("header.avg_year", ano=ctx.ano_sel)
-    )
+    # Introductory header temporarily hidden at the user's request.
     render_kpi_row(kpis_por_persona(ctx.persona, ctx.k, ctx.ranking))
     if ctx.persona == "geral":
         st.info(texto_ncg(ctx.k["NCG"]))
         a, b = st.columns(2)
         a.success(texto_tesouraria(ctx.k["Saldo_Tesouraria"]))
         b.warning(texto_ciclo(ctx.k["Ciclo_Financeiro"]))
-    elif ctx.persona == "cfo":
-        st.info(t("persona.blurb.cfo"))
-    elif ctx.persona == "acionistas":
-        st.info(t("persona.blurb.acionistas"))
     else:
-        st.info(t("persona.blurb.concedente"))
+        st.info(t(f"persona.blurb.{ctx.persona}"))
