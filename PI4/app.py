@@ -16,6 +16,7 @@ from src.components.sidebar import render_language_selector, render_persona, ren
 from src.config import NAV_KEYS
 from src.config.i18n import get_lang, t
 from src.views import (
+    ai_assistant as view_ai_assistant,
     capital_giro as view_capital_giro,
     comparar as view_comparar,
     como_ler as view_como_ler,
@@ -39,6 +40,9 @@ VIEW_RENDERERS = {
     ),
     "faixa": lambda ctx: view_faixa_risco.render(ctx.ind, ctx.cena_sel, ctx.ano_sel, ctx.anos),
     "comparar": lambda ctx: view_comparar.render(ctx.ind, ctx.cenas, ctx.cena_sel, ctx.ano_sel),
+    "assistente": lambda ctx: view_ai_assistant.render(
+        ctx.ranking, ctx.n_cenarios, ctx.p_ruina, ctx.cena_sel, ctx.k, ctx.ano_enc
+    ),
     "como_ler": lambda ctx: view_como_ler.render(
         ctx.n_cenarios, ctx.cena_sel, ctx.k, ctx.ano_enc, ctx.p_ruina
     ),
