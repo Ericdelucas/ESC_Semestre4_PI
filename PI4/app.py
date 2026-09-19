@@ -10,12 +10,10 @@ from __future__ import annotations
 import streamlit as st
 
 from src.components.bootstrap import carregar_estado, montar_contexto
-from src.components.kpis import kpis_por_persona, render_kpi_row
-from src.data.formatting import texto_ncg, texto_tesouraria, texto_ciclo
+from src.views import perfis as view_perfis
 from src.components.headers import expander_auditoria_base
 from src.components.resilience import safe_render
 from src.components.sidebar import render_language_selector, render_sidebar
-from src.config import NAV_KEYS
 from src.config.i18n import get_lang, t
 from src.views import (
     ai_assistant as view_ai_assistant,
@@ -32,6 +30,7 @@ st.set_page_config(layout="wide", page_title="Dashboard CTI", page_icon="📊")
 
 # Chaves estáveis — rótulos vêm do i18n (troca de idioma não perde a seção).
 VIEW_RENDERERS = {
+    "overview": view_perfis.render,
     "capital_giro": lambda ctx: view_capital_giro.render(ctx.foco, ctx.foco_ano, ctx.cena_sel, ctx.ano_sel),
     "prazos": lambda ctx: view_prazos_ciclo.render(ctx.foco, ctx.k, ctx.cena_sel, ctx.ano_sel),
     "mapeamento": lambda ctx: view_mapeamento_risco.render(
@@ -71,9 +70,9 @@ def main() -> None:
     # Keep existing profile IDs so the indicators and pages retain their behavior.
     profile_labels = dict(zip(
         ("geral", "cfo", "acionistas", "concedente"),
-        ("CEO", "CFO & Creditors", "Shareholders", "Granting Authority")
+        ("CEO", "CFO", "Shareholders", "Granting Authority")
         if get_lang() == "en" else
-        ("CEO", "CFO & Credores", "Acionistas", "Poder concedente"),
+        ("CEO", "CFO", "Acionistas", "Poder concedente"),
     ))
     current_profile = st.session_state.get("persona_id", "geral")
     if current_profile not in profile_labels:
@@ -82,9 +81,9 @@ def main() -> None:
         "Role / profile" if get_lang() == "en" else "Cargo / perfil",
         options=list(profile_labels), format_func=profile_labels.get,
         default=current_profile, key="profiles_ceo_cfo",
-        help="CEO: executive overview; CFO & Creditors: solvency; Shareholders: returns; Granting Authority: continuity."
+        help="CEO: strategy; CFO: financial management; Shareholders: return and risk; Granting Authority: sustainability."
         if get_lang() == "en" else
-        "CEO: visao geral; CFO & Credores: solvencia; Acionistas: retorno; Poder concedente: continuidade.",
+        "CEO: decisão estratégica; CFO: gestão financeira; Acionistas: retorno e risco; Poder concedente: sustentabilidade.",
     )
     persona = selected_profile or current_profile
     st.session_state["persona_id"] = persona
@@ -104,33 +103,16 @@ def main() -> None:
     #     else t("header.avg_year", ano=ctx.ano_sel)
     # )
 
-    render_kpi_row(kpis_por_persona(ctx.persona, ctx.k, ctx.ranking))
-    if ctx.persona == "geral":
-        st.info(texto_ncg(ctx.k["NCG"]))
-        a, b = st.columns(2)
-        a.success(texto_tesouraria(ctx.k["Saldo_Tesouraria"]))
-        b.warning(texto_ciclo(ctx.k["Ciclo_Financeiro"]))
-    else:
-        st.info(t(f"persona.blurb.{ctx.persona}"))
+    view_perfis.render_summary(ctx)
 
     lang = get_lang()
-    nav_keys = NAV_KEYS
-    if st.session_state.get("nav_key") not in nav_keys:
-        st.session_state["nav_key"] = nav_keys[0]
-    labels = [t(f"nav.{k}") for k in nav_keys]
-    label_to_key = dict(zip(labels, nav_keys, strict=True))
-    default_label = t(f"nav.{st.session_state['nav_key']}")
-    secao_label = st.segmented_control(
-        "nav",
-        options=labels,
-        default=default_label if default_label in labels else labels[0],
-        key=f"nav_original_{lang}",
+    nav_keys = view_perfis.PROFILE_NAV[persona]
+    nav_key = st.segmented_control(
+        "nav", options=nav_keys,
+        format_func=lambda key: view_perfis.overview_label(persona) if key == "overview" else t(f"nav.{key}"),
+        default="overview", key=f"nav_{persona}_{lang}",
         label_visibility="collapsed",
-    )
-    nav_key = label_to_key.get(secao_label or default_label, nav_keys[0])
-    if nav_key not in nav_keys:
-        nav_key = nav_keys[0]
-    st.session_state["nav_key"] = nav_key
+    ) or "overview"
 
     st.space("small")
     safe_render("audit", expander_auditoria_base, ctx.df, ctx.cena_sel, ctx.ano_sel)
