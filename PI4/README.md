@@ -28,3 +28,15 @@ PI4/
     components/          # KPIs, sidebar, charts, resiliência
     views/               # uma view por aba
 ```
+
+## Visões por perfil
+
+- **CEO - Visão estratégica:** receita, resultado, EBITDA, custos e capacidade de investir.
+- **CFO - Gestão financeira:** capital de giro, tesouraria, empréstimos e evolução de caixa.
+- **Acionistas - Retorno e risco:** lucro, margem líquida, crescimento, distribuições e sustentação do caixa.
+- **Poder concedente - Sustentabilidade da concessão:** liquidez, continuidade financeira, investimentos e anos críticos.
+
+Cada perfil abre uma visão própria e oferece análises detalhadas relevantes ao cargo.
+Os cartões mostram médias anuais quando o filtro está em Todos; gráficos e tabelas respeitam o período selecionado.
+A variação anual usa o ano anterior do mesmo cenário, inclusive quando apenas um ano está selecionado.
+A frequência de cenários com sinais financeiros considera caixa final negativo, liquidez abaixo de 1 ou geração de caixa negativa, com pesos iguais; não representa probabilidade de falência.

@@ -102,7 +102,7 @@ _KPI_CSS = f"""
 .cti-kpi-label {{
   font-size: 0.875rem;
   line-height: 1.3;
-  color: var(--secondary-text-color, rgba(49, 51, 63, 0.7));
+  color: inherit;
   display: flex;
   align-items: center;
   gap: 0.35rem;
@@ -116,7 +116,7 @@ _KPI_CSS = f"""
   font-size: 1.6rem;
   font-weight: 600;
   line-height: 1.35;
-  color: var(--text-color, #31333F);
+  color: inherit;
   font-variant-numeric: tabular-nums;
 }}
 .cti-kpi-tip {{
