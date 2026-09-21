@@ -23,12 +23,14 @@
             "id": "f65837a0b0a5e5c2",
             "type": "leaf",
             "state": {
-              "type": "excalidraw",
+              "type": "markdown",
               "state": {
-                "file": "Excalidraw/Drawing 2026-08-30 20.25.55.excalidraw.md"
+                "file": "DescriçãoDeProjetoParaIAs/Inventário do PI4.md",
+                "mode": "source",
+                "source": false
               },
-              "icon": "excalidraw-icon",
-              "title": "Drawing 2026-08-30 20.25.55.excalidraw"
+              "icon": "lucide-file",
+              "title": "Inventário do PI4"
             }
           }
         ],
@@ -200,8 +202,8 @@
   },
   "active": "f65837a0b0a5e5c2",
   "lastOpenFiles": [
-    "templeit_PI/PI_4CCOMP_202602_CTI_Ciencia_de_Dados_v3-1.pdf",
     "Excalidraw/Drawing 2026-08-30 20.25.55.excalidraw.md",
+    "templeit_PI/PI_4CCOMP_202602_CTI_Ciencia_de_Dados_v3-1.pdf",
     "Excalidraw",
     "Sem título.md",
     "Sem título.base",
