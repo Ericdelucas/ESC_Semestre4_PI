@@ -8,6 +8,7 @@ from . import (
     distribuicao,
     faixa_risco,
     mapeamento_risco,
+    persona_tabs,
     prazos_ciclo,
 )
 
@@ -19,5 +20,6 @@ __all__ = [
     "distribuicao",
     "faixa_risco",
     "mapeamento_risco",
+    "persona_tabs",
     "prazos_ciclo",
 ]

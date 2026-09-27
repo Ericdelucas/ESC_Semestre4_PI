@@ -1,9 +1,4 @@
-"""
-Painel financeiro CTI — orquestrador (< 100 linhas).
-
-Execute:
-  py -m streamlit run app.py
-"""
+"""Orquestrador do dashboard (< 100 linhas)."""
 
 from __future__ import annotations
 
@@ -23,6 +18,7 @@ from src.views import (
     distribuicao as view_distribuicao,
     faixa_risco as view_faixa_risco,
     mapeamento_risco as view_mapeamento_risco,
+    persona_tabs as view_persona_tabs,
     prazos_ciclo as view_prazos_ciclo,
 )
 
@@ -66,26 +62,63 @@ VIEW_RENDERERS = {
     ),
 }
 
+PERSONA_NAV_KEYS = {
+    "ceo": ["ceo_geral", "ceo_dre", "ceo_break_even", "ceo_ltv_cac", "comparar"],
+    "cfo": NAV_KEYS,
+    "acionistas": ["acionistas_retorno", "acionistas_eva", "acionistas_dividendos", "comparar"],
+    "concedente": ["concedente_capex", "concedente_solvencia", "concedente_ativos", "comparar"],
+}
+
+PERSONA_NAV_LABELS = {
+    "ceo_geral": "Visão Geral & DRE",
+    "ceo_dre": "DRE Operacional",
+    "ceo_break_even": "Break-Even & Margens",
+    "ceo_ltv_cac": "Eficiência LTV/CAC",
+    "acionistas_retorno": "Retorno & ROIC",
+    "acionistas_eva": "Geração de EVA",
+    "acionistas_dividendos": "Lucro Líquido & Dividendos",
+    "concedente_capex": "Plano de CAPEX",
+    "concedente_solvencia": "Solvência & Liquidez Geral",
+    "concedente_ativos": "Ativos Reversíveis",
+}
+
+PERSONA_VIEW_RENDERERS = {
+    "ceo_geral": lambda ctx: view_persona_tabs.render_ceo_visao_geral(ctx.df, ctx.cena_sel, ctx.ano_sel),
+    "ceo_dre": lambda ctx: view_persona_tabs.render_ceo_dre_operacional(ctx.df, ctx.cena_sel, ctx.ano_sel),
+    "ceo_break_even": lambda ctx: view_persona_tabs.render_ceo_break_even(ctx.df, ctx.cena_sel, ctx.ano_sel),
+    "ceo_ltv_cac": lambda ctx: view_persona_tabs.render_ceo_ltv_cac(ctx.df, ctx.cena_sel, ctx.ano_sel),
+    "acionistas_retorno": lambda ctx: view_persona_tabs.render_acionistas_retorno(ctx.df, ctx.cena_sel, ctx.ano_sel),
+    "acionistas_eva": lambda ctx: view_persona_tabs.render_acionistas_eva(ctx.df, ctx.cena_sel, ctx.ano_sel),
+    "acionistas_dividendos": lambda ctx: view_persona_tabs.render_acionistas_dividendos(ctx.df, ctx.cena_sel, ctx.ano_sel),
+    "concedente_capex": lambda ctx: view_persona_tabs.render_concedente_capex(ctx.df, ctx.cena_sel, ctx.ano_sel),
+    "concedente_solvencia": lambda ctx: view_persona_tabs.render_concedente_solvencia(ctx.df, ctx.cena_sel, ctx.ano_sel),
+    "concedente_ativos": lambda ctx: view_persona_tabs.render_concedente_ativos(ctx.df, ctx.cena_sel, ctx.ano_sel),
+    "comparar": lambda ctx: view_persona_tabs.render_comparar_cenarios(ctx.df, ctx.ind, ctx.cenas, ctx.persona, ctx.ano_sel),
+}
+
 
 def render_analises(ctx: AppContext) -> None:
     lang = get_lang()
-    if st.session_state.get("nav_key") not in VIEW_RENDERERS:
-        st.session_state["nav_key"] = NAV_KEYS[0]
-    labels = [t(f"nav.{k}") for k in NAV_KEYS]
-    label_to_key = dict(zip(labels, NAV_KEYS, strict=True))
-    default_label = t(f"nav.{st.session_state['nav_key']}")
+    nav_keys = PERSONA_NAV_KEYS.get(ctx.persona, NAV_KEYS)
+    renderers = {**VIEW_RENDERERS, "comparar": PERSONA_VIEW_RENDERERS["comparar"]} if ctx.persona == "cfo" else PERSONA_VIEW_RENDERERS
+    if st.session_state.get("nav_key") not in nav_keys:
+        st.session_state["nav_key"] = nav_keys[0]
+    labels = [t(f"nav.{k}") if k in NAV_KEYS else PERSONA_NAV_LABELS[k] for k in nav_keys]
+    label_to_key = dict(zip(labels, nav_keys, strict=True))
+    default_key = st.session_state["nav_key"]
+    default_label = t(f"nav.{default_key}") if default_key in NAV_KEYS else PERSONA_NAV_LABELS[default_key]
     secao_label = st.segmented_control(
         "nav",
         options=labels,
         default=default_label if default_label in labels else labels[0],
-        key=f"nav_secao_{lang}",
+        key=f"nav_secao_{ctx.persona}_{lang}",
         label_visibility="collapsed",
     )
-    nav_key = label_to_key.get(secao_label or default_label, NAV_KEYS[0])
+    nav_key = label_to_key.get(secao_label or default_label, nav_keys[0])
     st.session_state["nav_key"] = nav_key
     st.space("small")
     safe_render("auditoria da base", expander_auditoria_base, ctx.df, ctx.cena_sel, ctx.ano_sel)
-    VIEW_RENDERERS[nav_key](ctx)
+    renderers[nav_key](ctx)
     st.caption(t("app.footer"))
 
 

@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from src.controllers.headers import banner_auditoria_filtro, render_titulo
+from src.controllers.headers import banner_auditoria_filtro
 from src.controllers.kpis import kpis_por_persona, render_kpi_row
 from src.controllers.resilience import safe_render
 from src.config import CACHE_DIR, CSV_PATH
@@ -114,6 +114,10 @@ def montar_contexto(
         "resultado",
         "ebitda",
         "dre_receita",
+        "dre_custos",
+        "investimentos",
+        "total_ativo",
+        "total_passivo",
     ]
     base_kpi = foco_ano if not foco_ano.empty else foco
     presentes = [c for c in kpi_cols if c in base_kpi.columns]
@@ -139,7 +143,6 @@ def montar_contexto(
 
 def render_cabecalho(ctx: AppContext) -> None:
     """Título, banner, KPIs e textos por persona (auditoria fica no orquestrador)."""
-    render_titulo()
     st.subheader(t("header.focus", cena=cena_rotulo(ctx.cena_sel)))
     safe_render("banner de auditoria", banner_auditoria_filtro, ctx.cena_sel, ctx.ano_sel)
     st.write(
@@ -147,7 +150,7 @@ def render_cabecalho(ctx: AppContext) -> None:
         if ctx.ano_sel == "Todos"
         else t("header.avg_year", ano=ctx.ano_sel)
     )
-    render_kpi_row(kpis_por_persona(ctx.persona, ctx.k, ctx.ranking))
+    render_kpi_row(kpis_por_persona(ctx.persona, ctx.k, ctx.ranking, ctx.df, ctx.cena_sel, ctx.ano_sel))
     st.info(t(f"persona.blurb.{ctx.persona}"))
     if ctx.persona == "cfo":
         st.caption(texto_ncg(ctx.k["NCG"]) if "NCG" in ctx.k.index else "")

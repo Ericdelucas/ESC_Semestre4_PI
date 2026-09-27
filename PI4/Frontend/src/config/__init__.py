@@ -48,7 +48,7 @@ PERSONAS = [
     "ceo",
     "cfo",
     "acionistas",
-    "docente",
+    "concedente",
 ]
 
 METRICAS_NUVEM: dict[str, tuple[str, bool]] = {
@@ -64,8 +64,8 @@ NAV_KEYS = [
     "mapeamento",
     "distribuicao",
     "faixa",
-    "comparar",
     "como_ler",
+    "comparar",
 ]
 
 CORES_COMPARA = [COR, COR_ALERTA, "#3D6B5A"]

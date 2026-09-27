@@ -17,7 +17,6 @@ __all__ = [
     "render_metric_card",
     "render_persona",
     "render_sidebar",
-    "render_titulo",
     "safe_render",
     "titulo_filtro",
     "render_ai_layout",
@@ -36,7 +35,7 @@ def __getattr__(name: str):
         from src.controllers import charts as mod
 
         return getattr(mod, name)
-    if name in {"banner_auditoria_filtro", "expander_auditoria_base", "heading_with_help", "render_titulo"}:
+    if name in {"banner_auditoria_filtro", "expander_auditoria_base", "heading_with_help"}:
         from src.controllers import headers as mod
 
         return getattr(mod, name)
