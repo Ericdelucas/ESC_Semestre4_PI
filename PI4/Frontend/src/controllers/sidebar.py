@@ -80,7 +80,7 @@ def render_persona() -> str:
     lang = get_lang()
     labels = [t(f"persona.{p}") for p in PERSONAS]
     label_to_id = dict(zip(labels, PERSONAS, strict=True))
-    legado = {"geral": "ceo", "concedente": "docente"}
+    legado = {"geral": "ceo", "docente": "concedente"}
     atual = st.session_state.get("persona_id", PERSONAS[0])
     if atual not in PERSONAS:
         st.session_state["persona_id"] = legado.get(str(atual), PERSONAS[0])

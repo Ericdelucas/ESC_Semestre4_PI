@@ -97,7 +97,7 @@ GLOSSARIO: dict[str, dict[str, str]] = {
             "Cenário simulado em destaque. Os KPIs do topo e os gráficos de evolução seguem este recorte."
         ),
         "persona": (
-            "Alterna a visão: CEO (estratégia/risco), CFO (liquidez), Acionistas (retorno) e Poder Docente (metodologia)."
+            "Alterna a visão: CEO (estratégia/risco), CFO (liquidez), Acionistas (retorno) e Poder Concedente (continuidade operacional)."
         ),
         "metric_picker": (
             "Indicador do gráfico. NCG, tesouraria, caixa disponível e geração de caixa descrevem o capital de giro no horizonte."
@@ -208,7 +208,7 @@ GLOSSARIO: dict[str, dict[str, str]] = {
             "Highlighted simulated scenario. Top KPIs and evolution charts follow this slice."
         ),
         "persona": (
-            "Switches the view: CEO (strategy/risk), CFO (liquidity), Shareholders (return) and Faculty Board (methodology)."
+            "Switches the view: CEO (strategy/risk), CFO (liquidity), Shareholders (return) and Granting Authority (regulation)."
         ),
         "metric_picker": (
             "Chart indicator. NWC, treasury, available cash and cash generation describe working capital over the horizon."
