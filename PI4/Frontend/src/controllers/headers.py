@@ -59,11 +59,6 @@ def expander_auditoria_base(df: pd.DataFrame, cena_sel: str, ano_sel: str | int)
         st.dataframe(visao, width="stretch", hide_index=True)
 
 
-def render_titulo() -> None:
-    st.title(t("app.title"))
-    st.caption(t("app.caption"))
-
-
 def heading_with_help(title: str, gloss_key: str) -> None:
     """Título de seção com tooltip nativo (ⓘ) a partir do glossário."""
     body = title.lstrip("#").strip()
