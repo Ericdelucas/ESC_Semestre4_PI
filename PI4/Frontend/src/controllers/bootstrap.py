@@ -144,6 +144,8 @@ def montar_contexto(
 def render_cabecalho(ctx: AppContext) -> None:
     """Título, banner, KPIs e textos por persona (auditoria fica no orquestrador)."""
     st.subheader(t("header.focus", cena=cena_rotulo(ctx.cena_sel)))
+    if ctx.persona == "teste":
+        return
     safe_render("banner de auditoria", banner_auditoria_filtro, ctx.cena_sel, ctx.ano_sel)
     st.write(
         t("header.avg_all")

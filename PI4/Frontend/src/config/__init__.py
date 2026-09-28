@@ -49,6 +49,7 @@ PERSONAS = [
     "cfo",
     "acionistas",
     "concedente",
+    "teste",
 ]
 
 METRICAS_NUVEM: dict[str, tuple[str, bool]] = {
