@@ -1,610 +1,819 @@
-# Inventário do PI4
+# Inventário Técnico do PI4
 
-O que existe dentro de `PI4/`, pasta por pasta e arquivo por arquivo. Números medidos em 21 de setembro de 2026.
+Documento atualizado para refletir a arquitetura modular atual do projeto `PI4`, incluindo Frontend Streamlit, Backend FastAPI, motor RAG, módulos financeiros, controllers, views, caches e artefatos gerados.
 
-`__pycache__/` aparece depois de rodar o Python. É bytecode gerado (`.pyc`). Não é código-fonte. O `.gitignore` manda o Git ignorar essa pasta.
+> Observação: arquivos `__pycache__/*.pyc` e `Backend/cache/*.parquet` são artefatos derivados. Eles aparecem neste inventário porque existem dentro de `PI4`, mas não são código-fonte primário.
 
 ---
 
-## Pasta `PI4/`
+## 1. Visão Geral do Sistema
 
-Raiz do trabalho deste semestre. Tem três arquivos de configuração e duas pastas: `Backend` e `Frontend`.
+O PI4 é um dashboard financeiro e operacional para leitura executiva de cenários simulados da CTI. A aplicação combina:
 
-### `PI4/.env`
+- **Frontend Streamlit** para navegação interativa, filtros, KPIs e gráficos Plotly.
+- **Backend FastAPI** para chat RAG via endpoint HTTP.
+- **Base financeira `Cti.csv`** com cenários anuais em formato longo: `ANO`, `CENA`, `CONTA`, `VALOR`.
+- **Pipeline Pandas** para limpeza, pivot, indicadores, ranking, selos de risco e métricas financeiras.
+- **Motor RAG local + Gemini** para responder perguntas usando cenários, glossário e documentos técnicos.
 
-Arquivo local, fora do Git. Três linhas:
+### Personas Atendidas
+
+| Persona | Foco principal | Componentes relevantes |
+|---|---|---|
+| **CEO** | EBITDA, DRE, break-even, eficiência comercial, comparação estratégica | `controllers/kpis/ceo.py`, `views/persona_tabs/ceo.py`, comparador CEO |
+| **CFO** | NCG, tesouraria, ciclo financeiro, liquidez corrente | `controllers/kpis/personas.py`, `views/capital_giro.py`, `views/prazos_ciclo.py`, comparador CFO |
+| **Acionistas** | ROIC, EVA, dividendos, risco x retorno | `controllers/kpis/shareholders.py`, `views/persona_tabs/shareholders.py`, `comparison_shareholders.py` |
+| **Poder Concedente** | CAPEX, liquidez geral, ativos reversíveis, conformidade financeira | `controllers/kpis/concession.py`, `views/persona_tabs/concession.py`, `comparison_concession.py` |
+| **Teste** | Sandbox temporário para análises customizadas | `controllers/test_sandbox.py`, `views/persona_tabs/custom_analysis.py` |
+
+### Integração IA/RAG
+
+Existem dois modos de assistência:
+
+- **Chat flutuante HTML**: `Frontend/chat_component.py` injeta `chat_widget.html`, que chama `Backend/main.py` via `POST /api/chat`.
+- **Painel Streamlit nativo**: `views/ai_assistant/` renderiza chat com `st.chat_message`, usando o mesmo motor `src.models.rag_engine`.
+
+O motor RAG principal foi modularizado em `Frontend/src/models/rag_engine/` e é reutilizado pelo Backend através de `Backend/rag_engine.py`.
+
+---
+
+## 2. Árvore de Diretórios Atualizada
 
 ```text
-# Copie para .env e preencha. Não versionar o .env.
-GOOGLE_API_KEY=
+PI4/
+├── .env.example
+├── .gitignore
+├── README.md
+├── Backend/
+│   ├── .env.example
+│   ├── Cti.csv
+│   ├── main.py
+│   ├── rag_engine.py
+│   ├── requirements.txt
+│   ├── cache/
+│   │   ├── cti_limpo.parquet
+│   │   ├── indicadores.parquet
+│   │   └── ranking.parquet
+│   ├── documentos/
+│   │   └── manual_executivo_cti.md
+│   └── __pycache__/
+│       ├── main.cpython-314.pyc
+│       └── rag_engine.cpython-314.pyc
+└── Frontend/
+    ├── .streamlit/
+    │   ├── config.toml
+    │   └── credentials.toml
+    ├── analise.ipynb
+    ├── app.py
+    ├── chat_component.py
+    ├── chat_widget.html
+    ├── organizando.ipynb
+    ├── requirements_dashboard.txt
+    ├── __pycache__/
+    │   └── chat_component.cpython-314.pyc
+    └── src/
+        ├── __init__.py
+        ├── config/
+        │   ├── __init__.py
+        │   ├── glossary.py
+        │   └── i18n.py
+        ├── controllers/
+        │   ├── __init__.py
+        │   ├── ai_sidebar_right.py
+        │   ├── bootstrap.py
+        │   ├── custom_analysis.py
+        │   ├── data_input.py
+        │   ├── headers.py
+        │   ├── navigation.py
+        │   ├── page_setup.py
+        │   ├── resilience.py
+        │   ├── sidebar.py
+        │   ├── test_sandbox.py
+        │   ├── charts/
+        │   │   ├── __init__.py
+        │   │   ├── histograms.py
+        │   │   ├── risk_band.py
+        │   │   └── time_series.py
+        │   └── kpis/
+        │       ├── __init__.py
+        │       ├── ceo.py
+        │       ├── concession.py
+        │       ├── constants.py
+        │       ├── helpers.py
+        │       ├── personas.py
+        │       ├── rendering.py
+        │       └── shareholders.py
+        ├── models/
+        │   ├── __init__.py
+        │   ├── classifiers.py
+        │   ├── loaders.py
+        │   ├── analytics/
+        │   │   ├── __init__.py
+        │   │   ├── indicators.py
+        │   │   └── summaries.py
+        │   ├── financial_metrics/
+        │   │   ├── __init__.py
+        │   │   ├── catalog.py
+        │   │   ├── series.py
+        │   │   ├── types.py
+        │   │   └── utils.py
+        │   ├── formatting/
+        │   │   ├── __init__.py
+        │   │   ├── base.py
+        │   │   ├── comparisons.py
+        │   │   ├── numbers.py
+        │   │   ├── scenarios.py
+        │   │   └── texts.py
+        │   └── rag_engine/
+        │       ├── __init__.py
+        │       ├── answers.py
+        │       ├── config.py
+        │       ├── context.py
+        │       ├── documents.py
+        │       ├── embeddings.py
+        │       ├── engine.py
+        │       └── formatters.py
+        └── views/
+            ├── __init__.py
+            ├── capital_giro.py
+            ├── como_ler.py
+            ├── comparar.py
+            ├── distribuicao.py
+            ├── faixa_risco.py
+            ├── mapeamento_risco.py
+            ├── prazos_ciclo.py
+            ├── ai_assistant/
+            │   ├── __init__.py
+            │   ├── context.py
+            │   └── panel.py
+            └── persona_tabs/
+                ├── __init__.py
+                ├── ceo.py
+                ├── common.py
+                ├── comparison.py
+                ├── comparison_ceo_cfo.py
+                ├── comparison_concession.py
+                ├── comparison_helpers.py
+                ├── comparison_shareholders.py
+                ├── concession.py
+                ├── custom_analysis.py
+                ├── shareholders.py
+                └── styles.py
 ```
-
-A variável está vazia. É a chave do Gemini. A API e o motor de busca leem este arquivo.
-
-### `PI4/.env.example`
-
-Igual ao `.env`, mas este pode ir para o Git. Serve de modelo para quem clona o repositório criar o `.env`.
-
-### `PI4/.gitignore`
-
-Lista do que o Git não versiona:
-
-- `.venv/` — ambiente virtual
-- `__pycache__/` e `*.pyc` — bytecode
-- `cache/` — os Parquet gerados
-- `.env` — a chave
-- `.streamlit/secrets.toml` — segredo do Streamlit, se existir
-
-### `PI4/README.md`
-
-Texto de como subir o projeto. 74 linhas. Diz para instalar os dois `requirements`, copiar o `.env.example`, subir a API na porta 8000 com Uvicorn e o dashboard na 8501 com Streamlit. No final há um desenho curto da estrutura: `Backend/` e `Frontend/`.
 
 ---
 
-## Pasta `PI4/Backend/`
+## 3. Raiz `PI4/`
 
-Servidor do chat e os dados. Não desenha gráfico. Quem calcula os indicadores é o código em `Frontend/src/models/`, importado daqui.
-
-Arquivos:
-
-- `.env.example`
-- `Cti.csv`
-- `main.py`
-- `rag_engine.py`
-- `requirements.txt`
-- pasta `cache/`
-- pasta `documentos/`
-
-### `Backend/.env.example`
-
-Modelo da chave só desta pasta:
-
-```text
-# Copie para Backend/.env e preencha. Não versionar o .env.
-GOOGLE_API_KEY=
-```
-
-Não existe `Backend/.env` no disco. A chave, se for preenchida, está prevista em `PI4/.env` ou neste caminho.
-
-### `Backend/requirements.txt`
-
-Pacotes da API, um por linha, com versão mínima:
-
-- fastapi
-- uvicorn
-- pandas
-- numpy
-- langchain-core
-- langchain-text-splitters
-- scikit-learn
-- faiss-cpu
-- google-genai
-- pypdf
-- python-dotenv
-- pyarrow
-
-### `Backend/Cti.csv`
-
-Base bruta. Cerca de 66 MB. Sem linha de cabeçalho. Cada linha tem quatro campos, separados por vírgula:
-
-1. `ANO` — texto `Ano 1` até `Ano 12`
-2. `CENA` — texto `Total Cen_00001` e os demais cenários
-3. `CONTA` — nome da conta. Começa com `BAL -` (balanço), `DRE -` (resultado) ou `FLU -` (fluxo)
-4. `VALOR` — número em formato brasileiro, entre aspas quando tem ponto de milhar. Exemplo: `"1.205.264.965,52"`. Pode ser negativo.
-
-A primeira linha real é:
-
-`Ano 1,Total Cen_00001,,"0,025138815"`
-
-A conta dessa primeira linha veio vazia no arquivo. As seguintes trazem contas como `BAL - Total do Ativo`, `BAL - Disponível`, `BAL - Contas a Receber - Clientes`.
-
-O Parquet limpo, gerado a partir deste CSV, tem 1.002.000 linhas. São 1.200 cenários.
-
-### `Backend/main.py`
-
-Programa da API. O que tem dentro:
-
-- `load_dotenv` em `Backend/.env` e em `PI4/.env`, antes de importar o resto.
-- `app = FastAPI(title="CTI Assistente")`, com CORS aberto para qualquer origem.
-- Classe `ChatIn`: campos `message` (str) e `session_id` (str ou vazio).
-- Classe `ChatOut`: campos `response` (str) e `sources` (lista de str).
-- Dicionário `_sessoes`: histórico em memória, no máximo 12 mensagens por sessão.
-- Função `_rag()`: cria um `CTIRag` na primeira chamada e reutiliza depois.
-- Rota `GET /api/health`: devolve `{"status":"ok"}`.
-- Rota `POST /api/chat`: lê a mensagem, chama `CTIRag.responder`, grava a troca no histórico e devolve texto e fontes. Mensagem vazia devolve o aviso "Escreva uma pergunta sobre os cenários da CTI."
-
-Sobe com:
-
-`py -m uvicorn Backend.main:app --host 127.0.0.1 --port 8000`
-
-a partir da pasta `PI4`.
-
-### `Backend/rag_engine.py`
-
-Ponte entre a API e o motor que está em `Frontend/src/models/rag_engine.py`. O que tem dentro:
-
-- Caminhos fixos: `Cti.csv`, `documentos/`, `cache/`, todos relativos a esta pasta.
-- `load_dotenv` de novo, nos dois `.env`.
-- Coloca `PI4/Frontend` no `sys.path` para importar `src.models`.
-- Classe `CTIRag`:
-  - no `__init__` carrega o ranking e cria `RagEngine.from_ranking`
-  - `responder(message, history)` chama `engine.ask` em português, com a chave que `resolve_api_key()` achar, sem cenário em foco e sem texto extra
-- Função `_carregar_ranking`: se `cache/ranking.parquet` existir e for mais novo que o CSV, lê o Parquet. Senão lê o CSV com `load_cti_csv` e calcula com `montar_indicadores`.
+| Arquivo | Responsabilidade | Funções/classes | Conexões |
+|---|---|---|---|
+| `PI4/.env.example` | Modelo de variáveis de ambiente do projeto. | Não contém funções. | Referência para `GOOGLE_API_KEY`/`GEMINI_API_KEY`. |
+| `PI4/.gitignore` | Regras de exclusão de artefatos locais. | Não contém funções. | Ignora `.env`, caches, ambientes virtuais e bytecode. |
+| `PI4/README.md` | Guia operacional do projeto. | Não contém funções. | Mostra comandos para Streamlit e Backend. |
 
 ---
 
-## Pasta `PI4/Backend/cache/`
+## 4. Backend
 
-Três arquivos Parquet. São cópia já processada do CSV, para o painel não reler 66 MB toda vez. Se o CSV for alterado e ficar com data mais nova, o código regrava estes arquivos. A pasta está no `.gitignore`.
+### 4.1 Arquivos Principais
 
-### `cache/cti_limpo.parquet`
+| Arquivo | Responsabilidade principal | Principais funções/classes | Dependências/conexões |
+|---|---|---|---|
+| `Backend/.env.example` | Modelo de `.env` específico do Backend. | Nenhuma. | Runtime lê `.env` real se existir. |
+| `Backend/Cti.csv` | Base bruta financeira e operacional. | Não é código. | Lido por `src.models.loaders.load_cti_csv`; origem dos indicadores e ranking. |
+| `Backend/requirements.txt` | Dependências da API e do RAG. | Nenhuma. | FastAPI, Uvicorn, Pandas, FAISS, LangChain, Gemini e dotenv. |
+| `Backend/main.py` | API HTTP do chat CTI. | `ChatIn`, `ChatOut`, `_rag`, `health`, `chat`. | Importa `Backend.rag_engine.CTIRag`; expõe `/api/health` e `/api/chat`. |
+| `Backend/rag_engine.py` | Adaptador Backend para o motor RAG do Frontend. | `CTIRag`, `_carregar_ranking`. | Coloca `Frontend` no `sys.path`; importa `RagEngine`, `resolve_api_key`, `load_cti_csv`, `montar_indicadores`. |
 
-4,5 MB. 1.002.000 linhas. 5 colunas:
+### 4.2 `Backend/main.py`
 
-| Coluna | O que é |
+- **Propósito:** prover uma API FastAPI para o chat externo ao Streamlit.
+- **Estado interno:** `_engine` guarda uma instância única de `CTIRag`; `_sessoes` mantém histórico por `session_id`.
+- **Fluxo de chamada:** `POST /api/chat` recebe `ChatIn`, normaliza `session_id`, chama `_rag().responder`, salva as últimas 12 mensagens e devolve `ChatOut`.
+- **CORS:** aberto para qualquer origem, permitindo que `chat_widget.html` chame `localhost:8000`.
+
+### 4.3 `Backend/rag_engine.py`
+
+- **Propósito:** carregar ranking e delegar perguntas ao `RagEngine`.
+- **Classe `CTIRag`:**
+  - `__init__`: chama `_carregar_ranking` e cria `RagEngine.from_ranking`.
+  - `responder`: chama `engine.ask` em português com `resolve_api_key`.
+- **Cache de ranking:** se `Backend/cache/ranking.parquet` existir e for mais novo que `Cti.csv`, é lido diretamente; senão, o CSV é processado novamente.
+
+### 4.4 Dados, Cache e Documentos
+
+| Arquivo | Tipo | Responsabilidade | Conexões |
+|---|---|---|---|
+| `Backend/cache/cti_limpo.parquet` | Cache Parquet | CSV já limpo, com `VALOR` numérico e `ano_num`. | Gerado/lido por `load_cti_csv`. |
+| `Backend/cache/indicadores.parquet` | Cache Parquet | Indicadores anuais por cenário. | Usado por `bootstrap.carregar_pipeline`. |
+| `Backend/cache/ranking.parquet` | Cache Parquet | Ranking consolidado por cenário. | Usado pelo dashboard e pelo RAG. |
+| `Backend/documentos/manual_executivo_cti.md` | Markdown | Manual executivo indexado pelo RAG. | Lido por `rag_engine.documents.docs_manuais`. |
+
+### 4.5 Bytecode Backend
+
+| Arquivo | Propósito |
 |---|---|
-| `ANO` | texto original, `Ano 1` … `Ano 12` |
-| `CENA` | `Total Cen_00001` etc. |
-| `CONTA` | nome da conta, espaços já normalizados |
-| `VALOR` | número de verdade, vírgula brasileira já convertida |
-| `ano_num` | inteiro 1 a 12, extraído de `ANO` |
-
-Quem grava: `load_cti_csv` em `Frontend/src/models/loaders.py`. Quem lê de novo: a mesma função, se o Parquet for mais novo que o CSV.
-
-### `cache/indicadores.parquet`
-
-3,0 MB. 14.400 linhas. Isso é 1.200 cenários × 12 anos. 38 colunas.
-
-Identificação: `ANO`, `ano_num`, `CENA`.
-
-Contas somadas a partir do CSV: `ativo_circ`, `contas_receber`, `creditos_tributarios`, `disponivel`, `distribuicao`, `dre_custos`, `dre_receita`, `ebitda`, `emprestimos_cp`, `encargos_sociais`, `estoques`, `fornecedores`, `geracao_caixa`, `investimentos`, `passivo_circ`, `resultado`, `saldo_final`, `total_ativo`, `total_passivo`, `tributos_a_pagar`.
-
-Indicadores calculados: `ACO`, `PCO`, `NCG`, `Saldo_Tesouraria`, `PMR`, `PME`, `PMP`, `Ciclo_Financeiro`, `rentabilidade`, `liquidez`, `risco`, `pressao_invest`, `dist_abs`, `caixa_mag`, `caixa_final_sinal`.
-
-Quem grava: `carregar_pipeline` em `bootstrap.py`, depois de `montar_indicadores`. Os gráficos de evolução (NCG no tempo, prazos, faixa, comparação) leem este quadro.
-
-### `cache/ranking.parquet`
-
-164 KB. 1.200 linhas, uma por cenário. 24 colunas:
-
-`CENA`, `rentabilidade`, `liquidez`, `risco`, `NCG`, `Saldo_Tesouraria`, `Ciclo_Financeiro`, `receita`, `resultado`, `ebitda`, `pressao_invest`, `dist_abs`, `liquidez_acumulada`, `caixa_ano12`, `disponivel_ano12`, `Alta rentabilidade`, `Retorno moderado`, `Alta liquidez`, `Baixa liquidez`, `Baixo risco`, `Alto risco`, `selo`, `ano_encerramento`, `rotulo`.
-
-As colunas com nome de frase (`Alta rentabilidade`, `Baixo risco`…) são verdadeiro ou falso. `selo` é o rótulo final do cenário. `ano_encerramento` é 12. `rotulo` é o nome curto do cenário para a tela.
-
-Quem usa: mapeamento, distribuição, KPIs do topo, e o índice do chat (um parágrafo por linha).
+| `Backend/__pycache__/main.cpython-314.pyc` | Bytecode gerado a partir de `Backend/main.py`. |
+| `Backend/__pycache__/rag_engine.cpython-314.pyc` | Bytecode gerado a partir de `Backend/rag_engine.py`. |
 
 ---
 
-## Pasta `PI4/Backend/documentos/`
+## 5. Frontend Raiz
 
-Textos que o chat pode ler. Hoje só há um arquivo. PDF ou Markdown novos colocados aqui entram na busca, desde que o filtro de transcrição não os descarte.
+| Arquivo | Responsabilidade | Funções/classes | Conexões |
+|---|---|---|---|
+| `Frontend/app.py` | Orquestrador Streamlit enxuto. | `main`. | Chama `configure_page`, `carregar_estado`, `render_data_input`, `montar_contexto`, `render_pagina`, `render_floating_chat`. |
+| `Frontend/chat_component.py` | Injeta o chat flutuante HTML no Streamlit. | `render_floating_chat`. | Lê `chat_widget.html` e aplica CSS fixo para iframe. |
+| `Frontend/chat_widget.html` | Widget HTML/JS do chat flutuante. | JavaScript interno de envio HTTP. | Chama `http://localhost:8000/api/chat`. |
+| `Frontend/requirements_dashboard.txt` | Dependências do dashboard. | Nenhuma. | Streamlit, Plotly, Pandas, FAISS, Gemini, pypdf etc. |
+| `Frontend/analise.ipynb` | Notebook exploratório. | Células Jupyter. | Referência analítica; não é importado pelo app. |
+| `Frontend/organizando.ipynb` | Notebook de organização da base. | Células Jupyter. | Inspira funções de `loaders.py`; não é importado pelo app. |
 
-### `documentos/manual_executivo_cti.md`
+### 5.1 `Frontend/app.py`
 
-47 linhas. Manual curto em Markdown. Seções:
+O arquivo foi modularizado e agora só coordena alto nível:
 
-1. Título "Manual executivo CTI — leitura dos cenários". Diz que a base tem cerca de 1.200 cenários em 12 anos, perfil de concessão.
-2. "O que o painel responde" — cinco perguntas: NCG, saldo de tesouraria, ciclo financeiro, mapa risco × retorno, chance de caixa negativo.
-3. Tabela de fórmulas: NCG, saldo de tesouraria, PMR, PME, PMP, ciclo, liquidez corrente, rentabilidade, risco.
-4. Lista dos seis selos de negócio.
-5. "Como usar o assistente" — exemplos de pergunta e a indicação de colocar PDFs nesta pasta.
+1. `configure_page()` aplica `st.set_page_config` e CSS global.
+2. `render_language_selector()` inicializa idioma.
+3. `carregar_estado()` busca dados e caches.
+4. `render_data_input(df)` permite upload/edição/substituição de dados.
+5. Se houver dados customizados, recalcula `ind` e `ranking` com `montar_indicadores`.
+6. `render_sidebar` e `render_persona` coletam filtros.
+7. `montar_contexto` cria `AppContext`.
+8. `render_pagina(ctx)` renderiza cabeçalho, abas e análises.
+9. `render_floating_chat()` injeta o chat HTML.
 
-O motor de busca marca os pedaços deste arquivo como tipo `manual_executivo` e dá prioridade a eles na ordenação.
+### 5.2 Streamlit Local
 
----
+| Arquivo | Responsabilidade |
+|---|---|
+| `Frontend/.streamlit/config.toml` | Configuração de tema, servidor e estatísticas do Streamlit. |
+| `Frontend/.streamlit/credentials.toml` | Arquivo local do Streamlit com e-mail vazio. |
 
-## Pasta `PI4/Frontend/`
+### 5.3 Bytecode Frontend Raiz
 
-O site. Streamlit. O pacote Python se chama `src` e mora aqui dentro.
-
-Arquivos na raiz desta pasta:
-
-- `analise.ipynb`
-- `app.py`
-- `chat_component.py`
-- `chat_widget.html`
-- `organizando.ipynb`
-- `requirements_dashboard.txt`
-- pasta `.streamlit/`
-- pasta `src/`
-
-### `Frontend/requirements_dashboard.txt`
-
-Pacotes do painel:
-
-- streamlit
-- plotly
-- pandas
-- numpy
-- openpyxl
-- pyarrow
-- seaborn
-- matplotlib
-- langchain-core
-- langchain-text-splitters
-- scikit-learn
-- faiss-cpu
-- google-genai
-- pypdf
-- python-dotenv
-
-### `Frontend/app.py`
-
-Ponto de entrada do dashboard. O que tem dentro:
-
-- `st.set_page_config` com layout largo, título "Dashboard CTI", ícone de gráfico.
-- Um bloco `<style>` que força branco no valor e no rótulo de `st.metric`.
-- Dicionário `VIEW_RENDERERS`. Chave da aba → função:
-  - `capital_giro` → `views/capital_giro.py`
-  - `prazos` → `views/prazos_ciclo.py`
-  - `mapeamento` → `views/mapeamento_risco.py`
-  - `distribuicao` → `views/distribuicao.py`
-  - `faixa` → `views/faixa_risco.py`
-  - `comparar` → `views/comparar.py`
-  - `como_ler` → `views/como_ler.py`
-- `render_analises`: desenha o menu de abas, o expander de auditoria e a view escolhida. Rodapé com `app.footer`.
-- `render_pagina`: cabeçalho e depois as análises.
-- `main`: idioma, carga dos dados, barra lateral, persona, contexto, página, e por último `render_floating_chat()`.
-
-Sobe com `py -m streamlit run Frontend/app.py` a partir de `PI4`, ou `py -m streamlit run app.py` de dentro de `Frontend`. Porta usual: 8501.
-
-### `Frontend/chat_component.py`
-
-Uma função, `render_floating_chat`. Lê o HTML ao lado e manda o Streamlit desenhar um componente customizado. O CSS deste arquivo prende o container desse componente no canto inferior direito: 380 px de largura, 540 px de altura, `z-index` alto, para o chat ficar por cima dos gráficos sem empurrar o layout.
-
-### `Frontend/chat_widget.html`
-
-Página HTML do chat, sozinha dentro do iframe. Peças:
-
-- `#cti-chat-widget` — caixa que limita o CSS, para o estilo não vazar para o dashboard.
-- `#fab` — botão redondo do robô, fixo em baixo à direita. Abre e fecha o painel.
-- `#panel` — janela da conversa: título, lista de mensagens, campo de texto, botão enviar.
-- JavaScript que faz `POST` em `http://localhost:8000/api/chat` com `message` e `session_id`, e escreve a resposta na lista.
-
-### `Frontend/analise.ipynb`
-
-Notebook Jupyter, cerca de 24 KB. Rascunho de análise da base. O `app.py` não importa este arquivo. Não entra no ar quando o dashboard sobe.
-
-### `Frontend/organizando.ipynb`
-
-Notebook Jupyter, cerca de 38 KB. Nele a base foi separada em balanço, DRE e fluxo de caixa. A função `separar_demonstrativos` em `loaders.py` repete essa separação no código. O dashboard também não importa este notebook.
+| Arquivo | Propósito |
+|---|---|
+| `Frontend/__pycache__/chat_component.cpython-314.pyc` | Bytecode gerado de `chat_component.py`. |
 
 ---
 
-## Pasta `PI4/Frontend/.streamlit/`
+## 6. Pacote `Frontend/src`
 
-Configuração que o Streamlit lê sozinho ao subir `app.py`.
+| Arquivo | Responsabilidade |
+|---|---|
+| `Frontend/src/__init__.py` | Marca `src` como pacote raiz do dashboard. |
 
-### `.streamlit/config.toml`
+---
 
-Três blocos:
+## 7. Configuração (`src/config`)
 
-- `[browser]` — `gatherUsageStats = false`
-- `[server]` — `headless = true` (não abre o navegador sozinho)
-- `[theme]` — `base = "dark"`, cor primária `#1F4E45`, fundo `#0E1117`, fundo secundário `#262730`, texto `#FAFAFA`
+| Arquivo | Responsabilidade | Funções/constantes | Conexões |
+|---|---|---|---|
+| `src/config/__init__.py` | Constantes globais de caminho, cor, personas, navegação e contas. | `PI4`, `ROOT`, `BACKEND`, `CSV_PATH`, `CACHE_DIR`, `DOCS_DIR`, `COR*`, `PERSONAS`, `NAV_KEYS`, `METRICAS_NUVEM`, `PECAS_CONTAS`. | Importado por loaders, analytics, charts, KPIs, RAG e views. |
+| `src/config/i18n.py` | Internacionalização PT/EN da interface. | `DEFAULT_LANG`, `SUPPORTED_LANGS`, `LANG_OPTIONS`, `SELO_KEYS`, `TEXTS`, `get_lang`, `set_lang`, `t`, `get_text`, `translate_selo`. | Usado por sidebar, headers, formatting, views e controllers. |
+| `src/config/glossary.py` | Glossário técnico e textos de ajuda. | `GLOSSARIO`, `NUVEM_HELP`, `PERCENTIL_HELP`, `glossary`, `help_text`, `help_join`. | Alimenta `help=` dos widgets e documentos do RAG. |
 
-### `.streamlit/credentials.toml`
+`i18n.py` e `glossary.py` continuam como catálogos centralizados. Eles são extensos, mas majoritariamente textuais; dividir por idioma/domínio exige validação em runtime para evitar quebra de chaves usadas em dezenas de widgets.
 
-Criado pelo Streamlit. Conteúdo:
+### Bytecode `config`
 
-```toml
-[general]
-email = ""
+| Arquivo | Propósito |
+|---|---|
+| `src/config/__pycache__/__init__.cpython-314.pyc` | Bytecode de constantes globais. |
+| `src/config/__pycache__/glossary.cpython-314.pyc` | Bytecode do glossário. |
+| `src/config/__pycache__/i18n.cpython-314.pyc` | Bytecode de internacionalização. |
+
+---
+
+## 8. Controllers (`src/controllers`)
+
+Controllers coordenam Streamlit, estado de UI, layout, KPIs, navegação e gráficos. A lógica financeira pesada fica em `models`.
+
+| Arquivo | Responsabilidade | Funções/classes | Conexões |
+|---|---|---|---|
+| `src/controllers/__init__.py` | Fachada lazy-load dos controllers. | `__getattr__`, `__all__`. | Reexporta charts, headers, KPIs, sidebar, resilience e IA lateral. |
+| `src/controllers/page_setup.py` | Configuração visual global. | `configure_page`. | Chamado por `app.py`; esconde Deploy/menu/header Streamlit e força contraste de `st.metric`. |
+| `src/controllers/bootstrap.py` | Carregamento de dados, contexto e cabeçalho. | `AppContext`, `carregar_pipeline`, `carregar_estado`, `montar_contexto`, `render_cabecalho`. | Usa loaders, analytics, KPIs e headers. |
+| `src/controllers/navigation.py` | Navegação de sub-abas e roteamento por persona. | `VIEW_RENDERERS`, `PERSONA_NAV_KEYS`, `PERSONA_NAV_LABELS`, `PERSONA_VIEW_RENDERERS`, `render_analises`, `render_pagina`. | Chamado por `app.py`; usa views e sandbox/custom analysis. |
+| `src/controllers/sidebar.py` | Barra lateral e seletor de persona. | `render_language_selector`, `render_sidebar`, `render_persona`. | Usa `i18n`, `formatting.scenarios`, `st.session_state`. |
+| `src/controllers/headers.py` | Banners, auditoria e títulos com ajuda. | `recorte_label`, `banner_auditoria_filtro`, `expander_auditoria_base`, `heading_with_help`. | Usado por navigation, bootstrap e views. |
+| `src/controllers/resilience.py` | Tratamento de erro por componente. | `safe_render`, `resilient_view`. | Decora views e protege renderizações críticas. |
+| `src/controllers/data_input.py` | Upload, edição manual e restauração de dados. | `DF_OVERRIDE_KEY`, `REQUIRED_LONG_COLUMNS`, `SCENARIO_ALIASES`, `COLUMN_ALIASES`, `has_custom_data`, `_clean_col_name`, `_rename_aliases`, `_to_number`, `_read_upload`, `_long_from_wide`, `normalizar_novos_dados`, `_manual_template`, `render_data_input`. | Chamado por `app.py`; atualiza `st.session_state["cti_df_override"]`. |
+| `src/controllers/custom_analysis.py` | Estado e formulário de análises customizadas por persona. | `CUSTOM_ANALYSES_KEY`, `CHART_TYPES`, `custom_store`, `custom_analyses`, `custom_key`, `custom_label`, `insert_custom_tabs`, `_render_custom_analysis_form`, `render_custom_analysis_dialog`. | Usado por `navigation.py`; cria abas dinâmicas com `FINANCIAL_METRICS_DICT`. |
+| `src/controllers/test_sandbox.py` | Persona temporária `Teste`. | `TEST_SANDBOX_KEY`, `TEST_CHART_LABELS`, `_test_sandbox_items`, `_render_test_sandbox_form`, `_render_test_sandbox_dialog`, `render_teste_sandbox`. | Usa `views.persona_tabs.render_custom_analysis`. |
+| `src/controllers/ai_sidebar_right.py` | Painel de IA lateral alternativo. | `_CSS_FECHADA`, `_painel_aberto`, `_abrir`, `render_ai_layout`. | Usa `views.ai_assistant.render_chat_panel`; alternativa ao chat flutuante HTML. |
+
+### 8.1 Charts (`src/controllers/charts`)
+
+| Arquivo | Responsabilidade | Funções/classes | Conexões |
+|---|---|---|---|
+| `charts/__init__.py` | Fachada dos gráficos. | Reexporta funções de histograms, risk_band e time_series. | Mantém imports antigos `src.controllers.charts`. |
+| `charts/time_series.py` | Helpers para séries temporais Plotly. | `recorte_label`, `titulo_filtro`, `serie_temporal_plotavel`, `ancorar_ano_temporal`. | Usado em views de capital de giro, prazos e comparar. |
+| `charts/risk_band.py` | Gráfico de envelope/faixa de risco. | `figura_envelope`. | Usa `models.analytics.resumo_envelope`; destaca ano/cenário. |
+| `charts/histograms.py` | Histogramas de risco e caixa final. | `figura_histograma_ano`, `figura_histograma_caixa_final`. | Usado por `faixa_risco.py` e `distribuicao.py`. |
+
+### 8.2 KPIs (`src/controllers/kpis`)
+
+| Arquivo | Responsabilidade | Funções/classes | Conexões |
+|---|---|---|---|
+| `kpis/__init__.py` | Fachada compatível do antigo `kpis.py`. | Reexporta constantes, helpers, renderers e funções por persona. | Mantém imports existentes `from src.controllers.kpis import ...`. |
+| `kpis/constants.py` | Contas contábeis e parâmetros globais dos KPIs. | `KpiItem`, `CONTA_*`, `WACC_FALLBACK`, `ALIQUOTA_IR_FALLBACK`, `CEO_LTV_CAC_FALLBACK`. | Usado por KPIs CEO, acionistas e concedente. |
+| `kpis/helpers.py` | Leitura segura de contas/premissas. | `_safe_div`, `_valor_conta_raw`, `_valor_premissa_comercial`. | Usado por cálculos de KPI. |
+| `kpis/ceo.py` | Cards do CEO. | `_kpis_ceo`. | Calcula EBITDA, margem EBITDA, break-even e LTV/CAC. |
+| `kpis/shareholders.py` | Cards dos acionistas. | `_kpis_acionistas`. | Calcula ROIC, EVA, lucro líquido e margem líquida. |
+| `kpis/concession.py` | Cards do Poder Concedente. | `_kpis_poder_concedente`. | Calcula CAPEX, liquidez geral e ativo total/base reversível. |
+| `kpis/personas.py` | Roteamento de KPIs por persona. | `kpis_por_persona`. | CFO usa `k` do contexto; demais usam funções específicas. |
+| `kpis/rendering.py` | Renderização visual dos cards. | `_KPI_FORCE_CSS`, `_garantir_css_metricas`, `card_selo_html`, `render_metric_card`, `render_kpi_row`. | Usa `st.metric`, CSS de contraste e `translate_selo`. |
+
+### 8.3 Bytecode Controllers
+
+Arquivos `.pyc` existentes em `src/controllers/**/__pycache__` são bytecode gerado automaticamente para os módulos acima, incluindo `charts` e `kpis`. Eles não têm responsabilidade funcional própria e podem ser regenerados pelo Python.
+
+---
+
+## 9. Models (`src/models`)
+
+`models` concentra carga, limpeza, cálculo, classificação, formatação e RAG.
+
+| Arquivo | Responsabilidade | Funções/classes | Conexões |
+|---|---|---|---|
+| `src/models/__init__.py` | Fachada lazy-load de funções de models. | `__getattr__`, `__all__`. | Permite imports antigos como `from src.models import fmt_rs`. |
+| `src/models/loaders.py` | Leitura e normalização da base CTI. | `parse_valor_br`, `normalizar_conta`, `magnitude`, `load_cti_csv`, `separar_demonstrativos`, `soma_contas`. | Usa `CSV_PATH`, `CACHE_DIR`; gera `cti_limpo.parquet`. |
+| `src/models/classifiers.py` | Classificação de cenários por selos. | `classificar_cenarios`. | Usa `SELOS_NEGOCIO`; adiciona booleanos e `selo` ao ranking. |
+
+### 9.1 Analytics (`src/models/analytics`)
+
+| Arquivo | Responsabilidade | Funções/classes | Conexões |
+|---|---|---|---|
+| `analytics/__init__.py` | Fachada compatível do antigo `analytics.py`. | Reexporta `_mapa_contas`, `montar_indicadores`, `resumo_envelope`, `resumo_estatistico`, `cenas_por_percentil`, `probabilidade_caixa_negativo`. | Mantém imports existentes. |
+| `analytics/indicators.py` | Pipeline principal de indicadores. | `_mapa_contas`, `montar_indicadores`. | Usa `PECAS_CONTAS`, `CONTAS_RECEBER`, `magnitude`, `classificar_cenarios`. |
+| `analytics/summaries.py` | Estatísticas auxiliares. | `resumo_envelope`, `resumo_estatistico`, `cenas_por_percentil`, `probabilidade_caixa_negativo`. | Usado por faixa de risco, distribuição e bootstrap. |
+
+### 9.2 Métricas Financeiras Dinâmicas (`src/models/financial_metrics`)
+
+| Arquivo | Responsabilidade | Funções/classes | Conexões |
+|---|---|---|---|
+| `financial_metrics/__init__.py` | Fachada pública. | Reexporta `FINANCIAL_METRICS_DICT`, `FinancialMetric`, `metric_timeseries`, `format_metric_value`, helpers privados. | Usado por sandbox e análises customizadas. |
+| `financial_metrics/types.py` | Tipagem das métricas. | `FinancialMetric`. | Define estrutura `categoria`, `nome`, `formula`, `format`. |
+| `financial_metrics/utils.py` | Utilitários numéricos. | `_safe_div`, `_to_number`, `_normalizar_aliases`. | Usado por catálogo e séries. |
+| `financial_metrics/catalog.py` | Catálogo de indicadores dinâmicos. | `FINANCIAL_METRICS_DICT`. | Inclui ROE, ROA, ROIC, margens, liquidez, estrutura de capital, prazos, NCG, FCFF, FCFE e cobertura de juros. |
+| `financial_metrics/series.py` | Cálculo temporal de uma métrica. | `contas_necessarias`, `metric_timeseries`, `format_metric_value`. | Usado por `views/persona_tabs/custom_analysis.py`. |
+
+### 9.3 Formatting (`src/models/formatting`)
+
+| Arquivo | Responsabilidade | Funções/classes | Conexões |
+|---|---|---|---|
+| `formatting/__init__.py` | Fachada compatível do antigo `formatting.py`. | Reexporta formatos públicos e aliases privados antigos. | Mantém imports `src.models.formatting`. |
+| `formatting/base.py` | Helpers básicos de formatação. | `is_na`, `fmt_number_pt`, `fmt_number_en`. | Usado por números e textos. |
+| `formatting/numbers.py` | Formatação de valores. | `fmt_rs`, `fmt_dias`, `fmt_pct`. | Usa `get_lang` e `t`. |
+| `formatting/scenarios.py` | Identificação e rótulo de cenários. | `_RE_CEN`, `cena_id`, `cena_rotulo`, `cena_sort_key`. | Usado em sidebar, charts e views. |
+| `formatting/texts.py` | Frases interpretativas. | `texto_ncg`, `texto_tesouraria`, `texto_ciclo`. | Usado no cabeçalho CFO. |
+| `formatting/comparisons.py` | Comparações simples entre cenários. | `melhor_entre`, `cenas_padrao_comparacao`. | Usado no mapeamento e comparador legado. |
+
+### 9.4 RAG Engine (`src/models/rag_engine`)
+
+| Arquivo | Responsabilidade | Funções/classes | Conexões |
+|---|---|---|---|
+| `rag_engine/__init__.py` | Fachada compatível do antigo `rag_engine.py`. | Reexporta `RagEngine`, `TfidfEmbeddings`, `build_focus_context`, `resolve_api_key` e aliases privados antigos. | Usado por Backend e assistente Streamlit. |
+| `rag_engine/config.py` | Constantes e prompts do RAG. | `SYSTEM_PROMPT_PT`, `SYSTEM_PROMPT_EN`, `PLACEHOLDER_NAMES`, `TEXT_SUFFIXES`, `PDF_SUFFIXES`, `MAX_FILE_BYTES`, `GEMINI_MODELS`, regex e termos financeiros. | Usado por documentos e respostas. |
+| `rag_engine/formatters.py` | Formatação simples para respostas RAG. | `rs`, `pct`, `dias`. | Usado na geração de documentos de cenário e contexto. |
+| `rag_engine/embeddings.py` | Embeddings locais TF-IDF. | `TfidfEmbeddings`. | Implementa interface LangChain `Embeddings`; usado por `RagEngine`. |
+| `rag_engine/documents.py` | Coleta e criação de documentos RAG. | `ler_pdf`, `parece_transcricao`, `iter_arquivos_doc`, `docs_manuais`, `docs_glossario`, `docs_cenarios`. | Lê `Backend/documentos`, PDFs/Markdown e ranking. |
+| `rag_engine/context.py` | Contexto do filtro atual para o assistente. | `serie_val`, `build_focus_context`. | Usado por `views/ai_assistant/context.py`. |
+| `rag_engine/answers.py` | API key, fallback extrativo e Gemini. | `resolve_api_key`, `paragrafos_financeiros`, `resposta_extrativa`, `gerar_llm`. | Usa `google.genai`; fallback sem chave. |
+| `rag_engine/engine.py` | Núcleo de indexação e busca. | `faiss_index`, `prioridade_fonte`, `RagEngine`. | Usa FAISS se disponível; senão similaridade NumPy. |
+
+### 9.5 Bytecode Models
+
+Arquivos `.pyc` em `src/models/**/__pycache__` correspondem aos módulos acima (`analytics`, `financial_metrics`, `formatting`, `rag_engine`, `loaders`, `classifiers`). São artefatos derivados e podem ser removidos sem perda de código-fonte.
+
+---
+
+## 10. Views (`src/views`)
+
+Views renderizam telas Streamlit. Elas recebem DataFrames/contexto já preparados pelos controllers.
+
+| Arquivo | Responsabilidade | Funções/classes | Conexões |
+|---|---|---|---|
+| `src/views/__init__.py` | Importa os módulos de views. | `__all__`. | Permite `from src.views import persona_tabs`, etc. |
+| `views/capital_giro.py` | Aba Capital de Giro. | `_grafico_evolucao`, `_grafico_composicao`, `render`. | Usa `charts.time_series`, `fmt_rs`, `help_text`; mostra NCG e Tesouraria. |
+| `views/prazos_ciclo.py` | Aba Prazos e Ciclo. | `_grafico_prazos`, `render`. | Mostra PMR, PME, PMP e Ciclo Financeiro. |
+| `views/mapeamento_risco.py` | Matriz risco x retorno. | `_scatter`, `render`. | Usa Plotly scatter, `CORES_SELO`, `translate_selo`, `cenas_por_percentil`, `card_selo_html`. |
+| `views/distribuicao.py` | Distribuição e probabilidades. | `_boxplot`, `render`. | Usa percentis, boxplot e histograma de caixa final. |
+| `views/faixa_risco.py` | Envelope de risco. | `render`. | Usa `METRICAS_NUVEM`, `figura_envelope`, `figura_histograma_ano`. |
+| `views/comparar.py` | Comparador legado de 2 ou 3 cenários para métricas operacionais. | `render`. | Usa multiselect, `CORES_COMPARA`, `ancorar_ano_temporal`. |
+| `views/como_ler.py` | Explicação textual dos números. | `render`. | Usa textos i18n e contexto do cenário. |
+
+### 10.1 Assistente Streamlit (`views/ai_assistant`)
+
+| Arquivo | Responsabilidade | Funções/classes | Conexões |
+|---|---|---|---|
+| `ai_assistant/__init__.py` | Fachada da view de IA. | Reexporta `render`, `render_chat`, `render_chat_panel`. | Mantém import `from src.views.ai_assistant import render_chat_panel`. |
+| `ai_assistant/context.py` | Cache e contexto do RAG na tela. | `_fingerprint`, `_carregar_engine`, `_chave_api`, `_contexto_foco`. | Usa `RagEngine`, `build_focus_context`, `fmt_pct`, `cena_rotulo`. |
+| `ai_assistant/panel.py` | UI do chat nativo Streamlit. | `_BOAS_VINDAS`, `_inicializar_historico`, `_render_mensagens`, `_render_formulario`, `render_chat_panel`, `render_chat`, `render`. | Usa `st.chat_message`, `st.form`, `engine.ask`, `st.session_state`. |
+
+### 10.2 Sub-Abas por Persona (`views/persona_tabs`)
+
+| Arquivo | Responsabilidade | Funções/classes | Conexões |
+|---|---|---|---|
+| `persona_tabs/__init__.py` | Fachada compatível da antiga `persona_tabs.py`. | Reexporta renders de CEO, acionistas, concedente, comparador e custom analysis. | Usado por `controllers/navigation.py` e `test_sandbox.py`. |
+| `persona_tabs/common.py` | Cálculos comuns de DRE, balanço, financeiro e break-even. | `WACC`, `PAYOUT`, `ALIQUOTA_IR_FALLBACK`, `_safe_div`, `_wide`, `_conta`, `_dre`, `_balanco_fluxo`, `_financeiro`, `_break_even_df`. | Base para sub-abas e comparadores. |
+| `persona_tabs/styles.py` | Estilos das séries A/B/C no comparador. | `SERIES_STYLES`. | Usado por comparadores. |
+| `persona_tabs/ceo.py` | Sub-abas do CEO. | `render_ceo_visao_geral`, `render_ceo_dre_operacional`, `render_ceo_break_even`, `render_ceo_ltv_cac`. | Usa `_dre`, `_break_even_df`, Plotly Waterfall/Line/Bar/Area. |
+| `persona_tabs/shareholders.py` | Sub-abas dos acionistas. | `render_acionistas_retorno`, `render_acionistas_eva`, `render_acionistas_dividendos`. | Usa `_financeiro`; EVA trata `NaN` com `EVA_limpo`/`eva_positivo`. |
+| `persona_tabs/concession.py` | Sub-abas do Poder Concedente. | `_dre_balanco`, `render_concedente_capex`, `render_concedente_solvencia`, `render_concedente_ativos`. | Usa `_balanco_fluxo`, `_dre`, Plotly e limite de liquidez 1.0x. |
+| `persona_tabs/comparison.py` | Roteador do comparador por persona. | `render_comparar_cenarios`. | Direciona para CEO/CFO, acionistas ou concedente. |
+| `persona_tabs/comparison_helpers.py` | Helpers do comparador. | `_selecionar_cenarios`, `_delta`, `_cor_delta`, `_metric_base`, `_fmt_x`. | Usado pelos comparadores específicos. |
+| `persona_tabs/comparison_ceo_cfo.py` | Comparadores CEO e CFO. | `_ceo_cmp`, `_render_cmp_ceo`, `_render_cmp_cfo`. | Usa `SERIES_STYLES`, `_metric_base`, linhas/áreas Plotly. |
+| `persona_tabs/comparison_shareholders.py` | Comparador dos acionistas. | `_render_cmp_acionistas`. | Usa EVA, ROIC, dividendos e scatter risco x retorno. |
+| `persona_tabs/comparison_concession.py` | Comparador do Poder Concedente. | `_concedente_cmp`, `_lg_referencia`, `_base_final_ativos`, `_render_cmp_concedente`. | Alerta vermelho somente quando LG de referência < 1.0x. |
+| `persona_tabs/custom_analysis.py` | Renderização de análise customizada. | `render_custom_analysis`. | Usa `metric_timeseries`, `format_metric_value`, Plotly linha/barra/área/card. |
+
+### 10.3 Correções Plotly Recentes
+
+- **EVA da aba Acionistas:** `shareholders.py` cria `EVA_limpo = EVA.fillna(0)` e `eva_positivo = EVA_limpo >= 0` antes do `px.bar`, evitando `TypeError: boolean value of NA is ambiguous`.
+- **EVA do comparador:** `comparison_shareholders.py` converte `ano_num` para eixo categórico:
+
+```python
+eva["Ano_Rotulo"] = "Ano " + eva["ano_num"].astype(str)
+fig = px.bar(
+    eva,
+    x="Ano_Rotulo",
+    y="EVA",
+    color="Cenário",
+    barmode="group",
+    category_orders={"Ano_Rotulo": ordem_anos},
+)
 ```
 
-Não guarda a chave do Gemini. O e-mail está vazio.
+Esse ajuste evita eixo contínuo ilegível e mantém as barras agrupadas por cenário.
+
+### 10.4 Bytecode Views
+
+Arquivos `.pyc` em `src/views/**/__pycache__` são bytecode gerado a partir das views listadas. Eles refletem versões previamente executadas e não devem ser tratados como fonte.
 
 ---
 
-## Pasta `PI4/Frontend/src/`
+## 11. Fluxo de Dados e Estado Global
 
-Código do painel, dividido em quatro pastas: `config`, `controllers`, `models`, `views`.
+### 11.1 Fluxo Principal do Dashboard
 
-### `src/__init__.py`
+```text
+Frontend/app.py
+  ├─ configure_page()
+  ├─ render_language_selector()
+  ├─ carregar_estado()
+  │    └─ carregar_pipeline()
+  │         ├─ load_cti_csv(Cti.csv)
+  │         ├─ montar_indicadores(df)
+  │         └─ classificar_cenarios(ranking)
+  ├─ render_data_input(df)
+  │    └─ se houver override: recalcula indicadores/ranking
+  ├─ render_sidebar(df, ind, n_cenarios)
+  ├─ render_persona()
+  ├─ montar_contexto(...)
+  │    └─ cria AppContext
+  ├─ render_pagina(ctx)
+  │    ├─ render_cabecalho(ctx)
+  │    └─ render_analises(ctx)
+  └─ render_floating_chat()
+```
 
-Uma linha de docstring: "Pacote raiz do painel CTI." Existe para o Python tratar `src` como pacote.
+### 11.2 DataFrames Principais
 
----
+| Nome | Origem | Granularidade | Uso |
+|---|---|---|---|
+| `df` | `load_cti_csv` ou upload customizado | Base longa conta/ano/cenário | Auditoria, KPIs por conta, persona tabs, custom analysis. |
+| `ind` | `montar_indicadores` | Uma linha por cenário/ano | Capital de giro, prazos, faixa, comparadores CFO. |
+| `ranking` | `montar_indicadores` + `classificar_cenarios` | Uma linha por cenário | Mapeamento, distribuição, RAG, contexto, KPIs gerais. |
+| `ctx.foco` | `montar_contexto` | `ind` filtrado por cenário | Gráficos temporais. |
+| `ctx.foco_ano` | `montar_contexto` | `ctx.foco` filtrado por ano ou todo horizonte | Composição e KPIs. |
+| `ctx.k` | `montar_contexto` | Série média do recorte | Cards do topo, textos CFO, contexto IA. |
 
-## Pasta `PI4/Frontend/src/config/`
+### 11.3 `AppContext`
 
-Constantes, frases da tela e textos de ajuda. Não lê o CSV.
+`AppContext` é o objeto de contexto global da tela. Campos principais:
 
-### `config/__init__.py`
+- `df`, `ind`, `ranking`: dados base, indicadores e ranking.
+- `mapa_rotulo`: ranking enriquecido com rótulos.
+- `n_cenarios`, `ano_enc`, `p_ruina`: estatísticas globais.
+- `ano_sel`, `cena_sel`, `anos`, `cenas`: filtros.
+- `persona`: persona ativa (`ceo`, `cfo`, `acionistas`, `concedente`, `teste`).
+- `foco`, `foco_ano`, `k`: recortes calculados para a tela.
 
-O que está declarado:
+### 11.4 `st.session_state`
 
-Caminhos:
-
-- `PI4`, `ROOT`, `BACKEND`
-- `CSV_PATH` = `Backend/Cti.csv`
-- `CACHE_DIR` = `Backend/cache`
-- `DOCS_DIR` = `Backend/documentos`
-- `REPO_DOCS_DIR` = pasta `documentos` ao lado de `PI4`, na raiz do repositório
-- `VENV_PY` = `PI4/.venv/bin/python` (caminho de Linux; nesta máquina o Python é o `py` do Windows)
-
-Cores hex: `COR`, `COR_SUAVE`, `COR_ALERTA`, `COR_OK`, `COR_ANCORA`, `COR_AMARELO`, `COR_LARANJA`, `COR_ROXO`, `COR_VERMELHO`, `COR_VERDE_ESCURO`, `COR_VERDE_CLARO`.
-
-`SELOS_NEGOCIO`: lista com os seis nomes em português.
-
-`CORES_SELO`: um hex para cada selo.
-
-`PERSONAS`: `ceo`, `cfo`, `acionistas`, `docente`.
-
-`NAV_KEYS`: `capital_giro`, `prazos`, `mapeamento`, `distribuicao`, `faixa`, `comparar`, `como_ler`.
-
-`METRICAS_NUVEM`: quatro métricas e se "maior é melhor":
-
-- caixa disponível → coluna `disponivel`, maior é melhor
-- geração de caixa → `geracao_caixa`, maior é melhor
-- tesouraria → `Saldo_Tesouraria`, maior é melhor
-- NCG → `NCG`, maior não é melhor
-
-`CORES_COMPARA`: três cores para as curvas da aba comparar.
-
-`CONTAS_RECEBER`: três contas do balanço que viram a coluna `contas_receber`.
-
-`PECAS_CONTAS`: dicionário do nome interno para a conta do CSV. As chaves são `estoques`, `creditos_tributarios`, `fornecedores`, `encargos_sociais`, `tributos_a_pagar`, `disponivel`, `emprestimos_cp`, `ativo_circ`, `passivo_circ`, `total_ativo`, `total_passivo`, `dre_receita`, `dre_custos`, `resultado`, `ebitda`, `geracao_caixa`, `investimentos`, `distribuicao`, `saldo_final`.
-
-### `config/i18n.py`
-
-Dois dicionários grandes, `STRINGS["pt"]` e `STRINGS["en"]`. Cada chave é um texto da interface. Grupos de chave que existem:
-
-- `lang.*` — rótulo do seletor de idioma
-- `persona.*` — CEO, CFO, Acionistas, Poder Docente, e também os rótulos antigos Visão Geral e Poder Concedente
-- `nav.*` — nome de cada aba
-- `kpi.*` — nome de cada indicador do topo
-- `persona.blurb.*` — frase de uma linha embaixo dos KPIs
-- `stake.*` — títulos que sobraram da visão exclusiva por perfil (o menu de abas atual não usa esses blocos como página)
-- `chart.*`, `table.*` — eixos e percentis
-- `txt.ncg.*`, `txt.treasury.*`, `txt.cycle.*`, `txt.bank.*` — frases de alerta
-- `map.*` — textos do gráfico de risco × retorno, inclusive `map.focus.ceo`, `.cfo`, `.acionistas`, `.docente`
-- `dist.*`, `faixa.*`, `cmp.*`, `ai.*`, `app.footer`, `sidebar.*`, `header.*`, `filter.*`, `fmt.*`, `selo.*`
-
-Funções:
-
-- `get_lang` / `set_lang` — idioma guardado em `st.session_state["lang"]`, padrão `pt`
-- `t(chave)` — devolve a frase e preenche `{placeholders}`
-- `get_text` — apelido de `t`
-- `translate_selo` — troca o nome português do selo pela versão do idioma ativo
-
-### `config/glossary.py`
-
-Dicionário `GLOSSARIO` com as mesmas chaves em `pt` e `en`. São os parágrafos do ícone de interrogação: o que é NCG, tesouraria, ciclo, liquidez, risco, rentabilidade, PMR, PME, PMP, percentis, o que o filtro de ano faz, o que o seletor de persona faz.
-
-Funções: `glossary`, `help_text`, `help_join`. `help_text` devolve `None` se a chave não existir, para o widget não mostrar um `?` vazio.
+| Chave | Local | Função |
+|---|---|---|
+| `lang` | `config/i18n.py`, `sidebar.py` | Idioma ativo. |
+| `persona_id` | `sidebar.py` | Persona ativa. |
+| `nav_key` | `navigation.py` | Sub-aba ativa por persona. |
+| `show_custom_analysis_dialog_<persona>` | `custom_analysis.py`, `navigation.py` | Abre modal de análise customizada. |
+| `custom_financial_analyses` | `custom_analysis.py` | Lista de análises customizadas por persona. |
+| `test_sandbox_analyses` | `test_sandbox.py` | Lista de análises da persona Teste. |
+| `teste_nav_key` | `test_sandbox.py` | Aba ativa no sandbox. |
+| `show_test_sandbox_dialog` | `test_sandbox.py` | Abre modal do botão `+` no sandbox. |
+| `cti_df_override` | `data_input.py` | DataFrame customizado carregado/editado pelo usuário. |
+| `chat_history` | `ai_assistant/panel.py` | Histórico do chat Streamlit nativo. |
+| `ai_chat_history` | `ai_assistant/panel.py` | Compatibilidade com histórico anterior. |
+| `gemini_api_key_input` | `ai_assistant/context.py` | Chave colada em runtime. |
+| `google_api_key` | `ai_assistant/context.py` | Chave mantida na sessão. |
+| `_cti_kpi_css_ok` | `kpis/rendering.py` | Evita reinjetar CSS dos KPIs a cada card. |
 
 ---
 
-## Pasta `PI4/Frontend/src/models/`
+## 12. Fluxo RAG/IA
 
-Conta, classifica e formata. Não chama `streamlit` para desenhar aba (o `rag_engine` importa bibliotecas de IA, não widgets).
+### 12.1 Chat Flutuante HTML
 
-### `models/__init__.py`
+```text
+chat_component.py
+  └─ injeta chat_widget.html
+      └─ JS faz POST /api/chat
+          └─ Backend/main.py
+              └─ CTIRag.responder()
+                  └─ RagEngine.ask()
+```
 
-Não importa os módulos na hora em que o pacote abre. Tem `__getattr__`: se alguém pede `src.models.fmt_rs`, aí sim carrega `formatting.py`. O mesmo para funções de `analytics`, `classifiers` e `loaders`. A lista pública está em `__all__`.
+### 12.2 Chat Streamlit Nativo
 
-### `models/loaders.py`
+```text
+views/ai_assistant/panel.py
+  ├─ histórico em st.session_state
+  ├─ context._carregar_engine(ranking, fingerprint)
+  ├─ context._contexto_foco(...)
+  └─ engine.ask(..., extra_context=foco atual)
+```
 
-Funções:
+### 12.3 Documentos Indexados
 
-- `parse_valor_br` — tira ponto de milhar e troca vírgula por ponto. `"1.205.264.965,52"` vira número.
-- `normalizar_conta` — um espaço só entre as palavras do nome da conta.
-- `magnitude` — valor absoluto. O balanço mistura sinal de débito e de crédito.
-- `load_cti_csv` — lê `cti_limpo.parquet` se ele for mais novo que o CSV. Senão lê o CSV com `header=None` e nomes `ANO`, `CENA`, `CONTA`, `VALOR`, limpa, cria `ano_num`, grava o Parquet.
-- `separar_demonstrativos` — devolve um dicionário com três DataFrames: `BP` (contas `BAL -`), `DRE` (`DRE -`), `DFC` (`FLU -`).
-- `soma_contas` — soma uma lista de nomes de conta por ano e cenário.
+`rag_engine.documents` cria documentos a partir de:
 
-### `models/analytics.py`
+- Resumo agregado dos cenários.
+- Distribuição por selo.
+- Um documento por cenário.
+- Glossário PT/EN.
+- Arquivos técnicos em `Backend/documentos/` e repositório `documentos/`, ignorando transcrições e arquivos grandes.
 
-Funções:
-
-- `_mapa_contas` — liga cada string do CSV (`BAL - Disponível`, etc.) ao nome curto (`disponivel`).
-- `montar_indicadores` — filtra o CSV nessas contas, faz pivot, preenche zero onde a conta não apareceu, e calcula:
-  - `ACO` = clientes + estoques + créditos tributários (em módulo)
-  - `PCO` = fornecedores + encargos + tributos (em módulo)
-  - `NCG` = ACO − PCO
-  - `Saldo_Tesouraria` = disponível − empréstimos de curto prazo
-  - `PMR`, `PME`, `PMP` em dias
-  - `Ciclo_Financeiro` = PMR + PME − PMP
-  - `liquidez` = ativo circulante / passivo circulante
-  - `rentabilidade` = resultado / receita
-  - `risco` = passivo total / ativo total
-  - em seguida chama `classificar_cenarios`
-  - devolve a tupla `(indicadores, ranking)`
-- `resumo_envelope` — por ano, mínimo, máximo, mediana e média de uma coluna, para a aba faixa de risco
-- `resumo_estatistico` — média, mediana, desvio, mínimo, máximo de uma série
-- `cenas_por_percentil` — qual cenário cai em cada percentil
-- `probabilidade_caixa_negativo` — percentual de cenários com `caixa_ano12` < 0
-
-### `models/classifiers.py`
-
-Uma função, `classificar_cenarios`. Recebe o ranking e devolve o mesmo quadro com colunas booleanas e a coluna `selo`.
-
-Corta a distribuição em quartis de rentabilidade, liquidez e risco, e no percentil 75 de pressão de investimento, distribuição e disponibilidade. Atribui, nesta ordem, um dos seis selos listados em `SELOS_NEGOCIO`. O primeiro critério que bater fica.
-
-### `models/formatting.py`
-
-Funções de texto:
-
-- `fmt_rs` — reais, com "mi" ou "bi" quando o número é grande. Respeita PT/EN.
-- `fmt_dias` — "12,3 dias"
-- `fmt_pct` — a função espera proporção (0,15 vira 15%). O código multiplica por 100.
-- `texto_ncg` — frase se a NCG come caixa, gera caixa ou está zerada
-- `texto_tesouraria` — frase se o saldo cobre ou não
-- `texto_ciclo` — frase se o ciclo passa de 30 dias, é moderado ou é negativo
-- `cena_id` — tira o número de `Total Cen_00001`
-- `cena_rotulo` — rótulo mostrado no select
-- `cena_sort_key` — ordena cenário 2 antes de cenário 10
-- `melhor_entre` — diz qual dos dois números é o melhor, conforme a métrica
-- `cenas_padrao_comparacao` — sugere quais cenários já vêm marcados na aba comparar
-
-### `models/rag_engine.py`
-
-Motor de busca e de resposta. O que tem dentro:
-
-Classe `TfidfEmbeddings`: vetor TF-IDF local, até 768 termos, unigramas e bigramas. Não chama API para buscar.
-
-Funções de apoio: `resolve_api_key` (lê `GOOGLE_API_KEY` ou `GEMINI_API_KEY`), `_rs`, `_pct`, `_dias`, `_ler_pdf`.
-
-`_parece_transcricao`: verdadeiro se o nome do arquivo casa com aula, transcrição, reunião, anotação, ou se o começo do texto tem várias marcas de fala ("professor", "né?", "beleza").
-
-`_iter_arquivos_doc`: lista `.md`, `.txt`, `.markdown` e `.pdf` só em `Backend/documentos` e na pasta `documentos` da raiz do repositório. Ignora arquivo maior que 12 MB e o nome placeholder "venha para a fecap!". Não percorre `Estudo_do_caso/`.
-
-`_docs_manuais`: corta esses arquivos em pedaços de 900 caracteres. Pedaço do manual executivo recebe `tipo = manual_executivo`.
-
-`_docs_glossario`: um documento só, com o glossário PT e EN.
-
-`_docs_cenarios`: a partir do ranking, gera
-
-- 1 documento resumo (médias e probabilidade de caixa negativo)
-- 1 documento por selo
-- 1 documento por cenário (1.200)
-
-`build_focus_context`: parágrafo do cenário e do ano que estão filtrados na tela. A API em `Backend/rag_engine.py` não envia esse parágrafo. O chat em `views/ai_assistant.py` envia.
-
-Classe `RagEngine`:
-
-- `from_ranking` junta cenários + glossário + manuais, vetoriza e monta índice FAISS (se a biblioteca existir; senão compara vetor com numpy)
-- `retrieve` busca e depois soma um bônus: manual executivo +0,45, resumo +0,35, selo +0,25, cenário +0,12
-- `ask` recupera trechos, junta as fontes, e ou chama o Gemini ou devolve o texto de fallback
-
-`_resposta_extrativa`: título "Trechos Selecionados da Documentação CTI", até quatro parágrafos que contenham NCG, tesouraria, selo, EBITDA, liquidez, caixa, rentabilidade, ciclo, risco ou receita, e a dica da `GOOGLE_API_KEY`.
-
-`_gerar_llm`: tenta `gemini-2.0-flash`, depois `gemini-1.5-flash`, depois `gemini-2.5-flash`. O prompt manda responder só com o contexto, em tom de consultor, priorizando NCG, tesouraria, ciclo e risco.
-
-No import do módulo, `load_dotenv` lê `Backend/.env`, `PI4/.env` e o `.env` da pasta pai do repositório.
+Se `GOOGLE_API_KEY`/`GEMINI_API_KEY` não existir, `RagEngine.ask` usa `resposta_extrativa`, retornando trechos selecionados e fontes.
 
 ---
 
-## Pasta `PI4/Frontend/src/controllers/`
+## 13. Regras Visuais e CSS
 
-Monta pedaços da página Streamlit: barra, cabeçalho, KPI, gráfico. A conta em si fica em `models`.
-
-### `controllers/__init__.py`
-
-Igual ao de `models`: `__getattr__` carrega a função só quando alguém pede. Expõe funções de `charts`, `headers`, `kpis`, `resilience`, `sidebar` e `render_ai_layout`.
-
-### `controllers/bootstrap.py`
-
-- Classe `AppContext`. Campos: `df`, `ind`, `ranking`, `mapa_rotulo`, `n_cenarios`, `ano_enc`, `p_ruina`, `ano_sel`, `cena_sel`, `anos`, `cenas`, `persona`, `foco`, `foco_ano`, `k`.
-- `carregar_pipeline`: se os três Parquet estiverem mais novos que o CSV, lê os três. Senão roda `load_cti_csv` + `montar_indicadores` e grava `indicadores.parquet` e `ranking.parquet`. Decorada com `st.cache_resource`.
-- `carregar_estado`: se o CSV não existir, mostra erro e devolve `None`.
-- `montar_contexto`: filtra `ind` no cenário escolhido e, se o ano não for "Todos", naquele ano. Tira a média das colunas de KPI que existirem. A lista média é NCG, Saldo de Tesouraria, Ciclo, PMR, PME, PMP, liquidez, rentabilidade, risco, resultado, ebitda, dre_receita.
-- `render_cabecalho`: título, subtítulo com o cenário, banner de auditoria, frase "média de todos os anos" ou "média do ano N", a fileira de KPIs da persona, e `st.info` com `persona.blurb.<persona>`. Se a persona for `cfo`, ainda mostra as frases de NCG, tesouraria e ciclo.
-
-### `controllers/sidebar.py`
-
-- `render_language_selector`: select na barra, opções vindas de `LANG_OPTIONS`. Se mudar, grava o idioma e faz `st.rerun`.
-- `render_sidebar`: select de ano (valor interno `__all__` para "Todos") e select de cenário. Embaixo, nome do CSV, quantidade de linhas, de cenários e de anos. Devolve ano, cenário, lista de anos e lista de cenários.
-- `render_persona`: controle segmentado com os quatro rótulos. Guarda o id em `st.session_state["persona_id"]`. Se achar `geral`, troca para `ceo`. Se achar `concedente`, troca para `docente`. A chave do widget é `persona_visao_v2_` mais o idioma, para não reaproveitar o controle antigo.
-
-### `controllers/kpis.py`
-
-- Constante CSS `_KPI_FORCE_CSS` para cor branca do `st.metric`.
-- `card_selo_html`: HTML de um cartão com a cor do selo, o nome traduzido e a quantidade de cenários.
-- `kpis_por_persona`:
-  - `ceo`: probabilidade de caixa negativo (percentual de `caixa_ano12` < 0), rentabilidade média do ranking, selo mais frequente
-  - `cfo`: NCG, tesouraria, ciclo, liquidez, formatados, com texto de ajuda
-  - `acionistas`: margem EBITDA (ebitda / receita), rentabilidade média como "retorno esperado", selo cuja rentabilidade média é a maior
-  - qualquer outro id, na prática `docente`: quantidade de linhas do ranking, ano de encerramento, R² (correlação de EBITDA com resultado, ao quadrado), coeficiente de variação do caixa do ano 12
-- `render_metric_card` e `render_kpi_row`: desenham `st.metric`. O `help` do metric é o tooltip.
-
-### `controllers/charts.py`
-
-Funções que devolvem figura Plotly ou preparam a tabela do gráfico:
-
-- `recorte_label` — "Todos" ou o número do ano, no idioma ativo
-- `titulo_filtro` — assunto + cenário + ano, para o título do gráfico
-- `serie_temporal_plotavel` — fica só com `ano_num` e as colunas pedidas, ordenado, sem linha sem ano
-- `ancorar_ano_temporal` — marca o ano filtrado na linha
-- `figura_envelope` — faixa entre cenários (pior, mediana, melhor) ao longo dos anos
-- `figura_histograma_ano` — histograma de uma métrica num ano
-- `figura_histograma_caixa_final` — histograma do caixa do ano 12
-
-### `controllers/headers.py`
-
-- `recorte_label` — o mesmo papel do de charts, para o banner
-- `banner_auditoria_filtro` — faixa no topo dizendo qual cenário e qual ano estão ativos
-- `expander_auditoria_base` — sanfona com uma amostra da base bruta naquele filtro
-- `render_titulo` — título principal do painel
-- `heading_with_help` — título de seção mais o `?` do glossário
-
-### `controllers/resilience.py`
-
-- `safe_render(rótulo, função, argumentos)`: executa a função. Se der erro, mostra `st.error` com o tipo da exceção e uma sanfona com o traceback. O resto da página segue.
-- `resilient_view(rótulo)`: decorador que faz a mesma coisa em volta do `render` de uma aba.
-
-### `controllers/ai_sidebar_right.py`
-
-Painel de chat como coluna à direita, não como botão flutuante. Funções: `_painel_aberto`, `_abrir`, `render_ai_layout`. O CSS fixa uma alça na borda direita. O `app.py` atual não chama `render_ai_layout`. Quem abre o chat na tela é `chat_component.py`. Este arquivo continua no projeto e é exportado por `controllers/__init__.py`.
+| Local | Regra |
+|---|---|
+| `controllers/page_setup.py` | Esconde botão Deploy, menu superior e header padrão do Streamlit. |
+| `controllers/page_setup.py` | Força `stMetricValue` e `stMetricLabel` em branco para dark mode. |
+| `controllers/kpis/rendering.py` | Reaplica CSS específico em cards de KPI. |
+| `chat_component.py` | Posiciona iframe do chat flutuante no canto inferior direito. |
+| `chat_widget.html` | Controla aparência independente do widget HTML. |
 
 ---
 
-## Pasta `PI4/Frontend/src/views/`
+## 14. Funcionalidades Recentes Documentadas
 
-Uma aba da tela por arquivo. Quase todos têm uma função `render`, protegida por `@resilient_view`.
+### 14.1 Modularização
 
-### `views/__init__.py`
+Arquivos grandes convertidos em pacotes com `__init__.py` compatível:
 
-Importa os oito módulos: `ai_assistant`, `capital_giro`, `comparar`, `como_ler`, `distribuicao`, `faixa_risco`, `mapeamento_risco`, `prazos_ciclo`. O `__all__` repete esses nomes. `app.py` não usa este `__init__` para achar as abas; ele importa cada módulo pelo nome.
+- `models/formatting.py` -> `models/formatting/`
+- `models/rag_engine.py` -> `models/rag_engine/`
+- `models/analytics.py` -> `models/analytics/`
+- `models/financial_metrics.py` -> `models/financial_metrics/`
+- `controllers/kpis.py` -> `controllers/kpis/`
+- `controllers/charts.py` -> `controllers/charts/`
+- `views/persona_tabs.py` -> `views/persona_tabs/`
+- `views/ai_assistant.py` -> `views/ai_assistant/`
+- partes de `app.py` -> `controllers/page_setup.py`, `navigation.py`, `custom_analysis.py`, `test_sandbox.py`
 
-### `views/capital_giro.py`
+### 14.2 Upload e Edição de Dados
 
-Aba Capital de giro.
+`controllers/data_input.py` adiciona:
 
-- `_grafico_evolucao`: linha de NCG e de saldo de tesouraria nos 12 anos do cenário filtrado.
-- `_grafico_composicao`: barras do que compõe o giro naquele ano (as peças do ativo e do passivo operacional que existem no recorte).
-- `render(foco, foco_ano, cena_sel, ano_sel)`: título com ajuda e os dois gráficos.
+- Upload `.csv`/`.xlsx`.
+- Edição manual via `st.data_editor`.
+- Normalização de colunas e aliases.
+- Conversão de strings numéricas brasileiras.
+- Opção de aplicar dados customizados em `st.session_state`.
+- Opção de restaurar base original.
 
-### `views/prazos_ciclo.py`
+### 14.3 Comparação de Cenários
 
-Aba Prazos e ciclo.
+O comparador em `views/persona_tabs/comparison*.py` suporta:
 
-- `_grafico_prazos`: linhas de PMR, PME, PMP e ciclo financeiro.
-- `render`: quatro `render_metric_card` (os quatro prazos) e o gráfico.
+- Cenário A base.
+- Cenário B comparativo.
+- Cenário C opcional.
+- Deltas visuais contra A.
+- Gráficos distintos por persona.
+- Validação de cenários duplicados.
+- Alertas condicionais de caducidade apenas quando LG < 1.0x.
 
-### `views/mapeamento_risco.py`
+### 14.4 Sandbox de Teste
 
-Aba Mapeamento de risco × retorno.
+`controllers/test_sandbox.py` cria a persona `Teste`:
 
-- `_scatter`: gráfico de pontos. X = `risco`, Y = `rentabilidade`, cor = `selo`, usando `CORES_SELO`.
-- `render`: cartões com a contagem de cada selo, o scatter, busca de um cenário, e um comparativo do cenário escolhido com outro. A legenda de ênfase sai de `map.focus.<persona>`.
+- Sem cards fixos de topo.
+- Sub-aba inicial `Análise 1`.
+- Botão `+` para criar gráfico temporário.
+- Modal com indicador e tipo de visualização.
+- Renderização por `views/persona_tabs/custom_analysis.py`.
 
-### `views/distribuicao.py`
+---
 
-Aba Distribuição e probabilidades.
+## 15. Arquivos Gerados e Higiene
 
-- `_boxplot`: caixa do caixa no ano de encerramento, com os quartis.
-- `render`: cards (probabilidade de caixa negativo e leitura de percentis), histograma vindo de `figura_histograma_caixa_final`, e o boxplot. Os textos `dist.*` falam da cauda P5/P95.
+| Padrão | Natureza | Pode apagar? | Observação |
+|---|---|---|---|
+| `**/__pycache__/*.pyc` | Bytecode Python | Sim | Python recria automaticamente. |
+| `Backend/cache/*.parquet` | Cache de dados processados | Sim, com custo | O app recalcula a partir de `Cti.csv`. |
+| `.streamlit/credentials.toml` | Config local Streamlit | Sim | Pode ser recriado pelo Streamlit. |
+| `.env` real | Segredo local | Não versionar | Não aparece no inventário se ausente. |
 
-### `views/faixa_risco.py`
+---
 
-Aba Faixa de risco.
+## 16. Pontos de Entrada
 
-- `render`: select da métrica (`METRICAS_NUVEM`), cards de mediana, média, pior e melhor (`resumo_envelope`), o gráfico envelope e o histograma de um ano.
+| Comando | Diretório esperado | Resultado |
+|---|---|---|
+| `py -m streamlit run Frontend/app.py` | `PI4/` | Sobe o dashboard Streamlit. |
+| `py -m uvicorn Backend.main:app --host 127.0.0.1 --port 8000` | `PI4/` | Sobe API do chat. |
+| `POST http://localhost:8000/api/chat` | API ativa | Responde perguntas do chat flutuante. |
+| `GET http://localhost:8000/api/health` | API ativa | Retorna `{"status": "ok"}`. |
 
-### `views/comparar.py`
+---
 
-Aba Comparar cenários.
+## 17. Dependências Entre Camadas
 
-- `render`: multiselect de 2 ou 3 cenários, select da métrica, linhas sobrepostas com `CORES_COMPARA`, e cards lado a lado (caixa, NCG, tesouraria, liquidez, ciclo) de cada cenário escolhido.
+```text
+app.py
+  -> controllers/page_setup.py
+  -> controllers/bootstrap.py
+      -> models/loaders.py
+      -> models/analytics/
+      -> controllers/kpis/
+  -> controllers/data_input.py
+  -> controllers/sidebar.py
+  -> controllers/navigation.py
+      -> views/*
+      -> views/persona_tabs/*
+  -> chat_component.py
 
-### `views/como_ler.py`
+Backend/main.py
+  -> Backend/rag_engine.py
+      -> Frontend/src/models/rag_engine/
+      -> Frontend/src/models/analytics/
+      -> Frontend/src/models/loaders.py
+```
 
-Aba Como ler estes números.
+Separação de responsabilidades:
 
-- `render`: só texto. Usa `n_cenarios`, o rótulo do cenário, a série `k`, o ano de encerramento e `p_ruina` para preencher as frases do i18n. Não cria gráfico.
+- **`config`**: constantes, cores, textos e glossário.
+- **`models`**: dados, cálculos, formatação e RAG.
+- **`controllers`**: estado Streamlit, navegação, layout e coordenação.
+- **`views`**: telas, gráficos e widgets finais.
+- **`Backend`**: API HTTP e ponte para RAG.
 
-### `views/ai_assistant.py`
+---
 
-Chat desenhado com widgets do Streamlit, não com o HTML flutuante. Funções:
+## 18. Apêndice: Inventário Exato de Arquivos no Disco
 
-- `_fingerprint`: string com a quantidade de cenários e a média do caixa, para invalidar o cache se o ranking mudar.
-- `_carregar_engine`: `RagEngine.from_ranking`, com `st.cache_resource`.
-- `_chave_api`: procura a chave na sessão, no ambiente e no `secrets.toml`.
-- `_contexto_foco`: chama `build_focus_context` com o cenário e o ano da tela.
-- `render_chat_panel`: histórico na sessão, campo de pergunta, resposta, lista de fontes.
-- `render_chat` e `render`: atalhos para o mesmo painel.
+Esta seção lista todos os arquivos observados dentro de `PI4` no momento da atualização. Arquivos `.pyc` são bytecode gerado e estão marcados como artefatos.
 
-`app.py` não coloca esta view no menu de abas. `ai_sidebar_right.py` é quem a chama. O botão do robô que está no ar usa o HTML e a porta 8000, e portanto passa por `Backend/rag_engine.py`, que usa o mesmo `RagEngine` mas sem o contexto do filtro da tela.
+### 18.1 Raiz e Backend
+
+| Caminho | Propósito |
+|---|---|
+| `PI4/.env.example` | Modelo de variáveis de ambiente da raiz. |
+| `PI4/.gitignore` | Regras de arquivos ignorados pelo Git. |
+| `PI4/README.md` | Guia de instalação e execução do projeto. |
+| `PI4/Backend/.env.example` | Modelo de variáveis de ambiente do Backend. |
+| `PI4/Backend/Cti.csv` | Base bruta dos cenários CTI. |
+| `PI4/Backend/main.py` | API FastAPI do chat. |
+| `PI4/Backend/rag_engine.py` | Adaptador Backend para o motor RAG modular do Frontend. |
+| `PI4/Backend/requirements.txt` | Dependências Python do Backend. |
+| `PI4/Backend/cache/cti_limpo.parquet` | Cache da base limpa. |
+| `PI4/Backend/cache/indicadores.parquet` | Cache dos indicadores anuais. |
+| `PI4/Backend/cache/ranking.parquet` | Cache do ranking consolidado. |
+| `PI4/Backend/documentos/manual_executivo_cti.md` | Manual técnico indexado pelo RAG. |
+| `PI4/Backend/__pycache__/main.cpython-314.pyc` | Artefato bytecode de `main.py`. |
+| `PI4/Backend/__pycache__/rag_engine.cpython-314.pyc` | Artefato bytecode de `rag_engine.py`. |
+
+### 18.2 Frontend Raiz
+
+| Caminho | Propósito |
+|---|---|
+| `PI4/Frontend/.streamlit/config.toml` | Configuração de tema e servidor Streamlit. |
+| `PI4/Frontend/.streamlit/credentials.toml` | Credenciais locais vazias do Streamlit. |
+| `PI4/Frontend/analise.ipynb` | Notebook exploratório. |
+| `PI4/Frontend/app.py` | Entrada principal Streamlit. |
+| `PI4/Frontend/chat_component.py` | Injeção do chat flutuante HTML. |
+| `PI4/Frontend/chat_widget.html` | Widget HTML/JS do chat flutuante. |
+| `PI4/Frontend/organizando.ipynb` | Notebook auxiliar de organização da base. |
+| `PI4/Frontend/requirements_dashboard.txt` | Dependências Python do dashboard. |
+| `PI4/Frontend/__pycache__/chat_component.cpython-314.pyc` | Artefato bytecode de `chat_component.py`. |
+
+### 18.3 `src/config`
+
+| Caminho | Propósito |
+|---|---|
+| `PI4/Frontend/src/__init__.py` | Inicializador do pacote `src`. |
+| `PI4/Frontend/src/__pycache__/__init__.cpython-314.pyc` | Artefato bytecode do pacote `src`. |
+| `PI4/Frontend/src/config/__init__.py` | Constantes globais. |
+| `PI4/Frontend/src/config/glossary.py` | Glossário e textos de ajuda. |
+| `PI4/Frontend/src/config/i18n.py` | Traduções PT/EN e helper `t`. |
+| `PI4/Frontend/src/config/__pycache__/__init__.cpython-314.pyc` | Artefato bytecode de `config/__init__.py`. |
+| `PI4/Frontend/src/config/__pycache__/glossary.cpython-314.pyc` | Artefato bytecode de `glossary.py`. |
+| `PI4/Frontend/src/config/__pycache__/i18n.cpython-314.pyc` | Artefato bytecode de `i18n.py`. |
+
+### 18.4 `src/controllers`
+
+| Caminho | Propósito |
+|---|---|
+| `PI4/Frontend/src/controllers/__init__.py` | Fachada lazy-load dos controllers. |
+| `PI4/Frontend/src/controllers/ai_sidebar_right.py` | Layout alternativo do assistente em painel lateral. |
+| `PI4/Frontend/src/controllers/bootstrap.py` | Cache, contexto e cabeçalho do dashboard. |
+| `PI4/Frontend/src/controllers/custom_analysis.py` | Estado e modal de análises customizadas. |
+| `PI4/Frontend/src/controllers/data_input.py` | Upload, editor e substituição de dados. |
+| `PI4/Frontend/src/controllers/headers.py` | Cabeçalhos, auditoria e labels de filtro. |
+| `PI4/Frontend/src/controllers/navigation.py` | Roteamento das abas e personas. |
+| `PI4/Frontend/src/controllers/page_setup.py` | CSS global e configuração Streamlit. |
+| `PI4/Frontend/src/controllers/resilience.py` | Tratamento de exceções em views. |
+| `PI4/Frontend/src/controllers/sidebar.py` | Sidebar, idioma e persona. |
+| `PI4/Frontend/src/controllers/test_sandbox.py` | Sandbox da persona Teste. |
+| `PI4/Frontend/src/controllers/charts/__init__.py` | Fachada dos gráficos. |
+| `PI4/Frontend/src/controllers/charts/histograms.py` | Histogramas Plotly. |
+| `PI4/Frontend/src/controllers/charts/risk_band.py` | Envelope/faixa de risco. |
+| `PI4/Frontend/src/controllers/charts/time_series.py` | Helpers de séries temporais. |
+| `PI4/Frontend/src/controllers/kpis/__init__.py` | Fachada dos KPIs. |
+| `PI4/Frontend/src/controllers/kpis/ceo.py` | KPIs do CEO. |
+| `PI4/Frontend/src/controllers/kpis/concession.py` | KPIs do Poder Concedente. |
+| `PI4/Frontend/src/controllers/kpis/constants.py` | Constantes contábeis dos KPIs. |
+| `PI4/Frontend/src/controllers/kpis/helpers.py` | Helpers de divisão/leitura de contas. |
+| `PI4/Frontend/src/controllers/kpis/personas.py` | Roteador de KPIs por persona. |
+| `PI4/Frontend/src/controllers/kpis/rendering.py` | Renderização visual dos cards. |
+| `PI4/Frontend/src/controllers/kpis/shareholders.py` | KPIs dos acionistas. |
+| `PI4/Frontend/src/controllers/**/__pycache__/*.pyc` | Artefatos bytecode dos controllers e subpacotes. |
+
+### 18.5 `src/models`
+
+| Caminho | Propósito |
+|---|---|
+| `PI4/Frontend/src/models/__init__.py` | Fachada lazy-load dos models. |
+| `PI4/Frontend/src/models/classifiers.py` | Classificação por selos. |
+| `PI4/Frontend/src/models/loaders.py` | Leitura e limpeza de dados. |
+| `PI4/Frontend/src/models/analytics/__init__.py` | Fachada de analytics. |
+| `PI4/Frontend/src/models/analytics/indicators.py` | Cálculo de indicadores e ranking. |
+| `PI4/Frontend/src/models/analytics/summaries.py` | Resumos estatísticos. |
+| `PI4/Frontend/src/models/financial_metrics/__init__.py` | Fachada das métricas dinâmicas. |
+| `PI4/Frontend/src/models/financial_metrics/catalog.py` | Catálogo `FINANCIAL_METRICS_DICT`. |
+| `PI4/Frontend/src/models/financial_metrics/series.py` | Séries temporais de métricas. |
+| `PI4/Frontend/src/models/financial_metrics/types.py` | Tipo `FinancialMetric`. |
+| `PI4/Frontend/src/models/financial_metrics/utils.py` | Utilitários numéricos. |
+| `PI4/Frontend/src/models/formatting/__init__.py` | Fachada de formatação. |
+| `PI4/Frontend/src/models/formatting/base.py` | Helpers base de número/NA. |
+| `PI4/Frontend/src/models/formatting/comparisons.py` | Comparações e cenários padrão. |
+| `PI4/Frontend/src/models/formatting/numbers.py` | Formatação R$, dias e percentuais. |
+| `PI4/Frontend/src/models/formatting/scenarios.py` | IDs e rótulos de cenários. |
+| `PI4/Frontend/src/models/formatting/texts.py` | Textos interpretativos de NCG/tesouraria/ciclo. |
+| `PI4/Frontend/src/models/rag_engine/__init__.py` | Fachada do RAG. |
+| `PI4/Frontend/src/models/rag_engine/answers.py` | Geração Gemini e fallback extrativo. |
+| `PI4/Frontend/src/models/rag_engine/config.py` | Prompts e constantes do RAG. |
+| `PI4/Frontend/src/models/rag_engine/context.py` | Contexto da tela para o RAG. |
+| `PI4/Frontend/src/models/rag_engine/documents.py` | Documentos de manuais, glossário e cenários. |
+| `PI4/Frontend/src/models/rag_engine/embeddings.py` | Embeddings TF-IDF. |
+| `PI4/Frontend/src/models/rag_engine/engine.py` | Classe `RagEngine` e busca. |
+| `PI4/Frontend/src/models/rag_engine/formatters.py` | Formatadores simples do RAG. |
+| `PI4/Frontend/src/models/**/__pycache__/*.pyc` | Artefatos bytecode dos models e subpacotes. |
+
+### 18.6 `src/views`
+
+| Caminho | Propósito |
+|---|---|
+| `PI4/Frontend/src/views/__init__.py` | Fachada das views. |
+| `PI4/Frontend/src/views/capital_giro.py` | Aba Capital de Giro. |
+| `PI4/Frontend/src/views/como_ler.py` | Aba explicativa. |
+| `PI4/Frontend/src/views/comparar.py` | Comparador operacional legado. |
+| `PI4/Frontend/src/views/distribuicao.py` | Distribuição e probabilidades. |
+| `PI4/Frontend/src/views/faixa_risco.py` | Faixa de risco. |
+| `PI4/Frontend/src/views/mapeamento_risco.py` | Matriz risco x retorno. |
+| `PI4/Frontend/src/views/prazos_ciclo.py` | Prazos e ciclo financeiro. |
+| `PI4/Frontend/src/views/ai_assistant/__init__.py` | Fachada do assistente nativo. |
+| `PI4/Frontend/src/views/ai_assistant/context.py` | Contexto/cache do assistente. |
+| `PI4/Frontend/src/views/ai_assistant/panel.py` | UI Streamlit do assistente. |
+| `PI4/Frontend/src/views/persona_tabs/__init__.py` | Fachada das sub-abas por persona. |
+| `PI4/Frontend/src/views/persona_tabs/ceo.py` | Sub-abas CEO. |
+| `PI4/Frontend/src/views/persona_tabs/common.py` | Cálculos comuns de DRE/balanço/financeiro. |
+| `PI4/Frontend/src/views/persona_tabs/comparison.py` | Roteador do comparador por persona. |
+| `PI4/Frontend/src/views/persona_tabs/comparison_ceo_cfo.py` | Comparadores CEO e CFO. |
+| `PI4/Frontend/src/views/persona_tabs/comparison_concession.py` | Comparador do Poder Concedente. |
+| `PI4/Frontend/src/views/persona_tabs/comparison_helpers.py` | Helpers do comparador. |
+| `PI4/Frontend/src/views/persona_tabs/comparison_shareholders.py` | Comparador dos acionistas e gráfico EVA categórico. |
+| `PI4/Frontend/src/views/persona_tabs/concession.py` | Sub-abas do Poder Concedente. |
+| `PI4/Frontend/src/views/persona_tabs/custom_analysis.py` | Renderização de análise customizada. |
+| `PI4/Frontend/src/views/persona_tabs/shareholders.py` | Sub-abas dos acionistas. |
+| `PI4/Frontend/src/views/persona_tabs/styles.py` | Estilos A/B/C do comparador. |
+| `PI4/Frontend/src/views/**/__pycache__/*.pyc` | Artefatos bytecode das views e subpacotes. |
+
