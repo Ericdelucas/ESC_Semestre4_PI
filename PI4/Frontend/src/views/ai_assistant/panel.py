@@ -324,6 +324,43 @@ div[data-testid="stPopoverBody"], .floating-chat-container {
   box-shadow: 0px 8px 24px rgba(0, 0, 0, 0.5) !important;
   z-index: 999999 !important;
 }
+@media (max-width: 640px) {
+  div[class*="st-key-cti_chat_fab"] {
+    right: 12px !important;
+    bottom: 12px !important;
+    width: 58px !important;
+  }
+  div[class*="st-key-cti_chat_fab"] button {
+    min-height: 50px !important;
+    width: 50px !important;
+  }
+  div[class*="st-key-cti_chat_panel"] {
+    left: 8px !important;
+    right: 8px !important;
+    bottom: 72px !important;
+    width: calc(100vw - 16px) !important;
+    max-height: calc(100dvh - 88px) !important;
+    padding: 12px !important;
+    border-radius: 10px !important;
+  }
+  div[class*="st-key-cti_chat_panel"] h3 {
+    font-size: 1.05rem !important;
+    margin-bottom: 0.25rem !important;
+  }
+  div[class*="st-key-cti_chat_panel"] button {
+    min-height: 2.4rem !important;
+  }
+  div[class*="st-key-cti_chat_messages"] {
+    max-height: calc(100dvh - 260px) !important;
+    padding-right: 2px !important;
+  }
+  div[class*="st-key-cti_chat_input_area"] {
+    padding-top: 8px !important;
+  }
+  div[class*="st-key-cti_chat_input_area"] input {
+    font-size: 16px !important;
+  }
+}
 </style>
 """
 

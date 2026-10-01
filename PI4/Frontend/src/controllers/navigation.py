@@ -105,18 +105,19 @@ def render_analises(ctx: AppContext) -> None:
     nav_widget_key = f"nav_secao_{ctx.persona}_{lang}_{len(analyses)}"
     if pending_nav_key in nav_keys:
         st.session_state.pop(nav_widget_key, None)
-    col_nav, col_add = st.columns([0.94, 0.06])
-    with col_nav:
-        secao_label = st.segmented_control(
-            "nav",
-            options=labels,
-            default=default_label if default_label in labels else labels[0],
-            key=nav_widget_key,
-            label_visibility="collapsed",
-        )
-    with col_add:
-        if st.button("+", help="Adicionar análise customizada", key=f"add_analysis_{ctx.persona}"):
-            st.session_state[f"show_custom_analysis_dialog_{ctx.persona}"] = True
+    with st.container(key=f"cti_subnav_scroll_{ctx.persona}", border=False):
+        col_nav, col_add = st.columns([0.94, 0.06])
+        with col_nav:
+            secao_label = st.segmented_control(
+                "nav",
+                options=labels,
+                default=default_label if default_label in labels else labels[0],
+                key=nav_widget_key,
+                label_visibility="collapsed",
+            )
+        with col_add:
+            if st.button("+", help="Adicionar análise customizada", key=f"add_analysis_{ctx.persona}"):
+                st.session_state[f"show_custom_analysis_dialog_{ctx.persona}"] = True
     render_custom_analysis_dialog(ctx.persona)
     nav_key = label_to_key.get(secao_label or default_label, nav_keys[0])
     st.session_state["nav_key"] = nav_key
