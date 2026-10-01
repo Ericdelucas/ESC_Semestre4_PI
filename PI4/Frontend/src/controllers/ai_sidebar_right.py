@@ -81,4 +81,6 @@ def render_ai_layout(ctx: AppContext, corpo: Callable[[AppContext], None]) -> No
             ctx.k,
             ctx.ano_enc,
             ctx.ano_sel,
+            ctx.df,
+            ctx.ind,
         )

@@ -36,7 +36,7 @@ def _selecionar_cenarios(cenas: list[str], persona: str) -> list[tuple[str, str]
 
 def _delta(valor_a: float, valor_b: float, fmt, *, maior_melhor: bool = True) -> tuple[str, str]:
     if pd.isna(valor_a) or pd.isna(valor_b):
-        return "—", "off"
+        return fmt(0.0), "off"
     dif = valor_b - valor_a
     pct = _safe_div(dif, abs(valor_a))
     pct_txt = f" ({pct * 100:+.1f}%)" if pd.notna(pct) else ""
@@ -64,4 +64,4 @@ def _metric_base(label: str, valor_a: float, comparativos: list[tuple[str, float
 
 
 def _fmt_x(valor: float) -> str:
-    return "—" if pd.isna(valor) else f"{valor:.2f}x"
+    return f"{0.0 if pd.isna(valor) else valor:.2f}x"

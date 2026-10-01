@@ -85,6 +85,9 @@ def render_analises(ctx: AppContext) -> None:
     custom_by_key = dict(zip(custom_keys, analyses, strict=True))
     nav_keys = insert_custom_tabs(base_nav_keys, custom_keys)
     renderers = {**VIEW_RENDERERS, "comparar": PERSONA_VIEW_RENDERERS["comparar"]} if ctx.persona == "cfo" else PERSONA_VIEW_RENDERERS
+    pending_nav_key = st.session_state.pop("pending_nav_key", None)
+    if pending_nav_key in nav_keys:
+        st.session_state["nav_key"] = pending_nav_key
     if st.session_state.get("nav_key") not in nav_keys:
         st.session_state["nav_key"] = nav_keys[0]
     labels = [
@@ -99,13 +102,16 @@ def render_analises(ctx: AppContext) -> None:
         default_label = custom_label(custom_by_key[default_key])
     else:
         default_label = t(f"nav.{default_key}") if default_key in NAV_KEYS else PERSONA_NAV_LABELS[default_key]
+    nav_widget_key = f"nav_secao_{ctx.persona}_{lang}_{len(analyses)}"
+    if pending_nav_key in nav_keys:
+        st.session_state.pop(nav_widget_key, None)
     col_nav, col_add = st.columns([0.94, 0.06])
     with col_nav:
         secao_label = st.segmented_control(
             "nav",
             options=labels,
             default=default_label if default_label in labels else labels[0],
-            key=f"nav_secao_{ctx.persona}_{lang}_{len(analyses)}",
+            key=nav_widget_key,
             label_visibility="collapsed",
         )
     with col_add:

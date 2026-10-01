@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -14,7 +16,7 @@ try:
 except ImportError:
     faiss = None
 
-from .answers import gerar_llm, resolve_api_key, resposta_extrativa
+from .answers import gerar_llm, resolve_api_key
 from .documents import docs_cenarios, docs_glossario, docs_manuais
 from .embeddings import TfidfEmbeddings
 
@@ -41,6 +43,83 @@ def prioridade_fonte(doc: Document, score: float) -> float:
     elif tipo == "cenario":
         bonus += 0.12
     return score + bonus
+
+
+def _resposta_sem_llm(question: str, extra_context: str, lang: str) -> str:
+    pergunta = unicodedata.normalize("NFKD", question.lower()).encode("ascii", "ignore").decode("ascii")
+    fechamento = (
+        "Gostaria que eu direcionasse você para a aba de DRE/EBITDA ou quer analisar outro indicador?"
+        if lang != "en"
+        else "Would you like me to take you to the DRE/EBITDA tab, or would you rather analyze another indicator?"
+    )
+    if re.search(r"\b(o que e|o que é|what is|api)\b", pergunta) and "api" in pergunta:
+        if lang == "en":
+            return (
+                "An API is a defined way for systems to communicate, exposing functions or data "
+                "through documented requests and responses. Would you like to connect this idea "
+                "to the CTI dashboard data flow, or analyze another indicator?"
+            )
+        return (
+            "API é uma interface que permite que sistemas conversem entre si por meio de regras, "
+            "requisições e respostas bem definidas. Quer que eu conecte esse conceito ao fluxo de "
+            "dados do Dashboard CTI ou prefere analisar outro indicador?"
+        )
+
+    termos = {
+        "ebitda": ("EBITDA", "Margem EBITDA", "Receita Liquida"),
+        "ncg": ("NCG",),
+        "liquidez": ("Liquidez corrente",),
+        "ciclo": ("Ciclo Financeiro",),
+        "tesouraria": ("Saldo de Tesouraria",),
+        "saldo": ("Saldo de Tesouraria", "Saldo final"),
+        "dfc": ("DFC", "Geracao de Caixa", "Investimentos", "Saldo final"),
+        "receita": ("Receita Liquida", "Receita"),
+        "break": ("Ponto de equilibrio", "Margem de seguranca", "Margem de contribuicao"),
+        "equilibrio": ("Ponto de equilibrio", "Margem de seguranca", "Margem de contribuicao"),
+    }
+    chaves = [v for termo, vals in termos.items() if termo in pergunta for v in vals]
+    linhas = []
+    for linha in extra_context.splitlines():
+        limpo = linha.strip()
+        if not limpo.startswith("- "):
+            continue
+        if not chaves or any(chave.lower() in limpo.lower() for chave in chaves):
+            linhas.append(limpo)
+        if len(linhas) >= 6:
+            break
+
+    if linhas:
+        valores_extraidos = [linha.removeprefix("- ").rstrip(".") for linha in linhas[:4]]
+        if len(valores_extraidos) == 1:
+            valores = valores_extraidos[0]
+        else:
+            valores = ", ".join(valores_extraidos[:-1]) + f" e {valores_extraidos[-1]}"
+        if "ebitda" in pergunta:
+            return (
+                "EBITDA é uma medida operacional que ajuda a enxergar a geração de resultado antes "
+                f"dos efeitos financeiros, impostos, depreciação e amortização. Na base ativa do "
+                f"Dashboard CTI, esse indicador aparece junto de {valores}, o que ajuda a conectar "
+                f"a margem operacional ao desempenho do recorte atual. {fechamento}"
+            )
+        if "ncg" in pergunta:
+            return (
+                "NCG mostra a necessidade de capital de giro da operação, comparando ativos e "
+                f"passivos operacionais. No recorte atual da base ativa, a leitura passa por {valores}, "
+                "indicando quanto caixa operacional fica preso no ciclo do negócio. "
+                f"{fechamento}"
+            )
+        if "liquidez" in pergunta:
+            return (
+                "Liquidez corrente indica a capacidade de cobrir obrigações de curto prazo com "
+                f"ativos circulantes. No recorte atual da base ativa, o dado se conecta a {valores}, "
+                "então a leitura deve considerar tanto solvência quanto pressão de caixa. "
+                f"{fechamento}"
+            )
+        intro = "Na base ativa do Dashboard CTI, o recorte atual indica" if lang != "en" else "In the active CTI dashboard dataset, the current slice shows"
+        return f"{intro} {valores}. {fechamento}"
+    if lang == "en":
+        return "I can answer from the active CTI dashboard dataset when the question refers to project indicators, DRE, BP, DFC, scenarios, or dashboard navigation. Would you like me to open a related dashboard tab or analyze a specific indicator?"
+    return "Posso responder com base na base ativa do Dashboard CTI quando a pergunta envolver indicadores, DRE, BP, DFC, cenários ou navegação do painel. Quer que eu abra uma aba relacionada ou analise um indicador específico?"
 
 
 @dataclass
@@ -130,6 +209,6 @@ class RagEngine:
             contexto = extra_context.strip() + "\n\n" + contexto
         chave = resolve_api_key(api_key)
         if not chave:
-            return resposta_extrativa(question, hits, lang), fontes
+            return _resposta_sem_llm(question, extra_context, lang), fontes
         resposta = gerar_llm(question, contexto, lang, history, chave)
         return resposta, fontes
