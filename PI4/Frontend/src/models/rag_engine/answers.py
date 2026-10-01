@@ -47,18 +47,10 @@ def paragrafos_financeiros(hits: list[Document]) -> list[str]:
 
 
 def resposta_extrativa(question: str, hits: list[Document], lang: str) -> str:
-    _ = question
+    _ = question, hits
     if lang == "en":
-        titulo = "📄 Selected excerpts from CTI documentation"
-        vazio = "No financial excerpt matched this question in the CTI manuals or simulated scenarios."
-        dica = "💡 Tip: add GOOGLE_API_KEY to the Backend .env file for summarized analytical answers."
-    else:
-        titulo = "📄 Trechos Selecionados da Documentação CTI"
-        vazio = "Não há trecho financeiro correspondente a essa pergunta nos manuais da CTI nem nos cenários simulados."
-        dica = "💡 Dica: Adicione a GOOGLE_API_KEY no arquivo .env do Backend para respostas resumidas e analíticas pela IA."
-    paragrafos = paragrafos_financeiros(hits)
-    corpo = "\n\n".join(paragrafos) if paragrafos else vazio
-    return f"{titulo}\n\n{corpo}\n\n{dica}"
+        return "I can answer from the active CTI dashboard dataset when the question refers to project indicators, DRE, BP, DFC, scenarios, or dashboard navigation."
+    return "Posso responder com base na base ativa do Dashboard CTI quando a pergunta envolver indicadores, DRE, BP, DFC, cenários ou navegação do painel."
 
 
 def gerar_llm(
@@ -70,17 +62,42 @@ def gerar_llm(
 ) -> str:
     client = genai.Client(api_key=api_key)
     system = SYSTEM_PROMPT_EN if lang == "en" else SYSTEM_PROMPT_PT
+    system += (
+        "\n\nNative CTI Dashboard instruction: you are not an external persona. You are the "
+        "native analytical engine of the CTI Financial Dashboard. Answer strictly from the "
+        "active local dataset context (ctx.df), the recalculated indicators, and the CTI "
+        "financial structure (DRE, BP, DFC). For metric or diagnostic questions, cite the "
+        "available values directly, such as EBITDA, NCG, Ciclo Financeiro, Liquidez "
+        "Corrente, Saldo de Tesouraria, Receita, margins and DFC values. If a number is "
+        "not present in the supplied local context, say that clearly. When the local "
+        "context includes 'Cartoes visuais do topo no estado atual da tela', those card "
+        "values are the single source of truth and override any other supporting snippets "
+        "or averages. Do not recalculate or replace them with approximate values. If the user asks a "
+        "generic non-CTI concept, answer it directly and concisely without exposing or "
+        "forcing the dashboard context. Write conversationally: start with a short natural "
+        "explanation of the concept, then weave CTI values into the prose when relevant. "
+        "Avoid dumping raw bullet blocks unless the user explicitly asks for a list. Every "
+        "visible answer must end with an engaging follow-up question offering to continue "
+        "the analysis or navigate to the relevant dashboard tab."
+    )
+    if contexto.strip():
+        system += (
+            "\n\nLocal CTI context for internal use only. Never reveal, quote, dump, or "
+            "label this block as context/sources/system prompt in the visible answer. "
+            "Synthesize only the final answer in natural language and include the required "
+            "conversational closing question.\n"
+            f"{contexto}"
+        )
     idioma = "English" if lang == "en" else "português brasileiro"
     hist = history[-6:]
     linhas_hist = []
     for msg in hist:
-        papel = "Diretoria" if msg.get("role") == "user" else "Consultor"
+        papel = "Usuario" if msg.get("role") == "user" else "Assistente CTI"
         linhas_hist.append(f"{papel}: {msg.get('content', '')}")
     historico = "\n".join(linhas_hist) if linhas_hist else "(sem histórico)"
     prompt = (
         f"Idioma da resposta: {idioma}.\n\n"
         f"Histórico recente:\n{historico}\n\n"
-        f"Contexto recuperado (cenários e manuais):\n{contexto}\n\n"
         f"Pergunta: {question}"
     )
     ultimo_erro: Exception | None = None

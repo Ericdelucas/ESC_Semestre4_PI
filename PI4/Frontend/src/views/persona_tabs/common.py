@@ -101,7 +101,7 @@ def _balanco_fluxo(df: pd.DataFrame, cena: str) -> pd.DataFrame:
         "BAL - Passivo Circulante",
         "BAL - Realizável a Longo Prazo",
         "BAL - Exigível a Longo Prazo",
-        "BAL  - Patrimônio Líquido",
+        "BAL - Patrimônio Líquido",
         "BAL - Empréstimos",
         "BAL - Disponível",
         "BAL - Investimentos - Imobilizado",
@@ -118,26 +118,29 @@ def _financeiro(df: pd.DataFrame, cena: str) -> pd.DataFrame:
     dre = _dre(df, cena)
     bal = _balanco_fluxo(df, cena)
     dados = dre.merge(bal, on="ano_num", how="outer").sort_values("ano_num").fillna(0.0)
-    patrimonio = _conta(dados, "BAL  - Patrimônio Líquido").abs()
+    patrimonio = _conta(dados, "BAL - Patrimônio Líquido").abs()
     divida = _conta(dados, "BAL - Empréstimos").abs()
     caixa = _conta(dados, "BAL - Disponível").abs()
+    ativo_total = _conta(dados, "BAL - Total do Ativo").abs()
     divida_liquida = (divida - caixa).clip(lower=0)
-    capital = (patrimonio + divida_liquida).replace(0, pd.NA)
+    capital_base = patrimonio + divida_liquida
+    capital = capital_base.where(capital_base > 0, ativo_total)
+    capital_divisor = capital.replace(0, pd.NA)
     ir_cs = _conta(dados, "DRE - Imposto de Renda e Contribuição Social")
     aliquota_ir = (_safe_div(ir_cs.abs(), dados["EBIT"].abs())).clip(lower=0, upper=ALIQUOTA_IR_FALLBACK).fillna(ALIQUOTA_IR_FALLBACK)
     nopat = dados["EBIT"] * (1 - aliquota_ir)
     lucro = dados["Lucro Líquido"]
     dados["Dívida Líquida"] = divida_liquida
-    dados["Capital Investido"] = capital
+    dados["Capital Investido"] = capital.fillna(0)
     dados["NOPAT"] = nopat
-    dados["ROIC"] = nopat / capital
-    dados["ROE"] = lucro / patrimonio.replace(0, pd.NA)
+    dados["ROIC"] = _safe_div(nopat, capital_divisor).fillna(0)
+    dados["ROE"] = _safe_div(lucro, patrimonio.replace(0, pd.NA)).fillna(0)
     dados["WACC"] = WACC
-    dados["Custo do Capital"] = capital * WACC
-    dados["EVA"] = nopat - dados["Custo do Capital"]
+    dados["Custo do Capital"] = (capital.fillna(0) * WACC)
+    dados["EVA"] = (nopat - dados["Custo do Capital"]).fillna(0)
     dados["Dividendos"] = (lucro.clip(lower=0) * PAYOUT).fillna(0)
     dados["Retido"] = (lucro.clip(lower=0) - dados["Dividendos"]).fillna(0)
-    dados["DY"] = dados["Dividendos"] / capital
+    dados["DY"] = _safe_div(dados["Dividendos"], capital_divisor).fillna(0)
     return dados
 
 

@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import streamlit as st
 
-from chat_component import render_floating_chat
 from src.controllers.bootstrap import carregar_estado, montar_contexto
 from src.controllers.data_input import has_custom_data, render_data_input
 from src.controllers.navigation import render_pagina
 from src.controllers.page_setup import configure_page
 from src.controllers.sidebar import render_language_selector, render_persona, render_sidebar
 from src.models.analytics import montar_indicadores
+from src.views.ai_assistant.panel import render_floating_chat
 
 
 def main() -> None:
@@ -30,7 +30,7 @@ def main() -> None:
         df, ind, ranking, ano_sel=ano_sel, cena_sel=cena_sel, anos=anos, cenas=cenas, persona=persona
     )
     render_pagina(ctx)
-    render_floating_chat()
+    render_floating_chat(ctx)
 
 
 main()

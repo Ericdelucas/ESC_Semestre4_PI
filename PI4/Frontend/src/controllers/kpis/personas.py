@@ -13,6 +13,12 @@ from .constants import KpiItem
 from .shareholders import _kpis_acionistas
 
 
+def _zero_se_na(valor: object) -> float:
+    if pd.isna(valor):
+        return 0.0
+    return float(valor)
+
+
 def kpis_por_persona(
     persona: str,
     k: pd.Series,
@@ -26,23 +32,25 @@ def kpis_por_persona(
         return _kpis_ceo(df, cena_sel, ano_sel)
 
     if persona == "cfo":
-        liq = k["liquidez"] if "liquidez" in k.index else float("nan")
-        ciclo = k["Ciclo_Financeiro"] if "Ciclo_Financeiro" in k.index else float("nan")
+        ncg = _zero_se_na(k["NCG"]) if "NCG" in k.index else 0.0
+        tesouraria = _zero_se_na(k["Saldo_Tesouraria"]) if "Saldo_Tesouraria" in k.index else 0.0
+        liq = _zero_se_na(k["liquidez"]) if "liquidez" in k.index else 0.0
+        ciclo = _zero_se_na(k["Ciclo_Financeiro"]) if "Ciclo_Financeiro" in k.index else 0.0
         return [
-            ("Necessidade de Capital de Giro (NCG)", fmt_rs(k["NCG"]) if "NCG" in k.index else "—", help_text("ncg")),
+            ("Necessidade de Capital de Giro (NCG)", fmt_rs(ncg), help_text("ncg")),
             (
                 "Saldo de Tesouraria",
-                fmt_rs(k["Saldo_Tesouraria"]) if "Saldo_Tesouraria" in k.index else "—",
+                fmt_rs(tesouraria),
                 help_text("treasury"),
             ),
             (
                 "Ciclo Financeiro",
-                fmt_dias(ciclo) if pd.notna(ciclo) else "—",
+                fmt_dias(ciclo),
                 help_text("cycle"),
             ),
             (
                 "Liquidez Corrente (LC)",
-                f"{liq:.2f}x" if pd.notna(liq) else "—",
+                f"{liq:.2f}x",
                 help_text("liquidity"),
             ),
         ]
