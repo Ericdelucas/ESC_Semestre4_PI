@@ -47,9 +47,11 @@ def montar_indicadores(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
         .sum()
         .pivot(index=["ANO", "ano_num", "CENA"], columns="campo", values="VALOR")
         .reset_index()
-        .fillna(0)
     )
     wide.columns.name = None
+    metric_cols = [col for col in wide.columns if col not in {"ANO", "ano_num", "CENA"}]
+    if metric_cols:
+        wide[metric_cols] = wide[metric_cols].fillna(0)
     for col in [
         "contas_receber",
         "estoques",
