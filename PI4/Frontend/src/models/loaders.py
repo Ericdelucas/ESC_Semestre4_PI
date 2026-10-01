@@ -27,6 +27,31 @@ def magnitude(serie: pd.Series) -> pd.Series:
     return serie.abs()
 
 
+def otimizar_base_cti(df: pd.DataFrame) -> pd.DataFrame:
+    """Compacta a base longa para reduzir memoria no Render free."""
+    if df.empty:
+        return df
+    out = df
+    if "CONTA" in out.columns:
+        out["CONTA"] = normalizar_conta(out["CONTA"]).astype("category")
+    if "CENA" in out.columns:
+        out["CENA"] = out["CENA"].astype(str).str.strip().astype("category")
+    if "ANO" in out.columns:
+        out["ANO"] = out["ANO"].astype(str).str.strip().astype("category")
+    if "ano_num" in out.columns:
+        out["ano_num"] = pd.to_numeric(out["ano_num"], errors="coerce").fillna(0).astype("int8")
+    if "VALOR" in out.columns:
+        out["VALOR"] = pd.to_numeric(out["VALOR"], errors="coerce").fillna(0.0).astype("float64")
+    return out
+
+
+def _preparar_chunk(chunk: pd.DataFrame) -> pd.DataFrame:
+    chunk["CONTA"] = normalizar_conta(chunk["CONTA"])
+    chunk["VALOR"] = parse_valor_br(chunk["VALOR"])
+    chunk["ano_num"] = chunk["ANO"].str.extract(r"(\d+)", expand=False)
+    return chunk[["ANO", "CENA", "CONTA", "VALOR", "ano_num"]]
+
+
 def load_cti_csv(path: Path | None = None) -> pd.DataFrame:
     """Lê Cti.csv. Preferencialmente reutiliza Parquet em cache/ se estiver atualizado."""
     csv_path = Path(path) if path is not None else CSV_PATH
@@ -38,20 +63,22 @@ def load_cti_csv(path: Path | None = None) -> pd.DataFrame:
         and csv_path.exists()
         and parquet_path.stat().st_mtime >= csv_path.stat().st_mtime
     ):
-        return pd.read_parquet(parquet_path)
+        return otimizar_base_cti(pd.read_parquet(parquet_path))
 
-    # object + engine C: menos RAM que dtype="string"/ArrowStringArray no CSV grande
-    df = pd.read_csv(
+    chunks = pd.read_csv(
         csv_path,
         header=None,
         names=["ANO", "CENA", "CONTA", "VALOR"],
         dtype=str,
         engine="c",
+        chunksize=120_000,
         low_memory=False,
     )
-    df["CONTA"] = normalizar_conta(df["CONTA"])
-    df["VALOR"] = parse_valor_br(df["VALOR"])
-    df["ano_num"] = df["ANO"].str.extract(r"(\d+)", expand=False).astype("Int64")
+    partes = [_preparar_chunk(chunk) for chunk in chunks]
+    df = pd.concat(partes, ignore_index=True, copy=False) if partes else pd.DataFrame(
+        columns=["ANO", "CENA", "CONTA", "VALOR", "ano_num"]
+    )
+    df = otimizar_base_cti(df)
     df.to_parquet(parquet_path, index=False)
     return df
 

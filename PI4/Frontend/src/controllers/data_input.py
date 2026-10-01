@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from src.models.loaders import normalizar_conta, parse_valor_br
+from src.models.loaders import normalizar_conta, otimizar_base_cti, parse_valor_br
 
 DF_OVERRIDE_KEY = "cti_df_override"
 DATASETS_KEY = "cti_datasets"
@@ -155,20 +155,20 @@ def _default_upload_name(uploaded_file) -> str:
 
 def _init_datasets(current_df: pd.DataFrame) -> None:
     if DATASETS_KEY not in st.session_state or not isinstance(st.session_state.get(DATASETS_KEY), dict):
-        st.session_state[ORIGINAL_DATASET_KEY] = current_df.copy()
-        st.session_state[DATASETS_KEY] = {DEFAULT_DATASET_NAME: current_df.copy()}
+        st.session_state[ORIGINAL_DATASET_KEY] = current_df
+        st.session_state[DATASETS_KEY] = {DEFAULT_DATASET_NAME: current_df}
         st.session_state[ACTIVE_DATASET_KEY] = DEFAULT_DATASET_NAME
         st.session_state[DEFAULT_MODIFIED_KEY] = False
 
         legado = st.session_state.get(DF_OVERRIDE_KEY)
         if isinstance(legado, pd.DataFrame):
             legacy_name = _unique_dataset_name("Base Customizada (Legado)")
-            st.session_state[DATASETS_KEY][legacy_name] = legado.copy()
+            st.session_state[DATASETS_KEY][legacy_name] = otimizar_base_cti(legado)
             st.session_state[ACTIVE_DATASET_KEY] = legacy_name
     else:
-        st.session_state.setdefault(ORIGINAL_DATASET_KEY, current_df.copy())
+        st.session_state.setdefault(ORIGINAL_DATASET_KEY, current_df)
         st.session_state.setdefault(DEFAULT_MODIFIED_KEY, False)
-        st.session_state[DATASETS_KEY].setdefault(DEFAULT_DATASET_NAME, st.session_state[ORIGINAL_DATASET_KEY].copy())
+        st.session_state[DATASETS_KEY].setdefault(DEFAULT_DATASET_NAME, st.session_state[ORIGINAL_DATASET_KEY])
         if st.session_state.get(ACTIVE_DATASET_KEY) not in st.session_state[DATASETS_KEY]:
             st.session_state[ACTIVE_DATASET_KEY] = DEFAULT_DATASET_NAME
 
@@ -256,19 +256,21 @@ def render_data_input(current_df: pd.DataFrame) -> pd.DataFrame:
             elif uploaded is None:
                 erros.extend(manual_errors)
 
-            novos = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=current_df.columns)
+            novos = pd.concat(frames, ignore_index=True, copy=False) if frames else pd.DataFrame(columns=current_df.columns)
+            novos = otimizar_base_cti(novos.fillna(0)) if not novos.empty else novos
             if erros and novos.empty:
                 st.error(" ".join(erros))
             else:
                 if mode == "Salvar como Nova Base":
                     dataset_name = _unique_dataset_name(custom_name or default_name)
-                    st.session_state[DATASETS_KEY][dataset_name] = novos.fillna(0)
+                    st.session_state[DATASETS_KEY][dataset_name] = novos
                     st.session_state[ACTIVE_DATASET_KEY] = dataset_name
                     st.session_state[PENDING_ACTIVE_DATASET_KEY] = dataset_name
                     st.session_state[UPLOAD_COUNTER_KEY] = int(st.session_state.get(UPLOAD_COUNTER_KEY, 0)) + 1
                     st.success(f"{len(novos):,} linhas salvas em '{dataset_name}'.")
                 else:
-                    updated_df = pd.concat([active_df, novos], ignore_index=True).fillna(0)
+                    updated_df = pd.concat([active_df, novos], ignore_index=True, copy=False).fillna(0)
+                    updated_df = otimizar_base_cti(updated_df)
                     st.session_state[DATASETS_KEY][selected_name] = updated_df
                     st.session_state[ACTIVE_DATASET_KEY] = selected_name
                     st.session_state[PENDING_ACTIVE_DATASET_KEY] = selected_name
@@ -279,7 +281,7 @@ def render_data_input(current_df: pd.DataFrame) -> pd.DataFrame:
 
         if st.button("Restaurar Dados Originais", key="restore_original_data"):
             original_df = st.session_state.get(ORIGINAL_DATASET_KEY, current_df)
-            st.session_state[DATASETS_KEY][DEFAULT_DATASET_NAME] = original_df.copy()
+            st.session_state[DATASETS_KEY][DEFAULT_DATASET_NAME] = original_df
             st.session_state[ACTIVE_DATASET_KEY] = DEFAULT_DATASET_NAME
             st.session_state[PENDING_ACTIVE_DATASET_KEY] = DEFAULT_DATASET_NAME
             st.session_state[DEFAULT_MODIFIED_KEY] = False

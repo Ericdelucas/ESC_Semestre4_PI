@@ -10,6 +10,20 @@ from src.models.classifiers import classificar_cenarios
 from src.models.loaders import magnitude
 
 
+def _compactar_indicadores(df: pd.DataFrame) -> pd.DataFrame:
+    out = df
+    if "CENA" in out.columns:
+        out["CENA"] = out["CENA"].astype("category")
+    if "ANO" in out.columns:
+        out["ANO"] = out["ANO"].astype("category")
+    if "ano_num" in out.columns:
+        out["ano_num"] = pd.to_numeric(out["ano_num"], errors="coerce").fillna(0).astype("int8")
+    for col in out.select_dtypes(include=["float64", "int64", "Int64"]).columns:
+        if col != "ano_num":
+            out[col] = pd.to_numeric(out[col], errors="coerce").astype("float32")
+    return out
+
+
 def _mapa_contas() -> dict[str, str]:
     """CONTA original -> nome canonico da coluna no wide."""
     mapa: dict[str, str] = {c: "contas_receber" for c in CONTAS_RECEBER}
@@ -29,7 +43,7 @@ def montar_indicadores(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     slim = df.loc[df["CONTA"].isin(needed), ["ANO", "ano_num", "CENA", "CONTA", "VALOR"]].copy()
     slim["campo"] = slim["CONTA"].map(mapa)
     wide = (
-        slim.groupby(["ANO", "ano_num", "CENA", "campo"], as_index=False)["VALOR"]
+        slim.groupby(["ANO", "ano_num", "CENA", "campo"], as_index=False, observed=True)["VALOR"]
         .sum()
         .pivot(index=["ANO", "ano_num", "CENA"], columns="campo", values="VALOR")
         .reset_index()
@@ -93,7 +107,7 @@ def montar_indicadores(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     )
 
     ranking = (
-        base.groupby("CENA", as_index=False)
+        base.groupby("CENA", as_index=False, observed=True)
         .agg(
             rentabilidade=("rentabilidade", "mean"),
             liquidez=("liquidez", "mean"),
@@ -113,10 +127,14 @@ def montar_indicadores(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     ano_max = int(base["ano_num"].max()) if base["ano_num"].notna().any() else 12
     encerramento = (
         base.loc[base["ano_num"] == ano_max, ["CENA", "caixa_final_sinal", "caixa_mag"]]
-        .groupby("CENA", as_index=False)
+        .groupby("CENA", as_index=False, observed=True)
         .agg(caixa_ano12=("caixa_final_sinal", "mean"), disponivel_ano12=("caixa_mag", "mean"))
     )
     ranking = ranking.merge(encerramento, on="CENA", how="left")
     ranking = classificar_cenarios(ranking)
     ranking["ano_encerramento"] = ano_max
+    base = _compactar_indicadores(base)
+    ranking = _compactar_indicadores(ranking)
+    if "selo" in ranking.columns:
+        ranking["selo"] = ranking["selo"].astype("category")
     return base, ranking
