@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -10,7 +11,6 @@ import streamlit as st
 
 from src.controllers.headers import banner_auditoria_filtro
 from src.controllers.kpis import kpis_por_persona, render_kpi_row
-from src.controllers.resilience import safe_render
 from src.config import CACHE_DIR, CSV_PATH
 from src.config.i18n import t
 from src.models.analytics import montar_indicadores, probabilidade_caixa_negativo
@@ -64,6 +64,12 @@ def carregar_pipeline(csv_path: str, mtime: float) -> tuple[pd.DataFrame, pd.Dat
             ranking["selo"] = ranking["selo"].astype("category")
         ranking["rotulo"] = ranking["CENA"].map(cena_rotulo)
         return df, ind, ranking
+
+    if os.environ.get("RENDER"):
+        raise RuntimeError(
+            "Cache parquet nao encontrado no runtime. "
+            "Confirme se o Build Command executa `python scripts/precompute_cache.py` antes do start."
+        )
 
     df = load_cti_csv(csv)
     ind, ranking = montar_indicadores(df)

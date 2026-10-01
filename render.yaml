@@ -3,7 +3,7 @@ services:
     name: dashboard-cti
     runtime: python
     plan: free
-    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt && python scripts/precompute_cache.py
     startCommand: streamlit run PI4/Frontend/app.py --server.address 0.0.0.0 --server.port $PORT --server.headless true
     autoDeployTrigger: commit
     envVars:
