@@ -38,6 +38,30 @@ div[data-testid="stMetric"] {
   filter: none !important;
   color: #FFFFFF !important;
   -webkit-text-fill-color: #FFFFFF !important;
+  min-width: 0 !important;
+  overflow-wrap: anywhere !important;
+}
+div[data-testid="stMetric"] label,
+div[data-testid="stMetricValue"] {
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+}
+@media (max-width: 900px) {
+  div[data-testid="stHorizontalBlock"] {
+    flex-wrap: wrap !important;
+  }
+  div[data-testid="column"] {
+    flex: 1 1 100% !important;
+    min-width: 100% !important;
+  }
+  div[data-testid="stMetric"] {
+    padding: 0.5rem 0 !important;
+  }
+}
+@media (min-width: 901px) and (max-width: 1180px) {
+  div[data-testid="column"] {
+    min-width: min(18rem, 48%) !important;
+  }
 }
 </style>
 """
