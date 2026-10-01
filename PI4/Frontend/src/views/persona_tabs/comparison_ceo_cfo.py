@@ -38,7 +38,9 @@ def _render_cmp_ceo(df: pd.DataFrame, cenarios: list[tuple[str, str]]) -> None:
         _metric_base("Receita Líquida Acumulada", metricas["A"]["receita"], [(r, metricas[r]["receita"]) for r in comp], fmt_rs)
     with c2:
         margem_a = metricas["A"]["margem"]
-        extra = f"Margem média A: {margem_a * 100:.1f}%" if pd.notna(margem_a) else "Margem média A: —"
+        if pd.isna(margem_a):
+            margem_a = 0.0
+        extra = f"Margem média A: {margem_a * 100:.1f}%"
         _metric_base("EBITDA Acumulado", metricas["A"]["ebitda"], [(r, metricas[r]["ebitda"]) for r in comp], fmt_rs, extra=extra)
     with c3:
         _metric_base("Break-Even Médio", metricas["A"]["break_even"], [(r, metricas[r]["break_even"]) for r in comp], fmt_rs, maior_melhor=False)

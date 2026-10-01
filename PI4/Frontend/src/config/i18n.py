@@ -265,9 +265,9 @@ Use o seletor de **Visão do stakeholder** para priorizar os KPIs do topo.
 Cenário atual: **{cena}** · Rentabilidade {rent} · Risco {risco} · Prob. caixa negativo Ano {ano}: **{p_ruina:.1f}%**.
 """,
         "ai.title": "🤖 Assistente de IA CTI",
-        "ai.caption": "Consultor financeiro virtual com RAG sobre os cenários simulados e os manuais da CTI.",
+        "ai.caption": "Motor analítico nativo com contexto da base ativa, DRE, BP, DFC e indicadores CTI.",
         "ai.placeholder": "Pergunte ao Assistente CTI...",
-        "ai.welcome": "Olá. Sou o consultor virtual da CTI. Pergunte sobre NCG, tesouraria, ciclo, selos de risco ou a probabilidade de caixa negativo nos 1.200 cenários.",
+        "ai.welcome": "Assistente de Análise CTI pronto. Como posso ajudar com os indicadores de EBITDA, NCG, Liquidez ou navegação pelo dashboard?",
         "ai.sources": "Fontes consultadas",
         "ai.no_key": "Sem `GOOGLE_API_KEY` o assistente só recupera trechos. Para respostas geradas, cole a chave em Configurações, no `.env` ou em `.streamlit/secrets.toml`.",
         "ai.clear": "Limpar conversa",
@@ -520,9 +520,9 @@ Use **Stakeholder view** to prioritize top KPIs.
 Current scenario: **{cena}** · Profitability {rent} · Risk {risco} · Prob. negative cash Year {ano}: **{p_ruina:.1f}%**.
 """,
         "ai.title": "🤖 CTI AI Assistant",
-        "ai.caption": "Virtual financial advisor with RAG over simulated scenarios and CTI manuals.",
+        "ai.caption": "Native analytical engine with active dataset, Income Statement, Balance Sheet, Cash Flow and CTI indicators.",
         "ai.placeholder": "Ask the CTI Assistant...",
-        "ai.welcome": "Hello. I am CTI's virtual advisor. Ask about NWC, treasury, the cash cycle, risk badges or the chance of negative cash across the 1,200 scenarios.",
+        "ai.welcome": "CTI Analysis Assistant ready. How can I help with EBITDA, NWC, Liquidity or dashboard navigation?",
         "ai.sources": "Sources",
         "ai.no_key": "Without `GOOGLE_API_KEY` the assistant only retrieves excerpts. For generated answers, paste the key under Settings, in `.env` or `.streamlit/secrets.toml`.",
         "ai.clear": "Clear Chat",

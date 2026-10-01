@@ -67,8 +67,9 @@ def render_sidebar(df: pd.DataFrame, ind: pd.DataFrame, n_cenarios: int) -> tupl
         cena_sel = rotulo_para_cena[rotulo_sel]
 
         st.markdown("---")
+        active_base = st.session_state.get("cti_active_dataset_name", Path(CSV_PATH).name)
         st.markdown(
-            f"**{t('sidebar.base')}:** `{Path(CSV_PATH).name}`  \n"
+            f"**{t('sidebar.base')}:** `{active_base}`  \n"
             f"**{t('sidebar.rows')}:** {len(df):,}  \n"
             f"**{t('sidebar.scenarios')}:** {n_cenarios:,}  \n"
             f"**{t('sidebar.years')}:** {ind['ano_num'].nunique()}"
@@ -81,17 +82,23 @@ def render_persona() -> str:
     labels = [t(f"persona.{p}") for p in PERSONAS]
     label_to_id = dict(zip(labels, PERSONAS, strict=True))
     legado = {"geral": "ceo", "docente": "concedente"}
+    pending_persona = st.session_state.pop("pending_persona_id", None)
+    if pending_persona in PERSONAS:
+        st.session_state["persona_id"] = pending_persona
     atual = st.session_state.get("persona_id", PERSONAS[0])
     if atual not in PERSONAS:
         st.session_state["persona_id"] = legado.get(str(atual), PERSONAS[0])
     if "persona_id" not in st.session_state:
         st.session_state["persona_id"] = PERSONAS[0]
     default_label = t(f"persona.{st.session_state['persona_id']}")
+    persona_widget_key = f"persona_visao_v2_{lang}"
+    if pending_persona in PERSONAS:
+        st.session_state.pop(persona_widget_key, None)
     escolha = st.segmented_control(
         t("persona.label"),
         options=labels,
         default=default_label if default_label in labels else labels[0],
-        key=f"persona_visao_v2_{lang}",
+        key=persona_widget_key,
         help=help_text("persona"),
     )
     persona_id = label_to_id.get(escolha or default_label, PERSONAS[0])

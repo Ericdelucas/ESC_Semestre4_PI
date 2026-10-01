@@ -11,6 +11,13 @@ import streamlit as st
 from src.models.loaders import normalizar_conta, parse_valor_br
 
 DF_OVERRIDE_KEY = "cti_df_override"
+DATASETS_KEY = "cti_datasets"
+ACTIVE_DATASET_KEY = "cti_active_dataset_name"
+PENDING_ACTIVE_DATASET_KEY = "cti_pending_active_dataset_name"
+UPLOAD_COUNTER_KEY = "cti_upload_counter"
+ORIGINAL_DATASET_KEY = "cti_original_dataset"
+DEFAULT_MODIFIED_KEY = "cti_default_dataset_modified"
+DEFAULT_DATASET_NAME = "Base Padrão (Original)"
 REQUIRED_LONG_COLUMNS = {"ANO", "CENA", "CONTA", "VALOR", "ano_num"}
 SCENARIO_ALIASES = {
     "cenario": "CENA",
@@ -31,7 +38,11 @@ COLUMN_ALIASES = {
 
 
 def has_custom_data() -> bool:
-    return isinstance(st.session_state.get(DF_OVERRIDE_KEY), pd.DataFrame)
+    return (
+        st.session_state.get(ACTIVE_DATASET_KEY) != DEFAULT_DATASET_NAME
+        or bool(st.session_state.get(DEFAULT_MODIFIED_KEY))
+        or isinstance(st.session_state.get(DF_OVERRIDE_KEY), pd.DataFrame)
+    )
 
 
 def _clean_col_name(col: object) -> str:
@@ -124,16 +135,101 @@ def _manual_template() -> pd.DataFrame:
     return pd.DataFrame(columns=["ANO", "ano_num", "CENA", "CONTA", "VALOR"])
 
 
+def _unique_dataset_name(name: str) -> str:
+    datasets = st.session_state.get(DATASETS_KEY, {})
+    base = name.strip() or "Base Personalizada"
+    if base not in datasets:
+        return base
+    counter = 2
+    while f"{base} ({counter})" in datasets:
+        counter += 1
+    return f"{base} ({counter})"
+
+
+def _default_upload_name(uploaded_file) -> str:
+    counter = int(st.session_state.get(UPLOAD_COUNTER_KEY, 0)) + 1
+    if uploaded_file is not None:
+        return f"Base Upload {counter} ({uploaded_file.name})"
+    return f"Base Manual {counter}"
+
+
+def _init_datasets(current_df: pd.DataFrame) -> None:
+    if DATASETS_KEY not in st.session_state or not isinstance(st.session_state.get(DATASETS_KEY), dict):
+        st.session_state[ORIGINAL_DATASET_KEY] = current_df.copy()
+        st.session_state[DATASETS_KEY] = {DEFAULT_DATASET_NAME: current_df.copy()}
+        st.session_state[ACTIVE_DATASET_KEY] = DEFAULT_DATASET_NAME
+        st.session_state[DEFAULT_MODIFIED_KEY] = False
+
+        legado = st.session_state.get(DF_OVERRIDE_KEY)
+        if isinstance(legado, pd.DataFrame):
+            legacy_name = _unique_dataset_name("Base Customizada (Legado)")
+            st.session_state[DATASETS_KEY][legacy_name] = legado.copy()
+            st.session_state[ACTIVE_DATASET_KEY] = legacy_name
+    else:
+        st.session_state.setdefault(ORIGINAL_DATASET_KEY, current_df.copy())
+        st.session_state.setdefault(DEFAULT_MODIFIED_KEY, False)
+        st.session_state[DATASETS_KEY].setdefault(DEFAULT_DATASET_NAME, st.session_state[ORIGINAL_DATASET_KEY].copy())
+        if st.session_state.get(ACTIVE_DATASET_KEY) not in st.session_state[DATASETS_KEY]:
+            st.session_state[ACTIVE_DATASET_KEY] = DEFAULT_DATASET_NAME
+
+    st.session_state.setdefault(UPLOAD_COUNTER_KEY, 0)
+
+
+def _sync_legacy_override(active_name: str, active_df: pd.DataFrame) -> None:
+    if active_name == DEFAULT_DATASET_NAME and not st.session_state.get(DEFAULT_MODIFIED_KEY):
+        st.session_state.pop(DF_OVERRIDE_KEY, None)
+    else:
+        st.session_state[DF_OVERRIDE_KEY] = active_df
+
+
 def render_data_input(current_df: pd.DataFrame) -> pd.DataFrame:
     """Renderiza insercao de dados na sidebar e retorna o DataFrame ativo."""
-    active_df = st.session_state.get(DF_OVERRIDE_KEY)
-    if not isinstance(active_df, pd.DataFrame):
-        active_df = current_df
+    _init_datasets(current_df)
 
     with st.sidebar.expander("Inserção de Dados", expanded=False):
+        st.subheader("Gerenciador de Bases de Dados")
+
+        dataset_names = list(st.session_state[DATASETS_KEY].keys())
+        pending_name = st.session_state.pop(PENDING_ACTIVE_DATASET_KEY, None)
+        if pending_name in dataset_names:
+            st.session_state[ACTIVE_DATASET_KEY] = pending_name
+            st.session_state["active_dataset_selector"] = pending_name
+
+        active_name = st.session_state.get(ACTIVE_DATASET_KEY, DEFAULT_DATASET_NAME)
+        if active_name not in dataset_names:
+            active_name = DEFAULT_DATASET_NAME
+            st.session_state[ACTIVE_DATASET_KEY] = active_name
+        if st.session_state.get("active_dataset_selector") not in dataset_names:
+            st.session_state["active_dataset_selector"] = active_name
+
+        selected_name = st.selectbox(
+            "Selecione a Base Ativa",
+            options=dataset_names,
+            index=dataset_names.index(st.session_state["active_dataset_selector"]),
+            key="active_dataset_selector",
+        )
+        st.session_state[ACTIVE_DATASET_KEY] = selected_name
+        active_df = st.session_state[DATASETS_KEY][selected_name]
+        _sync_legacy_override(selected_name, active_df)
+
+        st.caption(f"Base ativa: {len(active_df):,} linhas.")
+        st.markdown("---")
         st.caption("Carregue CSV/XLSX ou edite linhas manualmente no formato da base.")
         uploaded = st.file_uploader("Arquivo de novos dados", type=["csv", "xlsx"], key="new_data_upload")
-        mode = st.radio("Modo de aplicação", ["Concatenar à base atual", "Substituir base atual"], horizontal=False, key="new_data_mode")
+        default_name = _default_upload_name(uploaded)
+        custom_name = st.text_input(
+            "Nome da nova base",
+            value="",
+            placeholder=default_name,
+            key="new_dataset_name",
+            help="Usado ao salvar como nova base.",
+        )
+        mode = st.radio(
+            "Modo de aplicação",
+            ["Salvar como Nova Base", "Concatenar à Base Selecionada"],
+            horizontal=False,
+            key="new_data_mode",
+        )
 
         manual = st.data_editor(
             st.session_state.get("manual_data_rows", _manual_template()),
@@ -164,17 +260,46 @@ def render_data_input(current_df: pd.DataFrame) -> pd.DataFrame:
             if erros and novos.empty:
                 st.error(" ".join(erros))
             else:
-                base = pd.DataFrame(columns=current_df.columns) if mode == "Substituir base atual" else active_df
-                st.session_state[DF_OVERRIDE_KEY] = pd.concat([base, novos], ignore_index=True).fillna(0)
-                st.success(f"{len(novos):,} linhas aplicadas.")
+                if mode == "Salvar como Nova Base":
+                    dataset_name = _unique_dataset_name(custom_name or default_name)
+                    st.session_state[DATASETS_KEY][dataset_name] = novos.fillna(0)
+                    st.session_state[ACTIVE_DATASET_KEY] = dataset_name
+                    st.session_state[PENDING_ACTIVE_DATASET_KEY] = dataset_name
+                    st.session_state[UPLOAD_COUNTER_KEY] = int(st.session_state.get(UPLOAD_COUNTER_KEY, 0)) + 1
+                    st.success(f"{len(novos):,} linhas salvas em '{dataset_name}'.")
+                else:
+                    updated_df = pd.concat([active_df, novos], ignore_index=True).fillna(0)
+                    st.session_state[DATASETS_KEY][selected_name] = updated_df
+                    st.session_state[ACTIVE_DATASET_KEY] = selected_name
+                    st.session_state[PENDING_ACTIVE_DATASET_KEY] = selected_name
+                    if selected_name == DEFAULT_DATASET_NAME:
+                        st.session_state[DEFAULT_MODIFIED_KEY] = True
+                    st.success(f"{len(novos):,} linhas concatenadas em '{selected_name}'.")
                 st.rerun()
 
         if st.button("Restaurar Dados Originais", key="restore_original_data"):
+            original_df = st.session_state.get(ORIGINAL_DATASET_KEY, current_df)
+            st.session_state[DATASETS_KEY][DEFAULT_DATASET_NAME] = original_df.copy()
+            st.session_state[ACTIVE_DATASET_KEY] = DEFAULT_DATASET_NAME
+            st.session_state[PENDING_ACTIVE_DATASET_KEY] = DEFAULT_DATASET_NAME
+            st.session_state[DEFAULT_MODIFIED_KEY] = False
             st.session_state.pop(DF_OVERRIDE_KEY, None)
             st.success("Base original restaurada.")
             st.rerun()
 
-        if isinstance(st.session_state.get(DF_OVERRIDE_KEY), pd.DataFrame):
-            st.info(f"Base customizada ativa: {len(active_df):,} linhas.")
+        removable = [name for name in st.session_state[DATASETS_KEY] if name != DEFAULT_DATASET_NAME]
+        if removable:
+            st.markdown("---")
+            if st.session_state.get("delete_dataset_name") not in removable:
+                st.session_state["delete_dataset_name"] = removable[0]
+            delete_name = st.selectbox("Excluir base adicionada", options=removable, key="delete_dataset_name")
+            if st.button("Excluir Base Selecionada", key="delete_dataset"):
+                st.session_state[DATASETS_KEY].pop(delete_name, None)
+                if st.session_state.get(ACTIVE_DATASET_KEY) == delete_name:
+                    st.session_state[ACTIVE_DATASET_KEY] = DEFAULT_DATASET_NAME
+                    st.session_state[PENDING_ACTIVE_DATASET_KEY] = DEFAULT_DATASET_NAME
+                    st.session_state.pop(DF_OVERRIDE_KEY, None)
+                st.success(f"Base '{delete_name}' excluida.")
+                st.rerun()
 
     return active_df
