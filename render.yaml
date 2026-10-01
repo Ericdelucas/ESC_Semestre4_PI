@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: dashboard-cti
+    runtime: python
+    plan: free
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: streamlit run PI4/Frontend/app.py --server.address 0.0.0.0 --server.port $PORT --server.headless true
+    autoDeployTrigger: commit
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
