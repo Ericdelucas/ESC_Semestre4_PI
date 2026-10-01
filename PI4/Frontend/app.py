@@ -13,6 +13,21 @@ from src.models.analytics import montar_indicadores
 from src.views.ai_assistant.panel import render_floating_chat
 
 
+def montar_indicadores_customizados(df):
+    """Evita recalcular indicadores de bases customizadas em todo rerun."""
+    cache = st.session_state.setdefault("cti_custom_indicator_cache", {})
+    signature = (
+        st.session_state.get("cti_active_dataset_name"),
+        bool(st.session_state.get("cti_default_dataset_modified")),
+        id(df),
+        len(df),
+    )
+    if cache.get("signature") != signature:
+        cache["signature"] = signature
+        cache["value"] = montar_indicadores(df)
+    return cache["value"]
+
+
 def main() -> None:
     configure_page()
     render_language_selector()
@@ -22,7 +37,7 @@ def main() -> None:
     df, ind, ranking = estado
     df = render_data_input(df)
     if has_custom_data():
-        ind, ranking = montar_indicadores(df)
+        ind, ranking = montar_indicadores_customizados(df)
 
     ano_sel, cena_sel, anos, cenas = render_sidebar(df, ind, int(ranking["CENA"].nunique()))
     persona = render_persona()

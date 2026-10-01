@@ -14,8 +14,9 @@ from src.controllers.resilience import safe_render
 from src.config import CACHE_DIR, CSV_PATH
 from src.config.i18n import t
 from src.models.analytics import montar_indicadores, probabilidade_caixa_negativo
+from src.models.analytics.indicators import _compactar_indicadores
 from src.models.formatting import cena_rotulo, texto_ciclo, texto_ncg, texto_tesouraria
-from src.models.loaders import load_cti_csv
+from src.models.loaders import load_cti_csv, otimizar_base_cti
 
 
 @dataclass
@@ -37,9 +38,9 @@ class AppContext:
     k: pd.Series
 
 
-@st.cache_resource(show_spinner="Preparando base e indicadores…")
+@st.cache_resource(show_spinner="Preparando base e indicadores...", max_entries=1)
 def carregar_pipeline(csv_path: str, mtime: float) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Cache em memória por caminho+mtime — sem hashear DataFrame."""
+    """Cache em memoria por caminho+mtime, sem hashear DataFrame."""
     _ = mtime  # entra na chave do cache
     CACHE_DIR.mkdir(exist_ok=True)
     ind_path = CACHE_DIR / "indicadores.parquet"
@@ -54,10 +55,13 @@ def carregar_pipeline(csv_path: str, mtime: float) -> tuple[pd.DataFrame, pd.Dat
         and raw_path.exists()
         and ind_path.stat().st_mtime >= csv.stat().st_mtime
         and rank_path.stat().st_mtime >= csv.stat().st_mtime
+        and raw_path.stat().st_mtime >= csv.stat().st_mtime
     ):
-        df = pd.read_parquet(raw_path)
-        ind = pd.read_parquet(ind_path)
-        ranking = pd.read_parquet(rank_path).copy()
+        df = otimizar_base_cti(pd.read_parquet(raw_path))
+        ind = _compactar_indicadores(pd.read_parquet(ind_path))
+        ranking = _compactar_indicadores(pd.read_parquet(rank_path)).copy()
+        if "selo" in ranking.columns:
+            ranking["selo"] = ranking["selo"].astype("category")
         ranking["rotulo"] = ranking["CENA"].map(cena_rotulo)
         return df, ind, ranking
 
@@ -75,7 +79,17 @@ def carregar_estado() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame] | None:
         st.error(f"Arquivo não encontrado: {CSV_PATH}")
         return None
     mtime = CSV_PATH.stat().st_mtime
-    return safe_render("pipeline de dados", carregar_pipeline, str(CSV_PATH), mtime)
+    try:
+        return carregar_pipeline(str(CSV_PATH), mtime)
+    except MemoryError:
+        st.error(
+            "A base excedeu a memoria disponivel durante a preparacao. "
+            "Tente reduzir o arquivo de entrada ou usar os caches parquet ja gerados."
+        )
+        return None
+    except Exception as exc:  # noqa: BLE001 - evita queda abrupta do processo no deploy
+        st.error(f"Nao foi possivel preparar a base de dados: {type(exc).__name__}: {exc}")
+        return None
 
 
 def montar_contexto(

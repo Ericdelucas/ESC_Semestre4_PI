@@ -9,8 +9,6 @@ from src.config.i18n import get_lang
 from src.controllers.bootstrap import AppContext
 from src.controllers.resilience import resilient_view
 
-from .context import _carregar_engine, _chave_api, _contexto_foco, _fingerprint, contexto_dataset_ativo
-
 _BOAS_VINDAS = (
     "Assistente de Análise CTI pronto. Como posso ajudar com os indicadores de EBITDA, "
     "NCG, Liquidez ou navegação pelo dashboard?"
@@ -197,6 +195,8 @@ def gerar_resposta_ia(
     persona: str = "cfo",
 ) -> str:
     """Chama o RAG/LLM com contexto financeiro da base ativa."""
+    from .context import _carregar_engine, _chave_api, _contexto_foco, _fingerprint, contexto_dataset_ativo
+
     engine = _carregar_engine(ranking, _fingerprint(ranking))
     contexto = "\n\n".join(
         [
