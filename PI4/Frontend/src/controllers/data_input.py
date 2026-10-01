@@ -257,7 +257,9 @@ def render_data_input(current_df: pd.DataFrame) -> pd.DataFrame:
                 erros.extend(manual_errors)
 
             novos = pd.concat(frames, ignore_index=True, copy=False) if frames else pd.DataFrame(columns=current_df.columns)
-            novos = otimizar_base_cti(novos.fillna(0)) if not novos.empty else novos
+            if not novos.empty:
+                novos["VALOR"] = pd.to_numeric(novos["VALOR"], errors="coerce").fillna(0)
+                novos = otimizar_base_cti(novos)
             if erros and novos.empty:
                 st.error(" ".join(erros))
             else:
@@ -269,7 +271,8 @@ def render_data_input(current_df: pd.DataFrame) -> pd.DataFrame:
                     st.session_state[UPLOAD_COUNTER_KEY] = int(st.session_state.get(UPLOAD_COUNTER_KEY, 0)) + 1
                     st.success(f"{len(novos):,} linhas salvas em '{dataset_name}'.")
                 else:
-                    updated_df = pd.concat([active_df, novos], ignore_index=True, copy=False).fillna(0)
+                    updated_df = pd.concat([active_df, novos], ignore_index=True, copy=False)
+                    updated_df["VALOR"] = pd.to_numeric(updated_df["VALOR"], errors="coerce").fillna(0)
                     updated_df = otimizar_base_cti(updated_df)
                     st.session_state[DATASETS_KEY][selected_name] = updated_df
                     st.session_state[ACTIVE_DATASET_KEY] = selected_name
