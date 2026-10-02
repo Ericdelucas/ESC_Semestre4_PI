@@ -6,8 +6,9 @@ import sys
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
-FRONTEND = ROOT / "PI4" / "Frontend"
+BACKEND = Path(__file__).resolve().parents[1]
+PI4_ROOT = BACKEND.parent
+FRONTEND = PI4_ROOT / "Frontend"
 sys.path.insert(0, str(FRONTEND))
 
 from src.config import CACHE_DIR, CSV_PATH  # noqa: E402
