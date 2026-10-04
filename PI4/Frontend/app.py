@@ -2,14 +2,21 @@
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import streamlit as st
 
+PI4_ROOT = Path(__file__).resolve().parents[1]
+if str(PI4_ROOT) not in sys.path:
+    sys.path.insert(0, str(PI4_ROOT))
+
+from Backend.metrics import montar_indicadores
 from src.controllers.bootstrap import carregar_estado, montar_contexto
 from src.controllers.data_input import has_custom_data, render_data_input
 from src.controllers.navigation import render_pagina
 from src.controllers.page_setup import configure_page
 from src.controllers.sidebar import render_language_selector, render_persona, render_sidebar
-from src.models.analytics import montar_indicadores
 from src.views.ai_assistant.panel import render_floating_chat
 
 

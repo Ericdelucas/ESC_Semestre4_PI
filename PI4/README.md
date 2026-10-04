@@ -71,3 +71,23 @@ PI4/
   Backend/     # FastAPI, Cti.csv, documentos, cache
   Frontend/    # Streamlit, src (config, controllers, models, views)
 ```
+
+### para rodar tudo de uma vez em computador novo
+
+```
+cd PI4
+py -m pip install -r Frontend/requirements_dashboard.txt
+py -m pip install -r Backend/requirements.txt
+copy .env.example .env
+py -m uvicorn Backend.main:app --host 127.0.0.1 --port 8000
+py -m streamlit run Frontend/app.py
+```
+
+
+
+```
+cd PI4
+copy .env.example .env
+py -m uvicorn Backend.main:app --host 127.0.0.1 --port 8000
+py -m streamlit run Frontend/app.py
+```

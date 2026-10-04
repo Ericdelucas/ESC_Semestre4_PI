@@ -8,12 +8,10 @@ from pathlib import Path
 
 BACKEND = Path(__file__).resolve().parents[1]
 PI4_ROOT = BACKEND.parent
-FRONTEND = PI4_ROOT / "Frontend"
-sys.path.insert(0, str(FRONTEND))
+sys.path.insert(0, str(PI4_ROOT))
 
-from src.config import CACHE_DIR, CSV_PATH  # noqa: E402
-from src.models.analytics import montar_indicadores  # noqa: E402
-from src.models.loaders import load_cti_csv  # noqa: E402
+from Backend.data_loader import CACHE_DIR, CSV_PATH, load_cti_csv  # noqa: E402
+from Backend.metrics import montar_indicadores  # noqa: E402
 
 
 def main() -> None:

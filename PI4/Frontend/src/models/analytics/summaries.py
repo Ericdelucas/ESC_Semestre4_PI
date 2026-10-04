@@ -2,7 +2,16 @@
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import pandas as pd
+
+PI4_ROOT = Path(__file__).resolve().parents[4]
+if str(PI4_ROOT) not in sys.path:
+    sys.path.insert(0, str(PI4_ROOT))
+
+from Backend.metrics import probabilidade_caixa_negativo  # noqa: E402
 
 
 def resumo_envelope(ind: pd.DataFrame, coluna: str, maior_e_melhor: bool) -> pd.DataFrame:
@@ -56,7 +65,3 @@ def cenas_por_percentil(ranking: pd.DataFrame, coluna: str, qs: list[float]) -> 
     return out
 
 
-def probabilidade_caixa_negativo(ranking: pd.DataFrame) -> float:
-    if ranking.empty or "caixa_ano12" not in ranking.columns:
-        return 0.0
-    return float((ranking["caixa_ano12"] < 0).mean() * 100)

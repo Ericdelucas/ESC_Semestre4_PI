@@ -19,8 +19,8 @@ _FRONTEND = BACKEND_DIR.parent / "Frontend"
 if str(_FRONTEND) not in sys.path:
     sys.path.insert(0, str(_FRONTEND))
 
-from src.models.analytics import montar_indicadores
-from src.models.loaders import load_cti_csv
+from Backend.data_loader import load_cti_csv
+from Backend.metrics import montar_indicadores
 from src.models.rag_engine import RagEngine, resolve_api_key
 
 
