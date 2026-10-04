@@ -1,26 +1,32 @@
-"""Estado global e cabeçalho do app (fora do orquestrador)."""
+"""Estado global e cabecalho do app Streamlit."""
 
 from __future__ import annotations
 
-import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
-from src.controllers.headers import banner_auditoria_filtro
-from src.controllers.kpis import kpis_por_persona, render_kpi_row
-from src.config import CACHE_DIR, CSV_PATH
-from src.config.i18n import t
-from src.models.analytics import montar_indicadores, probabilidade_caixa_negativo
-from src.models.analytics.indicators import _compactar_indicadores
-from src.models.formatting import cena_rotulo, texto_ciclo, texto_ncg, texto_tesouraria
-from src.models.loaders import load_cti_csv, otimizar_base_cti
+
+PI4_ROOT = Path(__file__).resolve().parents[3]
+if str(PI4_ROOT) not in sys.path:
+    sys.path.insert(0, str(PI4_ROOT))
+
+from Backend.services import build_context_metrics, prepare_dashboard_data  # noqa: E402
+from src.config import CSV_PATH  # noqa: E402
+from src.config.i18n import t  # noqa: E402
+from src.controllers.headers import banner_auditoria_filtro  # noqa: E402
+from src.controllers.kpis import kpis_por_persona, render_kpi_row  # noqa: E402
+from src.controllers.resilience import safe_render  # noqa: E402
+from src.models.formatting import cena_rotulo, texto_ciclo, texto_ncg, texto_tesouraria  # noqa: E402
 
 
 @dataclass
 class AppContext:
+    """Estado derivado usado pelas views do Streamlit."""
+
     df: pd.DataFrame
     ind: pd.DataFrame
     ranking: pd.DataFrame
@@ -40,53 +46,21 @@ class AppContext:
 
 @st.cache_resource(show_spinner="Preparando base e indicadores...", max_entries=1)
 def carregar_pipeline(csv_path: str, mtime: float) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Cache em memoria por caminho+mtime, sem hashear DataFrame."""
-    _ = mtime  # entra na chave do cache
-    CACHE_DIR.mkdir(exist_ok=True)
-    ind_path = CACHE_DIR / "indicadores.parquet"
-    rank_path = CACHE_DIR / "ranking.parquet"
-    raw_path = CACHE_DIR / "cti_limpo.parquet"
-
-    # Atalho: se indicadores já existem e estão frescos em relação ao CSV
-    csv = Path(csv_path)
-    if (
-        ind_path.exists()
-        and rank_path.exists()
-        and raw_path.exists()
-        and ind_path.stat().st_mtime >= csv.stat().st_mtime
-        and rank_path.stat().st_mtime >= csv.stat().st_mtime
-        and raw_path.stat().st_mtime >= csv.stat().st_mtime
-    ):
-        df = otimizar_base_cti(pd.read_parquet(raw_path))
-        ind = _compactar_indicadores(pd.read_parquet(ind_path))
-        ranking = _compactar_indicadores(pd.read_parquet(rank_path)).copy()
-        if "selo" in ranking.columns:
-            ranking["selo"] = ranking["selo"].astype("category")
-        ranking["rotulo"] = ranking["CENA"].map(cena_rotulo)
-        return df, ind, ranking
-
-    if os.environ.get("RENDER"):
-        raise RuntimeError(
-            "Cache parquet nao encontrado no runtime. "
-            "Confirme se o Build Command executa `python scripts/precompute_cache.py` antes do start."
-        )
-
-    df = load_cti_csv(csv)
-    ind, ranking = montar_indicadores(df)
+    """Carrega base e indicadores processados pelo backend."""
+    _ = mtime
+    df, ind, ranking = prepare_dashboard_data(csv_path)
     ranking = ranking.copy()
     ranking["rotulo"] = ranking["CENA"].map(cena_rotulo)
-    ind.to_parquet(ind_path, index=False)
-    ranking.to_parquet(rank_path, index=False)
     return df, ind, ranking
 
 
 def carregar_estado() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame] | None:
+    """Carrega o estado base do dashboard ou exibe erro amigavel."""
     if not CSV_PATH.exists():
-        st.error(f"Arquivo não encontrado: {CSV_PATH}")
+        st.error(f"Arquivo nao encontrado: {CSV_PATH}")
         return None
-    mtime = CSV_PATH.stat().st_mtime
     try:
-        return carregar_pipeline(str(CSV_PATH), mtime)
+        return carregar_pipeline(str(CSV_PATH), CSV_PATH.stat().st_mtime)
     except MemoryError:
         st.error(
             "A base excedeu a memoria disponivel durante a preparacao. "
@@ -109,39 +83,17 @@ def montar_contexto(
     cenas: list[str],
     persona: str,
 ) -> AppContext:
+    """Monta contexto visual usando metricas calculadas pelo backend."""
     ranking = ranking.copy()
     ranking["rotulo"] = ranking["CENA"].map(cena_rotulo)
     mapa_rotulo = dict(zip(ranking["rotulo"], ranking["CENA"], strict=False))
     n_cenarios = int(ranking["CENA"].nunique())
-    ano_enc = int(ranking["ano_encerramento"].iloc[0]) if len(ranking) else 12
-    p_ruina = probabilidade_caixa_negativo(ranking)
-    foco = ind.loc[ind["CENA"] == cena_sel].sort_values("ano_num")
-    if ano_sel == "Todos":
-        foco_ano = foco
-    else:
-        ano_num = int(ano_sel)
-        foco_ano = foco.loc[pd.to_numeric(foco["ano_num"], errors="coerce") == ano_num]
-    kpi_cols = [
-        "NCG",
-        "Saldo_Tesouraria",
-        "Ciclo_Financeiro",
-        "PMR",
-        "PME",
-        "PMP",
-        "liquidez",
-        "rentabilidade",
-        "risco",
-        "resultado",
-        "ebitda",
-        "dre_receita",
-        "dre_custos",
-        "investimentos",
-        "total_ativo",
-        "total_passivo",
-    ]
-    base_kpi = foco_ano if not foco_ano.empty else foco
-    presentes = [c for c in kpi_cols if c in base_kpi.columns]
-    k = base_kpi[presentes].mean(numeric_only=True) if presentes else pd.Series(dtype=float)
+    ano_enc, p_ruina, foco, foco_ano, k = build_context_metrics(
+        ind,
+        ranking,
+        cena_sel=cena_sel,
+        ano_sel=ano_sel,
+    )
     return AppContext(
         df=df,
         ind=ind,
@@ -162,21 +114,16 @@ def montar_contexto(
 
 
 def render_cabecalho(ctx: AppContext) -> None:
-    """Título, banner, KPIs e textos por persona (auditoria fica no orquestrador)."""
+    """Renderiza titulo, banner e KPIs ja processados."""
     st.subheader(t("header.focus", cena=cena_rotulo(ctx.cena_sel)))
     if ctx.persona == "teste":
         return
     safe_render("banner de auditoria", banner_auditoria_filtro, ctx.cena_sel, ctx.ano_sel)
-    st.write(
-        t("header.avg_all")
-        if ctx.ano_sel == "Todos"
-        else t("header.avg_year", ano=ctx.ano_sel)
-    )
+    st.write(t("header.avg_all") if ctx.ano_sel == "Todos" else t("header.avg_year", ano=ctx.ano_sel))
     render_kpi_row(kpis_por_persona(ctx.persona, ctx.k, ctx.ranking, ctx.df, ctx.cena_sel, ctx.ano_sel))
     st.info(t(f"persona.blurb.{ctx.persona}"))
     if ctx.persona == "cfo":
         st.caption(texto_ncg(ctx.k["NCG"]) if "NCG" in ctx.k.index else "")
-        a, b = st.columns(2)
-        a.success(texto_tesouraria(ctx.k["Saldo_Tesouraria"]) if "Saldo_Tesouraria" in ctx.k.index else "—")
-        b.warning(texto_ciclo(ctx.k["Ciclo_Financeiro"]) if "Ciclo_Financeiro" in ctx.k.index else "—")
-
+        col_tes, col_ciclo = st.columns(2)
+        col_tes.success(texto_tesouraria(ctx.k["Saldo_Tesouraria"]) if "Saldo_Tesouraria" in ctx.k.index else "-")
+        col_ciclo.warning(texto_ciclo(ctx.k["Ciclo_Financeiro"]) if "Ciclo_Financeiro" in ctx.k.index else "-")
