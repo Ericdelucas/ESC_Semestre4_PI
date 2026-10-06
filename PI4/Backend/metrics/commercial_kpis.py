@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from .column_resolver import series_by_alias
+from .column_resolver import normalize_label, series_by_alias
 from .financial_kpis import build_break_even
 
 
@@ -19,7 +19,8 @@ def _assumption_series(df: pd.DataFrame, cena: str, aliases: list[str], fallback
     rows = _scenario_rows(df, cena)
     if rows.empty or "CONTA" not in rows.columns:
         return fallback
-    mask = rows["CONTA"].astype(str).str.strip().isin(aliases)
+    normalized_aliases = {normalize_label(alias) for alias in aliases}
+    mask = rows["CONTA"].astype(str).map(lambda value: normalize_label(value) in normalized_aliases)
     found = rows.loc[mask, ["ano_num", "VALOR"]].copy()
     if found.empty:
         return fallback

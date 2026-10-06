@@ -10,6 +10,8 @@ from . import (
     mapeamento_risco,
     persona_tabs,
     prazos_ciclo,
+    report,
+    settings,
 )
 
 __all__ = [
@@ -22,4 +24,6 @@ __all__ = [
     "mapeamento_risco",
     "persona_tabs",
     "prazos_ciclo",
+    "report",
+    "settings",
 ]

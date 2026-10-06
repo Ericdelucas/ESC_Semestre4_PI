@@ -4,26 +4,60 @@ from __future__ import annotations
 
 import streamlit as st
 
+from src.views.settings import get_theme_mode
+
+
+def _theme_css() -> str:
+    """CSS leve para alternar tema visual em sessao."""
+    if get_theme_mode() == "light":
+        return """
+<style>
+.stApp, [data-testid="stAppViewContainer"] {
+  background: #F7F8FA !important;
+  color: #111827 !important;
+}
+section[data-testid="stSidebar"], div[data-testid="stSidebarContent"] {
+  background: #FFFFFF !important;
+  color: #111827 !important;
+}
+div[data-testid="stMetric"] {
+  background: #161B26 !important;
+  border-radius: 8px !important;
+  padding: 0.65rem !important;
+}
+</style>
+"""
+    return """
+<style>
+.stApp, [data-testid="stAppViewContainer"] {
+  background: #0E1117 !important;
+  color: #FAFAFA !important;
+}
+section[data-testid="stSidebar"], div[data-testid="stSidebarContent"] {
+  background: #161B26 !important;
+  color: #FAFAFA !important;
+}
+div[data-testid="stMetric"] {
+  background: #161B26 !important;
+  border-radius: 8px !important;
+  padding: 0.65rem !important;
+}
+</style>
+"""
+
 
 def configure_page() -> None:
-    st.set_page_config(layout="wide", page_title="Dashboard CTI", page_icon="📊")
+    st.set_page_config(layout="wide", page_title="ESC | Dashboard CTI", page_icon="🔵")
+    st.markdown(_theme_css(), unsafe_allow_html=True)
     st.markdown(
         """
-        <style>
-        .stAppDeployButton {
-            visibility: hidden;
-            display: none !important;
-        }
-        #MainMenu {
-            visibility: hidden;
-            display: none !important;
-        }
-        header[data-testid="stHeader"] {
-            visibility: hidden;
-            display: none !important;
-        }
-        </style>
-        """,
+    <style>
+    /* Oculta estritamente o botão de Deploy do Streamlit */
+    .stAppDeployButton {
+        display: none !important;
+    }
+    </style>
+""",
         unsafe_allow_html=True,
     )
     st.markdown(
