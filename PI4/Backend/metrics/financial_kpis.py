@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 from Backend.data_loader import magnitude
+from Backend.metrics.column_resolver import normalize_label
 
 
 WACC = 0.10
@@ -229,7 +230,10 @@ def calcular_kpis_recorte(foco: pd.DataFrame, foco_ano: pd.DataFrame) -> pd.Seri
 
 
 def _wide(df: pd.DataFrame, cena: str, contas: list[str]) -> pd.DataFrame:
-    base = df.loc[(df["CENA"] == cena) & (df["CONTA"].isin(contas)), ["ano_num", "CONTA", "VALOR"]].copy()
+    conta_keys = {normalize_label(conta): conta for conta in contas}
+    source = df.loc[df["CENA"] == cena, ["ano_num", "CONTA", "VALOR"]].copy()
+    source["CONTA"] = source["CONTA"].map(lambda value: conta_keys.get(normalize_label(value)))
+    base = source.loc[source["CONTA"].notna()].copy()
     if base.empty:
         return pd.DataFrame(columns=["ano_num", *contas])
     base["ano_num"] = pd.to_numeric(base["ano_num"], errors="coerce")
@@ -253,44 +257,56 @@ def _conta(dados: pd.DataFrame, nome: str) -> pd.Series:
     return pd.to_numeric(dados.get(nome, 0.0), errors="coerce").fillna(0.0)
 
 
+def _conta_alias(dados: pd.DataFrame, *nomes: str) -> pd.Series:
+    index = {normalize_label(col): col for col in dados.columns}
+    for nome in nomes:
+        col = index.get(normalize_label(nome))
+        if col is not None:
+            return pd.to_numeric(dados[col], errors="coerce").fillna(0.0)
+    return pd.Series(0.0, index=dados.index, dtype="float64")
+
+
 def build_dre(df: pd.DataFrame, cena: str) -> pd.DataFrame:
     """Monta DRE derivada para um cenario."""
     contas = [
         "DRE - Receita",
         "DRE - Tributos",
         "DRE - Custos",
-        "DRE - DepreciaÃ§Ã£o e AmortizaÃ§Ã£o",
+        "DRE - Depreciação e Amortização",
         "DRE - Resultado Operacional",
         "DRE - Resultado Financeiro",
         "DRE - Despesas Financeiras",
         "DRE - Outros Resultados Operacionais",
         "DRE - Resultado Antes do Imposto de Renda",
-        "DRE - Imposto de Renda e ContribuiÃ§Ã£o Social",
-        "DRE - Resultado LÃ­quido",
+        "DRE - Imposto de Renda e Contribuição Social",
+        "DRE - Resultado Líquido",
         "DRE - EBITDA",
     ]
     dados = _wide(df, cena, contas)
     if dados.empty:
         return dados
-    receita = _conta(dados, "DRE - Receita")
-    tributos = _conta(dados, "DRE - Tributos")
-    custos = _conta(dados, "DRE - Custos")
-    ebitda = _conta(dados, "DRE - EBITDA")
-    dados["Receita LÃ­quida"] = receita + tributos
-    dados["Margem Bruta"] = dados["Receita LÃ­quida"] + custos
+    receita = _conta_alias(dados, "DRE - Receita")
+    tributos = _conta_alias(dados, "DRE - Tributos")
+    custos = _conta_alias(dados, "DRE - Custos")
+    ebitda = _conta_alias(dados, "DRE - EBITDA")
+    resultado_financeiro = _conta_alias(dados, "DRE - Resultado Financeiro")
+    ir_cs = _conta_alias(dados, "DRE - Imposto de Renda e Contribuição Social")
+    lucro_informado = _conta_alias(dados, "DRE - Resultado Líquido")
+
+    dados["Receita Líquida"] = receita + tributos
+    dados["Margem Bruta"] = dados["Receita Líquida"] + custos
     dados["OPEX"] = ebitda - dados["Margem Bruta"]
     dados["EBITDA"] = ebitda
-    dados["EBIT"] = _conta(dados, "DRE - Resultado Operacional")
-    dados["Resultado Financeiro"] = _conta(dados, "DRE - Resultado Financeiro")
-    dados["EBT"] = _conta(dados, "DRE - Resultado Antes do Imposto de Renda")
-    dados["Lucro LÃ­quido"] = _conta(dados, "DRE - Resultado LÃ­quido")
+    dados["EBIT"] = _conta_alias(dados, "DRE - Resultado Operacional")
+    dados["Resultado Financeiro"] = resultado_financeiro
+    dados["EBT"] = _conta_alias(dados, "DRE - Resultado Antes do Imposto de Renda")
+    lucro_derivado = dados["EBIT"] + resultado_financeiro + ir_cs
+    dados["Lucro Líquido"] = lucro_informado.where(lucro_informado.abs() > 1e-9, lucro_derivado)
     dados["Custos"] = custos
-    dados["DepreciaÃ§Ã£o"] = _conta(dados, "DRE - DepreciaÃ§Ã£o e AmortizaÃ§Ã£o")
-    dados["Outros Operacionais"] = _conta(dados, "DRE - Outros Resultados Operacionais")
-    dados["Despesas Financeiras"] = _conta(dados, "DRE - Despesas Financeiras")
+    dados["Depreciação"] = _conta_alias(dados, "DRE - Depreciação e Amortização")
+    dados["Outros Operacionais"] = _conta_alias(dados, "DRE - Outros Resultados Operacionais")
+    dados["Despesas Financeiras"] = _conta_alias(dados, "DRE - Despesas Financeiras")
     return dados
-
-
 def _balanco_fluxo(df: pd.DataFrame, cena: str) -> pd.DataFrame:
     contas = [
         "BAL - Total do Ativo",
@@ -324,10 +340,10 @@ def build_financial_statement(df: pd.DataFrame, cena: str) -> pd.DataFrame:
     divida_liquida = (divida - caixa).clip(lower=0)
     capital_base = patrimonio + divida_liquida
     capital = capital_base.where(capital_base > 0, ativo_total)
-    ir_cs = _conta(dados, "DRE - Imposto de Renda e ContribuiÃ§Ã£o Social")
+    ir_cs = _conta_alias(dados, "DRE - Imposto de Renda e Contribuição Social")
     aliquota_ir = safe_div(ir_cs.abs(), dados["EBIT"].abs()).clip(lower=0, upper=ALIQUOTA_IR_FALLBACK).fillna(ALIQUOTA_IR_FALLBACK)
     nopat = dados["EBIT"] * (1 - aliquota_ir)
-    lucro = dados["Lucro LÃ­quido"]
+    lucro = dados["Lucro Líquido"]
     capital_divisor = capital.replace(0, pd.NA)
     dados["DÃ­vida LÃ­quida"] = divida_liquida
     dados["Capital Investido"] = capital.fillna(0)
@@ -348,12 +364,13 @@ def build_break_even(df: pd.DataFrame, cena: str) -> pd.DataFrame:
     dados = build_dre(df, cena)
     if dados.empty:
         return dados
-    receita = dados["Receita LÃ­quida"].replace(0, pd.NA)
+    receita = dados["Receita Líquida"].replace(0, pd.NA)
     custos_variaveis = dados["Custos"].abs()
-    custos_fixos = dados["Outros Operacionais"].abs() + dados["DepreciaÃ§Ã£o"].abs() + dados["Despesas Financeiras"].abs()
-    margem_contrib = (dados["Receita LÃ­quida"] - custos_variaveis) / receita
+    custos_fixos = dados["Outros Operacionais"].abs() + dados["Depreciação"].abs() + dados["Despesas Financeiras"].abs()
+    margem_contrib = (dados["Receita Líquida"] - custos_variaveis) / receita
     dados["Custos Fixos"] = custos_fixos
-    dados["Margem de ContribuiÃ§Ã£o (%)"] = margem_contrib
+    dados["Margem de Contribuição (%)"] = margem_contrib
     dados["Break-Even"] = custos_fixos / margem_contrib.replace(0, pd.NA)
-    dados["Margem de SeguranÃ§a (%)"] = (dados["Receita LÃ­quida"] - dados["Break-Even"]) / receita
+    dados["Margem de Segurança (%)"] = (dados["Receita Líquida"] - dados["Break-Even"]) / receita
     return dados
+
