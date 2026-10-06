@@ -24,6 +24,15 @@ def render_language_selector() -> str:
     idx = codes.index(atual) if atual in codes else 0
 
     with st.sidebar:
+        st.markdown(
+            """
+<div style="display:flex;align-items:center;gap:0.65rem;margin:0.15rem 0 0.9rem 0;">
+  <div style="width:2.25rem;height:2.25rem;border-radius:999px;background:#1F4E79;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;letter-spacing:0.02em;">ESC</div>
+  <div style="font-weight:750;line-height:1.1;">Grupo ESC<br><span style="font-size:0.8rem;font-weight:500;opacity:0.75;">Dashboard CTI</span></div>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
         escolha = st.selectbox(
             t("lang.label"),
             options=labels,
