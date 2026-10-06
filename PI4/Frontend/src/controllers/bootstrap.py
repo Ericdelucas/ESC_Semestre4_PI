@@ -115,7 +115,12 @@ def montar_contexto(
 
 def render_cabecalho(ctx: AppContext) -> None:
     """Renderiza titulo, banner e KPIs ja processados."""
-    st.subheader(t("header.focus", cena=cena_rotulo(ctx.cena_sel)))
+    title_col, report_col = st.columns([0.78, 0.22], vertical_alignment="center")
+    with title_col:
+        st.subheader(t("header.focus", cena=cena_rotulo(ctx.cena_sel)))
+    with report_col:
+        if ctx.persona != "teste" and st.button("Criar Relatório", key="header_create_report", use_container_width=True):
+            st.session_state["show_report_modal"] = True
     if ctx.persona == "teste":
         return
     safe_render("banner de auditoria", banner_auditoria_filtro, ctx.cena_sel, ctx.ano_sel)
