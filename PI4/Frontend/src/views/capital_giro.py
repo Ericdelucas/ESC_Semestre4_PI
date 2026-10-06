@@ -18,10 +18,20 @@ def _grafico_evolucao(foco: pd.DataFrame, cena_sel: str, ano_sel: str | int) -> 
     plot_df = serie_temporal_plotavel(foco, ["NCG", "Saldo_Tesouraria"])
     ncg_lbl, tes_lbl = t("kpi.ncg"), t("kpi.treasury")
     plot_df = plot_df.rename(columns={"NCG": ncg_lbl, "Saldo_Tesouraria": tes_lbl})
+    available_lines = [ncg_lbl, tes_lbl]
+    selected_lines = st.multiselect(
+        "Exibir no gráfico:",
+        options=available_lines,
+        default=available_lines,
+        key="capital_giro_linhas_evolucao",
+    )
+    if not selected_lines:
+        st.info("Selecione ao menos uma linha para exibir o gráfico.")
+        return
     fig_ncg = px.line(
         plot_df,
         x="ano_num",
-        y=[ncg_lbl, tes_lbl],
+        y=selected_lines,
         markers=True,
         labels={
             "ano_num": t("chart.year"),
@@ -32,7 +42,7 @@ def _grafico_evolucao(foco: pd.DataFrame, cena_sel: str, ano_sel: str | int) -> 
         title=titulo_filtro(t("chart.evolution"), cena_sel, ano_sel),
     )
     fig_ncg.update_layout(legend_title_text="", hovermode="x unified")
-    fig_ncg = ancorar_ano_temporal(fig_ncg, plot_df, [ncg_lbl, tes_lbl], ano_sel)
+    fig_ncg = ancorar_ano_temporal(fig_ncg, plot_df, selected_lines, ano_sel)
     st.plotly_chart(fig_ncg, width="stretch", theme="streamlit")
 
 

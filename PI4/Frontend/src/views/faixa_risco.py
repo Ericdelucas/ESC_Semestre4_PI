@@ -40,6 +40,19 @@ def render(
     col_nuvem, maior_melhor = METRICAS_NUVEM[metric_key]
     rotulo_nuvem = t(metric_key)
     ano_nuvem = None if ano_sel == "Todos" else int(ano_sel)
+    envelope_options = [
+        "Otimista (melhor caso)",
+        "Pessimista (pior caso)",
+        "Média",
+        "Mais provável (mediana)",
+        "Faixa 5-95%",
+    ]
+    envelope_selected = st.multiselect(
+        "Linhas visíveis no envelope",
+        options=envelope_options,
+        default=envelope_options,
+        key=f"faixa_envelope_linhas_{metric_key}",
+    )
 
     def _envelope() -> None:
         st.plotly_chart(
@@ -51,6 +64,7 @@ def render(
                 titulo=titulo_filtro(t("faixa.risk_title", metric=rotulo_nuvem), cena_sel, ano_sel),
                 ano_destaque=ano_nuvem,
                 cena_destaque=cena_sel,
+                series_visiveis=set(envelope_selected),
             ),
             width="stretch",
             theme="streamlit",
