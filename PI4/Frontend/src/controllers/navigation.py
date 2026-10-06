@@ -27,7 +27,6 @@ from src.views import (
     persona_tabs as view_persona_tabs,
     prazos_ciclo as view_prazos_ciclo,
     report as view_report,
-    settings as view_settings,
 )
 
 VIEW_RENDERERS = {
@@ -59,7 +58,6 @@ PERSONA_NAV_LABELS = {
     "concedente_solvencia": "Solvência & Liquidez Geral",
     "concedente_ativos": "Ativos Reversíveis",
 }
-PERSONA_NAV_LABELS["configuracoes"] = "Configurações"
 
 PERSONA_VIEW_RENDERERS = {
     "ceo_geral": lambda ctx: view_persona_tabs.render_ceo_visao_geral(ctx.df, ctx.cena_sel, ctx.ano_sel),
@@ -73,7 +71,6 @@ PERSONA_VIEW_RENDERERS = {
     "concedente_solvencia": lambda ctx: view_persona_tabs.render_concedente_solvencia(ctx.df, ctx.cena_sel, ctx.ano_sel),
     "concedente_ativos": lambda ctx: view_persona_tabs.render_concedente_ativos(ctx.df, ctx.cena_sel, ctx.ano_sel),
     "comparar": lambda ctx: view_persona_tabs.render_comparar_cenarios(ctx.df, ctx.ind, ctx.cenas, ctx.persona, ctx.ano_sel),
-    "configuracoes": lambda ctx: view_settings.render(),
 }
 
 
@@ -88,10 +85,7 @@ def render_analises(ctx: AppContext) -> None:
     custom_keys = [custom_key(analysis) for analysis in analyses]
     custom_by_key = dict(zip(custom_keys, analyses, strict=True))
     nav_keys = insert_custom_tabs(base_nav_keys, custom_keys)
-    if "configuracoes" not in nav_keys:
-        nav_keys.append("configuracoes")
     renderers = {**VIEW_RENDERERS, "comparar": PERSONA_VIEW_RENDERERS["comparar"]} if ctx.persona == "cfo" else PERSONA_VIEW_RENDERERS
-    renderers["configuracoes"] = PERSONA_VIEW_RENDERERS["configuracoes"]
     pending_nav_key = st.session_state.pop("pending_nav_key", None)
     if pending_nav_key in nav_keys:
         st.session_state["nav_key"] = pending_nav_key

@@ -41,14 +41,17 @@ def render_ceo_visao_geral(df: pd.DataFrame, cena: str, ano_sel: str | int) -> N
     ir_cs = float(_s(medias.to_frame().T, "DRE - Imposto de Renda e Contribuição Social").iloc[0])
     lucro = float(_s(medias.to_frame().T, "Lucro Líquido", "Lucro Liquido").iloc[0])
 
+    custos_delta = -abs(custos)
+    opex_delta = -abs(opex)
+    dep_delta = -abs(dep)
     labels = ["Receita Liquida", "Custos", "OPEX", "EBITDA", "Depreciacao", "Resultado Financeiro", "IR/CS", "Lucro Liquido"]
-    values = [receita, custos, opex, 0, dep, resultado_fin, ir_cs, 0]
-    text = [fmt_rs(v) if v else "" for v in [receita, custos, opex, receita + custos + opex, dep, resultado_fin, ir_cs, lucro]]
+    values = [receita, custos_delta, opex_delta, float(_s(medias.to_frame().T, "EBITDA").iloc[0]), dep_delta, resultado_fin, ir_cs, lucro]
+    text = [fmt_rs(v) if v else "" for v in values]
     waterfall = go.Figure(
         go.Waterfall(
             name="DRE media",
             orientation="v",
-            measure=["absolute", "relative", "relative", "total", "relative", "relative", "relative", "total"],
+            measure=["relative", "relative", "relative", "total", "relative", "relative", "relative", "total"],
             x=labels,
             y=values,
             text=text,

@@ -26,10 +26,19 @@ def _grafico_prazos(foco: pd.DataFrame, cena_sel: str, ano_sel: str | int) -> No
     }
     plot_df = plot_df.rename(columns=rename)
     y_cols = [rename[c] for c in raw_cols]
+    selected_cols = st.multiselect(
+        "Exibir no gráfico:",
+        options=y_cols,
+        default=y_cols,
+        key="prazos_linhas_trajetoria",
+    )
+    if not selected_cols:
+        st.info("Selecione ao menos uma métrica de prazo para exibir o gráfico.")
+        return
     fig = px.line(
         plot_df,
         x="ano_num",
-        y=y_cols,
+        y=selected_cols,
         markers=True,
         labels={
             "ano_num": t("chart.year"),
@@ -39,7 +48,7 @@ def _grafico_prazos(foco: pd.DataFrame, cena_sel: str, ano_sel: str | int) -> No
         title=titulo_filtro(t("prazos.chart"), cena_sel, ano_sel),
     )
     fig.update_layout(legend_title_text="", hovermode="x unified")
-    fig = ancorar_ano_temporal(fig, plot_df, y_cols, ano_sel)
+    fig = ancorar_ano_temporal(fig, plot_df, selected_cols, ano_sel)
     st.plotly_chart(fig, width="stretch", theme="streamlit")
 
 

@@ -7,7 +7,20 @@ import streamlit as st
 from src.models.financial_metrics import FINANCIAL_METRICS_DICT
 
 CUSTOM_ANALYSES_KEY = "custom_financial_analyses"
+MODAL_CUSTOM_ANALYSIS_KEY = "modal_custom_analysis_open"
 CHART_TYPES = ["Linha", "Barra", "Área", "Card KPI"]
+
+
+def custom_analysis_modal_key(persona: str) -> str:
+    """Chave unica do modal de analise customizada por persona."""
+    return f"{MODAL_CUSTOM_ANALYSIS_KEY}_{persona}"
+
+
+def set_custom_analysis_modal(persona: str, open_: bool) -> None:
+    """Abre/fecha o modal e limpa a chave legada."""
+    st.session_state[custom_analysis_modal_key(persona)] = open_
+    st.session_state[MODAL_CUSTOM_ANALYSIS_KEY] = open_
+    st.session_state[f"show_custom_analysis_dialog_{persona}"] = False
 
 
 def custom_store() -> dict[str, list[dict[str, str]]]:

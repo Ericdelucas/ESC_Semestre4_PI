@@ -1,4 +1,4 @@
-"""Comparacoes das personas CEO e CFO."""
+﻿"""Comparacoes das personas CEO e CFO."""
 
 from __future__ import annotations
 
@@ -55,28 +55,58 @@ def _render_cmp_ceo(df: pd.DataFrame, cenarios: list[tuple[str, str]]) -> None:
     with c3:
         _metric_base("Break-Even Medio", metricas["A"]["break_even"], [(r, metricas[r]["break_even"]) for r in comp], fmt_rs, maior_melhor=False)
 
+    metric_options = {"Receita Líquida": "receita", "EBITDA": "ebitda"}
+    selected_metric_labels = st.multiselect(
+        "Métricas do gráfico",
+        options=list(metric_options),
+        default=list(metric_options),
+        key="cmp_ceo_metricas_receita_ebitda",
+    )
+    selected_metrics = {metric_options[label] for label in selected_metric_labels}
+
+    series_options = {
+        "A": "Cenário A (Base)",
+        "B": "Cenário B (Comparativo 1)",
+        "C": "Cenário C (Comparativo 2)",
+    }
+    available_series = [(rotulo, series_options.get(rotulo, f"Cenário {rotulo}")) for rotulo, _ in cenarios]
+    selected_series_labels = st.multiselect(
+        "Exibir no gráfico",
+        options=[label for _, label in available_series],
+        default=[label for _, label in available_series],
+        key="cmp_ceo_series_receita_ebitda",
+    )
+    selected_series = {rotulo for rotulo, label in available_series if label in selected_series_labels}
+
     fig = go.Figure()
     for rotulo, cena in cenarios:
+        if rotulo not in selected_series:
+            continue
         estilo = SERIES_STYLES[rotulo]
         base = dados[rotulo]
         nome = f"Serie {rotulo} - {cena_rotulo(cena)}"
-        fig.add_scatter(
-            x=base["ano_num"],
-            y=_col(base, "Receita Líquida", "Receita Liquida"),
-            mode="lines+markers",
-            name=f"{nome} - Receita",
-            line={"color": estilo["color"], "dash": estilo["dash"]},
-        )
-        fig.add_scatter(
-            x=base["ano_num"],
-            y=_col(base, "EBITDA"),
-            mode="lines+markers",
-            name=f"{nome} - EBITDA",
-            line={"color": estilo["color"], "dash": estilo["dash"], "width": 2},
-        )
+        if "receita" in selected_metrics:
+            fig.add_scatter(
+                x=base["ano_num"],
+                y=_col(base, "Receita Líquida", "Receita Liquida"),
+                mode="lines+markers",
+                name=f"{nome} - Receita",
+                line={"color": estilo["color"], "dash": estilo["dash"]},
+            )
+        if "ebitda" in selected_metrics:
+            fig.add_scatter(
+                x=base["ano_num"],
+                y=_col(base, "EBITDA"),
+                mode="lines+markers",
+                name=f"{nome} - EBITDA",
+                line={"color": estilo["color"], "dash": estilo["dash"], "width": 2},
+            )
     fig.update_layout(title="Receita Liquida e EBITDA: comparacao de cenarios", xaxis_title="Ano", yaxis_title="R$", hovermode="x unified")
     fig.update_xaxes(tickmode="linear", tick0=1, dtick=1)
-    st.plotly_chart(fig, width="stretch", theme="streamlit")
+    if fig.data:
+        st.plotly_chart(fig, width="stretch", theme="streamlit")
+    else:
+        st.info("Selecione ao menos uma métrica e um cenário para exibir o gráfico.")
 
 
 def _render_cmp_cfo(ind: pd.DataFrame, cenarios: list[tuple[str, str]]) -> None:
@@ -112,3 +142,4 @@ def _render_cmp_cfo(ind: pd.DataFrame, cenarios: list[tuple[str, str]]) -> None:
     fig.update_layout(title="Teste de estresse de tesouraria", xaxis_title="Ano", yaxis_title="R$", hovermode="x unified")
     fig.update_xaxes(tickmode="linear", tick0=1, dtick=1)
     st.plotly_chart(fig, width="stretch", theme="streamlit")
+
