@@ -17,8 +17,8 @@ div[data-testid="stMetricValue"],
 div[data-testid="stMetricValue"] > div,
 div[data-testid="stMetricValue"] span,
 div[data-testid="stMetricValue"] p {
-  color: #FFFFFF !important;
-  -webkit-text-fill-color: #FFFFFF !important;
+  color: var(--text-color) !important;
+  -webkit-text-fill-color: var(--text-color) !important;
   opacity: 1 !important;
   filter: none !important;
   font-weight: 700 !important;
@@ -28,21 +28,29 @@ div[data-testid="stMetricLabel"] > div,
 div[data-testid="stMetricLabel"] span,
 div[data-testid="stMetricLabel"] p,
 div[data-testid="stMetricLabel"] label {
-  color: rgba(255, 255, 255, 0.92) !important;
-  -webkit-text-fill-color: rgba(255, 255, 255, 0.92) !important;
+  color: var(--text-color) !important;
+  -webkit-text-fill-color: var(--text-color) !important;
   opacity: 1 !important;
   filter: none !important;
 }
 div[data-testid="stMetric"] {
   opacity: 1 !important;
   filter: none !important;
-  color: #FFFFFF !important;
-  -webkit-text-fill-color: #FFFFFF !important;
+  color: var(--text-color) !important;
+  -webkit-text-fill-color: var(--text-color) !important;
   min-width: 0 !important;
   overflow-wrap: anywhere !important;
 }
 div[data-testid="stMetric"] label,
-div[data-testid="stMetricValue"] {
+div[data-testid="stMetricValue"],
+div[data-testid="stMetricDelta"],
+div[data-testid="stMetricDelta"] * {
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  text-overflow: clip !important;
+  overflow: visible !important;
+}
+div[data-testid="stMetric"] [data-testid="stMarkdownContainer"] {
   white-space: normal !important;
   overflow-wrap: anywhere !important;
 }
@@ -76,7 +84,7 @@ def _garantir_css_metricas() -> None:
 
 def card_selo_html(nome: str, qtd: int, ativo: bool) -> str:
     cor = CORES_SELO.get(nome, COR)
-    borda = "3px solid #111" if ativo else f"1px solid {cor}"
+    borda = "3px solid var(--text-color)" if ativo else f"1px solid {cor}"
     fundo = f"{cor}22" if not ativo else f"{cor}44"
     rotulo = translate_selo(nome)
     return f"""
@@ -86,11 +94,11 @@ def card_selo_html(nome: str, qtd: int, ativo: bool) -> str:
     border-radius:10px;
     padding:0.65rem 0.75rem;
     min-height:4.6rem;
-    color:#FFFFFF;
-    -webkit-text-fill-color:#FFFFFF;
+    color:var(--text-color);
+    -webkit-text-fill-color:var(--text-color);
 ">
   <div style="font-size:0.78rem;font-weight:700;color:{cor};-webkit-text-fill-color:{cor};line-height:1.25;">{escape(rotulo)}</div>
-  <div style="font-size:1.15rem;font-weight:700;margin-top:0.35rem;color:#FFFFFF;-webkit-text-fill-color:#FFFFFF;">{escape(t("map.scenarios_n", n=qtd))}</div>
+  <div style="font-size:1.15rem;font-weight:700;margin-top:0.35rem;color:var(--text-color);-webkit-text-fill-color:var(--text-color);">{escape(t("map.scenarios_n", n=qtd))}</div>
 </div>
 """
 

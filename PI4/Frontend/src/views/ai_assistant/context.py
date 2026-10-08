@@ -6,7 +6,15 @@ import pandas as pd
 import streamlit as st
 
 from src.controllers.kpis import kpis_por_persona
-from src.controllers.kpis.constants import CONTA_CUSTOS, CONTA_EBITDA, CONTA_OUTROS_RESULTADOS, CONTA_RECEITA, CONTA_TRIBUTOS
+from Backend.metrics.financial_kpis import build_financial_statement as _financeiro
+from src.controllers.kpis.constants import (
+    CONTA_CUSTOS,
+    CONTA_EBITDA,
+    CONTA_FLU_INVESTIMENTOS,
+    CONTA_OUTROS_RESULTADOS,
+    CONTA_RECEITA,
+    CONTA_TRIBUTOS,
+)
 from src.controllers.kpis.helpers import _safe_div, _valor_conta_raw
 from src.config.i18n import get_lang
 from src.models.formatting import cena_rotulo, fmt_pct, fmt_rs
@@ -182,6 +190,42 @@ def _contexto_cartoes_visuais(
     return "\n".join(linhas)
 
 
+def _contexto_acionistas(df: pd.DataFrame, cena_sel: str, ano_sel: str | int) -> str:
+    dados = _financeiro(df, cena_sel)
+    if dados.empty:
+        return "Acionistas e retorno: sem dados financeiros suficientes para ROIC/EVA no recorte atual."
+    if ano_sel != "Todos" and "ano_num" in dados.columns:
+        dados = dados.loc[pd.to_numeric(dados["ano_num"], errors="coerce") == int(ano_sel)]
+    roic = _safe_mean(dados, "ROIC")
+    roe = _safe_mean(dados, "ROE")
+    wacc = _safe_mean(dados, "WACC")
+    eva = _safe_mean(dados, "EVA")
+    dividendos = _safe_mean(dados, "Dividendos")
+    return "\n".join(
+        [
+            "Acionistas e retorno do recorte. Use estes dados quando a pergunta envolver ROIC, ROE, WACC, EVA, dividendos ou capital investido:",
+            f"- ROIC medio: {fmt_pct(roic)}",
+            f"- ROE medio: {fmt_pct(roe)}",
+            f"- WACC medio: {fmt_pct(wacc)}",
+            f"- EVA medio: {fmt_rs(eva)}",
+            f"- Dividendos medios: {fmt_rs(dividendos)}",
+            "- Aba recomendada para ROIC: Acionistas > Retorno & ROIC.",
+        ]
+    )
+
+
+def _contexto_concedente(df: pd.DataFrame, cena_sel: str, ano_sel: str | int) -> str:
+    capex = abs(_valor_conta_raw(df, cena_sel, CONTA_FLU_INVESTIMENTOS, ano_sel))
+    return "\n".join(
+        [
+            "Poder Concedente e investimentos do recorte. Use estes dados quando a pergunta envolver CAPEX, investimentos, infraestrutura, solvencia ou ativos reversiveis:",
+            f"- CAPEX / investimentos do recorte: {fmt_rs(capex)}",
+            "- Conta usada para CAPEX no dashboard: FLU - Investimentos.",
+            "- Aba recomendada para CAPEX: Poder Concedente > Plano de CAPEX.",
+        ]
+    )
+
+
 def contexto_dataset_ativo(
     df: pd.DataFrame,
     ind: pd.DataFrame,
@@ -209,6 +253,10 @@ def contexto_dataset_ativo(
         "Ao diagnosticar metricas, cite diretamente os valores abaixo quando estiverem disponiveis.",
         "",
         _contexto_cartoes_visuais(persona, k if isinstance(k, pd.Series) else pd.Series(dtype=float), ranking, df, cena_sel, ano_sel),
+        "",
+        _contexto_acionistas(df, cena_sel, ano_sel),
+        "",
+        _contexto_concedente(df, cena_sel, ano_sel),
         "",
         _contexto_dre(df, cena_sel, ano_sel),
         "",
@@ -240,6 +288,9 @@ def contexto_dataset_ativo(
         "- Ciclo Financeiro = PMR + PME - PMP.",
         "- PMR = Contas a Receber / Receita x 365; PME = Estoques / abs(Custos) x 365; PMP = Fornecedores / abs(Custos) x 365.",
         "- Margem EBITDA = EBITDA / Receita Liquida.",
+        "- ROIC = NOPAT / Capital Investido; no painel, aparece em Acionistas > Retorno & ROIC.",
+        "- EVA = NOPAT - (Capital Investido x WACC).",
+        "- CAPEX = Capital Expenditure / investimentos em bens de capital; no painel, usa FLU - Investimentos e aparece em Poder Concedente > Plano de CAPEX.",
         "- Break-Even = Custos Fixos / Margem de Contribuicao.",
         "- Margem de Seguranca = (Receita Liquida - Break-Even) / Receita Liquida.",
     ]

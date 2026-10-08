@@ -44,7 +44,7 @@ def parece_transcricao(path: Path, texto: str = "") -> bool:
 
 
 def iter_arquivos_doc() -> list[Path]:
-    """So o manual da CTI e documentos tecnicos em Backend/documentos."""
+    """Arquivos tecnicos em Backend/documentos e na pasta documentos do repositorio."""
     candidatos: list[Path] = []
     pastas = [
         DOCS_DIR,
@@ -70,6 +70,8 @@ def iter_arquivos_doc() -> list[Path]:
             continue
         if path.stem.strip().lower() in PLACEHOLDER_NAMES:
             continue
+        if path.name.lower() == "base_conhecimento_cti.md":
+            continue
         try:
             if path.stat().st_size > MAX_FILE_BYTES:
                 continue
@@ -93,10 +95,29 @@ def docs_manuais() -> list[Document]:
         if not texto.strip() or parece_transcricao(path, texto):
             continue
         origem = str(path.relative_to(ROOT.parent)) if ROOT.parent in path.parents else path.name
-        tipo = "manual_executivo" if "manual_executivo" in path.stem.lower() else "manual"
+        stem = path.stem.lower()
+        if path.parent.resolve() == REPO_DOCS_DIR.resolve() and path.suffix.lower() in TEXT_SUFFIXES:
+            tipo = "base_conhecimento"
+        elif "base_conhecimento_cti" in stem:
+            tipo = "base_conhecimento"
+        elif "manual_executivo" in stem:
+            tipo = "manual_executivo"
+        else:
+            tipo = "manual"
         for chunk in splitter.split_text(texto):
             docs.append(Document(page_content=chunk, metadata={"source": origem, "tipo": tipo}))
     return docs
+
+
+def status_documentos() -> dict[str, object]:
+    """Resume os arquivos tecnicos disponiveis para o indice RAG."""
+    arquivos = iter_arquivos_doc()
+    return {
+        "count": len(arquivos),
+        "sources": [str(path.relative_to(ROOT.parent)) if ROOT.parent in path.parents else path.name for path in arquivos],
+        "directories": [str(DOCS_DIR), str(REPO_DOCS_DIR)],
+        "suffixes": sorted(TEXT_SUFFIXES | PDF_SUFFIXES),
+    }
 
 
 def docs_glossario() -> list[Document]:

@@ -27,7 +27,7 @@ div[class*="st-key-ai_edge"] {
 }
 div[class*="st-key-ai_edge"] button {
   background: transparent !important;
-  color: #d4d4d4 !important;
+  color: var(--text-color) !important;
   border: 0 !important;
   box-shadow: none !important;
   height: 2.1rem !important;
@@ -42,6 +42,50 @@ div[class*="st-key-ai_edge"] button {
   margin: 0 !important;
   padding: 0 !important;
   overflow: visible !important;
+}
+</style>
+"""
+
+_CSS_ABERTA = """
+<style>
+div[class*="st-key-cti_ai_side_panel"] {
+  position: sticky !important;
+  top: 0.75rem !important;
+  z-index: 50 !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-height: calc(100vh - 1.5rem) !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  background: #0E1117 !important;
+  background-color: #0E1117 !important;
+  color: #F0F6FC !important;
+  opacity: 1 !important;
+  border: 1px solid #30363D !important;
+  border-radius: 12px !important;
+  padding: 0.85rem !important;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.42) !important;
+}
+div[class*="st-key-cti_ai_side_panel"] > div,
+div[class*="st-key-cti_ai_side_panel"] [data-testid="stVerticalBlock"],
+div[class*="st-key-cti_ai_side_panel"] [data-testid="stElementContainer"] {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  background: transparent !important;
+}
+div[class*="st-key-cti_ai_side_panel"] [data-testid="stChatMessage"] {
+  max-width: 100% !important;
+  background: #161B22 !important;
+  border: 1px solid #30363D !important;
+  border-radius: 10px !important;
+  padding: 0.65rem !important;
+  color: #F0F6FC !important;
+}
+div[class*="st-key-cti_ai_side_panel"] p,
+div[class*="st-key-cti_ai_side_panel"] li,
+div[class*="st-key-cti_ai_side_panel"] span {
+  overflow-wrap: anywhere !important;
+  word-break: normal !important;
 }
 </style>
 """
@@ -71,16 +115,19 @@ def render_ai_layout(ctx: AppContext, corpo: Callable[[AppContext], None]) -> No
     with col_main:
         corpo(ctx)
     with col_ai:
-        safe_render(
-            "assistente IA",
-            render_chat_panel,
-            ctx.ranking,
-            ctx.n_cenarios,
-            ctx.p_ruina,
-            ctx.cena_sel,
-            ctx.k,
-            ctx.ano_enc,
-            ctx.ano_sel,
-            ctx.df,
-            ctx.ind,
-        )
+        st.markdown(_CSS_ABERTA, unsafe_allow_html=True)
+        with st.container(key="cti_ai_side_panel", border=False):
+            safe_render(
+                "assistente IA",
+                render_chat_panel,
+                ctx.ranking,
+                ctx.n_cenarios,
+                ctx.p_ruina,
+                ctx.cena_sel,
+                ctx.k,
+                ctx.ano_enc,
+                ctx.ano_sel,
+                ctx.df,
+                ctx.ind,
+                persona=ctx.persona,
+            )

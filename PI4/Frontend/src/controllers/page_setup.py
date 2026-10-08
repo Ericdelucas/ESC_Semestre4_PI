@@ -1,54 +1,11 @@
-"""Configuracao visual global da aplicacao Streamlit."""
+﻿"""Configuracao visual global da aplicacao Streamlit."""
 
 from __future__ import annotations
 
 import streamlit as st
 
-from src.views.settings import get_theme_mode
-
-
-def _theme_css() -> str:
-    """CSS leve para alternar tema visual em sessao."""
-    if get_theme_mode() == "light":
-        return """
-<style>
-.stApp, [data-testid="stAppViewContainer"] {
-  background: #F7F8FA !important;
-  color: #111827 !important;
-}
-section[data-testid="stSidebar"], div[data-testid="stSidebarContent"] {
-  background: #FFFFFF !important;
-  color: #111827 !important;
-}
-div[data-testid="stMetric"] {
-  background: #161B26 !important;
-  border-radius: 8px !important;
-  padding: 0.65rem !important;
-}
-</style>
-"""
-    return """
-<style>
-.stApp, [data-testid="stAppViewContainer"] {
-  background: #0E1117 !important;
-  color: #FAFAFA !important;
-}
-section[data-testid="stSidebar"], div[data-testid="stSidebarContent"] {
-  background: #161B26 !important;
-  color: #FAFAFA !important;
-}
-div[data-testid="stMetric"] {
-  background: #161B26 !important;
-  border-radius: 8px !important;
-  padding: 0.65rem !important;
-}
-</style>
-"""
-
-
 def configure_page() -> None:
     st.set_page_config(layout="wide", page_title="ESC | Dashboard CTI", page_icon="🔵")
-    st.markdown(_theme_css(), unsafe_allow_html=True)
     st.markdown(
         """
     <style>
@@ -183,18 +140,18 @@ div[class*="st-key-cti_subnav_scroll"] div[data-testid="stSegmentedControl"] {
   overflow-y: hidden !important;
   padding-bottom: 0.5rem !important;
   scrollbar-width: thin !important;
-  scrollbar-color: rgba(255,255,255,.45) rgba(255,255,255,.10) !important;
+  scrollbar-color: var(--text-color) var(--secondary-background-color) !important;
   -webkit-overflow-scrolling: touch !important;
 }
 div[class*="st-key-cti_subnav_scroll"] div[data-testid="stSegmentedControl"]::-webkit-scrollbar {
   height: 8px !important;
 }
 div[class*="st-key-cti_subnav_scroll"] div[data-testid="stSegmentedControl"]::-webkit-scrollbar-track {
-  background: rgba(255,255,255,.10) !important;
+  background: var(--secondary-background-color) !important;
   border-radius: 999px !important;
 }
 div[class*="st-key-cti_subnav_scroll"] div[data-testid="stSegmentedControl"]::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,.45) !important;
+  background: var(--text-color) !important;
   border-radius: 999px !important;
 }
 div[class*="st-key-cti_subnav_scroll"] div[data-testid="stSegmentedControl"] [role="radiogroup"] {
@@ -213,18 +170,22 @@ div[class*="st-key-cti_subnav_scroll"] div[data-testid="stSegmentedControl"] but
 }
 div[data-testid="stMetricValue"],
 div[data-testid="stMetricValue"] * {
-  color: #FFFFFF !important;
-  -webkit-text-fill-color: #FFFFFF !important;
+  color: var(--text-color) !important;
+  -webkit-text-fill-color: var(--text-color) !important;
   opacity: 1 !important;
 }
 div[data-testid="stMetricLabel"],
 div[data-testid="stMetricLabel"] * {
-  color: rgba(255, 255, 255, 0.92) !important;
-  -webkit-text-fill-color: rgba(255, 255, 255, 0.92) !important;
+  color: var(--text-color) !important;
+  -webkit-text-fill-color: var(--text-color) !important;
   opacity: 1 !important;
 }
 div[data-testid="stMetric"] {
   min-width: 0 !important;
+  background: var(--secondary-background-color) !important;
+  color: var(--text-color) !important;
+  border-radius: 8px !important;
+  padding: 0.65rem !important;
 }
 div[data-testid="stMetric"] label,
 div[data-testid="stMetricValue"] {
@@ -299,3 +260,4 @@ div[data-testid="stMetricValue"] {
 """,
         unsafe_allow_html=True,
     )
+
