@@ -21,7 +21,6 @@ from src.controllers.headers import banner_auditoria_filtro  # noqa: E402
 from src.controllers.kpis import kpis_por_persona, render_kpi_row  # noqa: E402
 from src.controllers.resilience import safe_render  # noqa: E402
 from src.models.formatting import cena_rotulo, texto_ciclo, texto_ncg, texto_tesouraria  # noqa: E402
-from src.views import settings as view_settings  # noqa: E402
 
 
 @dataclass
@@ -116,13 +115,9 @@ def montar_contexto(
 
 def render_cabecalho(ctx: AppContext) -> None:
     """Renderiza titulo, banner e KPIs ja processados."""
-    title_col, settings_col, report_col = st.columns([0.72, 0.08, 0.20], vertical_alignment="center")
+    title_col, report_col = st.columns([0.80, 0.20], vertical_alignment="center")
     with title_col:
         st.subheader(t("header.focus", cena=cena_rotulo(ctx.cena_sel)))
-    with settings_col:
-        if ctx.persona != "teste":
-            with st.popover("⚙️", use_container_width=True):
-                view_settings.render()
     with report_col:
         if ctx.persona != "teste" and st.button("Criar Relatório", key="header_create_report", use_container_width=True):
             st.session_state["show_report_modal"] = True

@@ -38,19 +38,19 @@ def _kpis_poder_concedente(df: pd.DataFrame | None, cena: str | None, ano_sel: s
         (
             "CAPEX Investido (Infraestrutura)",
             fmt_rs(investimentos),
-            "Investimento acumulado na concessão de serviço público",
-            None,
+            "Investimento acumulado em infraestrutura",
+            "CAPEX executado no recorte selecionado, associado aos investimentos da concessão.",
         ),
         (
             "Liquidez Geral (Solvência de Longo Prazo)",
             f"{liquidez_geral:.2f}x",
-            "Capacidade de cumprir obrigações contratuais até o fim da concessão",
-            None,
+            "Capacidade de solvência a longo prazo",
+            "Mede a capacidade de cumprir obrigações de curto e longo prazo ao longo da concessão.",
         ),
         (
             "Base de Ativos Reversíveis (Ativo Total)",
             fmt_rs(ativo_total),
-            "Patrimônio total afetado à prestação do serviço público",
-            None,
+            "Patrimônio total afetado ao serviço",
+            "Base patrimonial associada à prestação do serviço público concedido.",
         ),
     ]

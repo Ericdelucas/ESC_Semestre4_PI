@@ -11,7 +11,6 @@ from . import (
     persona_tabs,
     prazos_ciclo,
     report,
-    settings,
 )
 
 __all__ = [
@@ -25,5 +24,4 @@ __all__ = [
     "persona_tabs",
     "prazos_ciclo",
     "report",
-    "settings",
 ]

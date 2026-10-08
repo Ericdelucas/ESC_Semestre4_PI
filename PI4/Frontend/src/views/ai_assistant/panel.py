@@ -15,6 +15,42 @@ _BOAS_VINDAS = (
 )
 CHAT_NAV_CARDS_KEY = "cti_chat_nav_cards"
 NAV_TARGETS = {
+    "acionistas_retorno": {
+        "label": "Retorno & ROIC",
+        "persona": "acionistas",
+        "description": "Visão de Acionistas com ROIC, ROE e WACC para avaliar retorno sobre o capital investido.",
+        "terms": ("roic", "retorno sobre o capital", "capital investido", "roe", "wacc", "retorno do acionista", "retorno acionista"),
+    },
+    "acionistas_eva": {
+        "label": "Geração de EVA",
+        "persona": "acionistas",
+        "description": "Visão de Acionistas com criação de valor econômico acima do custo de capital.",
+        "terms": ("eva", "valor economico", "valor econômico", "criacao de valor", "criação de valor", "lucro economico", "lucro econômico"),
+    },
+    "acionistas_dividendos": {
+        "label": "Lucro Líquido & Dividendos",
+        "persona": "acionistas",
+        "description": "Visão de Acionistas com lucro líquido, dividendos e reinvestimento.",
+        "terms": ("dividendos", "dividendo", "payout", "lucro liquido", "lucro líquido", "reinvestimento"),
+    },
+    "concedente_capex": {
+        "label": "Plano de CAPEX",
+        "persona": "concedente",
+        "description": "Visão de Poder Concedente com CAPEX anual e acumulado dos investimentos da concessão.",
+        "terms": ("capex", "capital expenditure", "investimento", "investimentos", "infraestrutura", "plano de capex"),
+    },
+    "concedente_solvencia": {
+        "label": "Solvência & Liquidez Geral",
+        "persona": "concedente",
+        "description": "Visão de Poder Concedente com liquidez geral, endividamento e cobertura de juros.",
+        "terms": ("liquidez geral", "solvencia", "solvência", "obrigacoes contratuais", "obrigações contratuais"),
+    },
+    "concedente_ativos": {
+        "label": "Ativos Reversíveis",
+        "persona": "concedente",
+        "description": "Visão de Poder Concedente com base líquida de ativos reversíveis.",
+        "terms": ("ativos reversiveis", "ativos reversíveis", "base de ativos", "patrimonio", "patrimônio"),
+    },
     "ceo_geral": {
         "label": "Visão Geral & DRE",
         "persona": "ceo",
@@ -251,6 +287,48 @@ def _garantir_fechamento_conversacional(texto: str) -> str:
     )
 
 
+_CHAT_PANEL_CSS = """
+<style>
+div[class*="st-key-cti_chat_messages"],
+div[class*="st-key-cti_chat_input_area"] {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  background: #0E1117 !important;
+  background-color: #0E1117 !important;
+  color: #F0F6FC !important;
+  opacity: 1 !important;
+}
+div[class*="st-key-cti_chat_messages"] [data-testid="stChatMessage"],
+div[data-testid="stChatMessage"] {
+  background: #161B22 !important;
+  background-color: #161B22 !important;
+  border: 1px solid #30363D !important;
+  border-radius: 10px !important;
+  color: #F0F6FC !important;
+  opacity: 1 !important;
+  max-width: 100% !important;
+  overflow-wrap: anywhere !important;
+  word-break: normal !important;
+}
+div[data-testid="stChatMessage"] p,
+div[data-testid="stChatMessage"] li,
+div[data-testid="stChatMessage"] span {
+  color: #F0F6FC !important;
+  overflow-wrap: anywhere !important;
+  word-break: normal !important;
+}
+div[class*="st-key-cti_chat_input_area"] {
+  border-top: 1px solid #30363D !important;
+  padding-top: 0.65rem !important;
+}
+div[class*="st-key-cti_chat_input_area"] input {
+  background: #0B0F14 !important;
+  color: #F0F6FC !important;
+}
+</style>
+"""
+
+
 _FLOATING_CHAT_CSS = """
 <style>
 div[class*="st-key-cti_chat_fab"] {
@@ -276,26 +354,26 @@ div[class*="st-key-cti_chat_panel"] {
   width: min(420px, calc(100vw - 32px)) !important;
   max-height: min(720px, calc(100vh - 120px)) !important;
   overflow: auto !important;
-  background: #0e1117 !important;
-  background-color: #0e1117 !important;
+  background: #0E1117 !important;
+  background-color: #0E1117 !important;
   opacity: 1 !important;
-  border: 1px solid #30363d !important;
+  border: 1px solid #30363D !important;
   border-radius: 12px !important;
   padding: 16px !important;
   box-shadow: 0 18px 56px rgba(0,0,0,.72) !important;
-  color: #f0f6fc !important;
+  color: #F0F6FC !important;
 }
 div[class*="st-key-cti_chat_panel"] > div,
 div[class*="st-key-cti_chat_panel"] [data-testid="stVerticalBlock"],
 div[class*="st-key-cti_chat_panel"] [data-testid="stElementContainer"] {
-  background: #0e1117 !important;
-  background-color: #0e1117 !important;
+  background: #0E1117 !important;
+  background-color: #0E1117 !important;
   opacity: 1 !important;
 }
 div[class*="st-key-cti_chat_panel"] [data-testid="stChatMessage"] {
   font-size: .92rem !important;
-  background: #161b22 !important;
-  border: 1px solid #30363d !important;
+  background: #161B22 !important;
+  border: 1px solid #30363D !important;
   border-radius: 10px !important;
   padding: 8px !important;
 }
@@ -304,23 +382,23 @@ div[class*="st-key-cti_chat_messages"] {
   overflow-y: auto !important;
   padding-right: 4px !important;
   margin-bottom: 10px !important;
-  background: #0e1117 !important;
+  background: #0E1117 !important;
 }
 div[class*="st-key-cti_chat_input_area"] {
   position: sticky !important;
   bottom: 0 !important;
   z-index: 2 !important;
-  background: #0e1117 !important;
-  border-top: 1px solid #30363d !important;
+  background: #0E1117 !important;
+  border-top: 1px solid #30363D !important;
   padding-top: 10px !important;
 }
 div[class*="st-key-cti_chat_input_area"] form {
   margin-bottom: 0 !important;
 }
 div[data-testid="stPopoverBody"], .floating-chat-container {
-  background-color: #0e1117 !important;
+  background-color: #0E1117 !important;
   opacity: 1 !important;
-  border: 1px solid #30363d !important;
+  border: 1px solid #30363D !important;
   box-shadow: 0px 8px 24px rgba(0, 0, 0, 0.5) !important;
   z-index: 999999 !important;
 }
@@ -418,6 +496,7 @@ def render_chat_panel(
     persona: str = "cfo",
     show_title: bool = True,
 ) -> None:
+    st.markdown(_CHAT_PANEL_CSS, unsafe_allow_html=True)
     if show_title:
         st.subheader("Assistente CTI")
     _render_configuracoes()
