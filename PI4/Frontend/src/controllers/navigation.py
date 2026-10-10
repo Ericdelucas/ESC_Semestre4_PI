@@ -6,6 +6,8 @@ import streamlit as st
 
 from src.config import NAV_KEYS
 from src.config.i18n import get_lang, t
+from src.controllers.auth import is_super_admin
+from src.controllers.modals import close_chat, close_relatorio, is_relatorio_open
 from src.controllers.bootstrap import AppContext, render_cabecalho
 from src.controllers.custom_analysis import (
     custom_analyses,
@@ -40,23 +42,25 @@ VIEW_RENDERERS = {
 }
 
 PERSONA_NAV_KEYS = {
-    "ceo": ["ceo_geral", "ceo_dre", "ceo_break_even", "ceo_ltv_cac", "comparar"],
+    "ceo": ["ceo_geral", "ceo_dre", "ceo_break_even", "ceo_ltv_cac", "comparar", "ceo_auditoria"],
     "cfo": NAV_KEYS,
     "acionistas": ["acionistas_retorno", "acionistas_eva", "acionistas_dividendos", "comparar"],
     "concedente": ["concedente_capex", "concedente_solvencia", "concedente_ativos", "comparar"],
 }
 
 PERSONA_NAV_LABELS = {
-    "ceo_geral": "Visão Geral & DRE",
-    "ceo_dre": "DRE Operacional",
-    "ceo_break_even": "Break-Even & Margens",
-    "ceo_ltv_cac": "Eficiência LTV/CAC",
-    "acionistas_retorno": "Retorno & ROIC",
-    "acionistas_eva": "Geração de EVA",
-    "acionistas_dividendos": "Lucro Líquido & Dividendos",
-    "concedente_capex": "Plano de CAPEX",
-    "concedente_solvencia": "Solvência & Liquidez Geral",
-    "concedente_ativos": "Ativos Reversíveis",
+    "ceo_geral": "nav.ceo_geral",
+    "ceo_dre": "nav.ceo_dre",
+    "ceo_break_even": "nav.ceo_break_even",
+    "ceo_ltv_cac": "nav.ceo_ltv_cac",
+    "acionistas_retorno": "nav.acionistas_retorno",
+    "acionistas_eva": "nav.acionistas_eva",
+    "acionistas_dividendos": "nav.acionistas_dividendos",
+    "concedente_capex": "nav.concedente_capex",
+    "concedente_solvencia": "nav.concedente_solvencia",
+    "concedente_ativos": "nav.concedente_ativos",
+    "ceo_auditoria": "nav.ceo_auditoria",
+    "admin_users": "nav.admin_users",
 }
 
 PERSONA_VIEW_RENDERERS = {
@@ -71,6 +75,8 @@ PERSONA_VIEW_RENDERERS = {
     "concedente_solvencia": lambda ctx: view_persona_tabs.render_concedente_solvencia(ctx.df, ctx.cena_sel, ctx.ano_sel),
     "concedente_ativos": lambda ctx: view_persona_tabs.render_concedente_ativos(ctx.df, ctx.cena_sel, ctx.ano_sel),
     "comparar": lambda ctx: view_persona_tabs.render_comparar_cenarios(ctx.df, ctx.ind, ctx.cenas, ctx.persona, ctx.ano_sel),
+    "ceo_auditoria": lambda ctx: view_persona_tabs.render_ceo_auditoria(),
+    "admin_users": lambda ctx: view_persona_tabs.render_admin_usuarios(),
 }
 
 
@@ -80,7 +86,10 @@ def render_analises(ctx: AppContext) -> None:
         return
 
     lang = get_lang()
-    base_nav_keys = PERSONA_NAV_KEYS.get(ctx.persona, NAV_KEYS)
+    base_nav_keys = list(PERSONA_NAV_KEYS.get(ctx.persona, NAV_KEYS))
+    if ctx.persona == "ceo" and is_super_admin():
+        if "admin_users" not in base_nav_keys:
+            base_nav_keys.append("admin_users")
     analyses = custom_analyses(ctx.persona)
     custom_keys = [custom_key(analysis) for analysis in analyses]
     custom_by_key = dict(zip(custom_keys, analyses, strict=True))
@@ -98,7 +107,7 @@ def render_analises(ctx: AppContext) -> None:
     labels = [
         custom_label(custom_by_key[k])
         if k in custom_by_key
-        else t(f"nav.{k}") if k in NAV_KEYS else PERSONA_NAV_LABELS[k]
+        else t(f"nav.{k}") if k in NAV_KEYS else t(PERSONA_NAV_LABELS[k])
         for k in nav_keys
     ]
     label_to_key = dict(zip(labels, nav_keys, strict=True))
@@ -106,7 +115,7 @@ def render_analises(ctx: AppContext) -> None:
     if default_key in custom_by_key:
         default_label = custom_label(custom_by_key[default_key])
     else:
-        default_label = t(f"nav.{default_key}") if default_key in NAV_KEYS else PERSONA_NAV_LABELS[default_key]
+        default_label = t(f"nav.{default_key}") if default_key in NAV_KEYS else t(PERSONA_NAV_LABELS[default_key])
     nav_widget_key = f"nav_secao_{ctx.persona}_{lang}_{len(analyses)}"
     if pending_nav_key in nav_keys:
         st.session_state.pop(nav_widget_key, None)
@@ -121,14 +130,16 @@ def render_analises(ctx: AppContext) -> None:
                 label_visibility="collapsed",
             )
         with col_add:
-            if st.button("+", help="Adicionar análise customizada", key=f"add_analysis_{ctx.persona}"):
+            if st.button("+", help=t("nav.add_custom"), key=f"add_analysis_{ctx.persona}"):
+                close_chat()
+                close_relatorio()
                 st.session_state[f"show_custom_analysis_dialog_{ctx.persona}"] = True
     render_custom_analysis_dialog(ctx.persona)
     nav_key = label_to_key.get(secao_label or default_label, nav_keys[0])
     st.session_state["nav_key"] = nav_key
     st.session_state["current_tab"] = nav_key
     st.space("small")
-    safe_render("auditoria da base", expander_auditoria_base, ctx.df, ctx.cena_sel, ctx.ano_sel)
+    safe_render(t("ui.audit_base"), expander_auditoria_base, ctx.df, ctx.cena_sel, ctx.ano_sel)
     if nav_key in custom_by_key:
         view_persona_tabs.render_custom_analysis(ctx.df, custom_by_key[nav_key], ctx.cena_sel, ctx.ano_sel)
     else:
@@ -139,5 +150,5 @@ def render_analises(ctx: AppContext) -> None:
 def render_pagina(ctx: AppContext) -> None:
     render_cabecalho(ctx)
     render_analises(ctx)
-    if st.session_state.get("show_report_modal"):
+    if is_relatorio_open():
         view_report.render_dialog(ctx.df, ctx.cena_sel, ctx.ano_sel)

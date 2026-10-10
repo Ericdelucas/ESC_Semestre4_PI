@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pandas as pd
 
+from src.config.i18n import t
 from src.models.formatting import fmt_pct, fmt_rs
 
 from .constants import (
@@ -55,21 +56,21 @@ def _kpis_acionistas(df: pd.DataFrame | None, cena: str | None, ano_sel: str | i
 
     return [
         (
-            "Retorno sobre o Capital Investido (ROIC %)",
+            t("kpi.sh.roic"),
             fmt_pct(roic),
-            "Retorno gerado sobre o capital total operado",
+            t("kpi.sh.roic_delta"),
             None,
         ),
         (
-            "Criação de Valor Econômico (EVA)",
+            t("kpi.sh.eva"),
             fmt_rs(eva),
-            "Lucro econômico acima do custo de capital",
+            t("kpi.sh.eva_delta"),
             None,
         ),
         (
-            "Lucro Líquido & Margem Líquida (%)",
+            t("kpi.sh.net"),
             fmt_rs(resultado_liquido),
-            f"Margem: {margem_liquida * 100:.1f}%",
+            t("kpi.sh.net_delta", pct=margem_liquida * 100),
             None,
         ),
     ]

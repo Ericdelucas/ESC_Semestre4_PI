@@ -23,6 +23,61 @@ def repair_mojibake(text: object) -> str:
     return value
 
 
+FRIENDLY_CONTAS: dict[str, str] = {
+    "receita": "DRE - Receita",
+    "receita bruta": "DRE - Receita",
+    "receita liquida": "DRE - Receita",
+    "dre receita": "DRE - Receita",
+    "ebitda": "DRE - EBITDA",
+    "ebitda operacional": "DRE - EBITDA",
+    "dre ebitda": "DRE - EBITDA",
+    "receita operacional": "DRE - Receita",
+    "custos": "DRE - Custos",
+    "custo": "DRE - Custos",
+    "dre custos": "DRE - Custos",
+    "resultado": "DRE - Resultado Líquido",
+    "resultado liquido": "DRE - Resultado Líquido",
+    "lucro liquido": "DRE - Resultado Líquido",
+    "disponivel": "BAL - Disponível",
+    "caixa": "BAL - Disponível",
+    "ativo circulante": "BAL - Ativo Circulante",
+    "passivo circulante": "BAL - Passivo Circulante",
+    "total ativo": "BAL - Total do Ativo",
+    "total passivo": "BAL - Total do Passivo",
+    "estoques": "BAL - Estoques Diversos",
+    "fornecedores": "BAL - Fornecedores",
+    "emprestimos": "BAL - Empréstimos",
+    "patrimonio liquido": "BAL - Patrimônio Líquido",
+    "geracao de caixa": "FLU - Geração de Caixa",
+    "investimentos": "FLU - Investimentos",
+    "capex": "FLU - Investimentos",
+    "distribuicao": "FLU - Distribuição para Acionista",
+    "saldo final": "FLU - Saldo Final",
+    "caixa final": "FLU - Saldo Final",
+}
+
+
+def resolve_account_name(value: object, official_names: Iterable[str] | None = None) -> str:
+    """Traduz cabecalhos amigaveis (Receita Bruta, EBITDA) para contas oficiais CTI."""
+    bruto = str(value).strip()
+    key = normalize_label(bruto)
+    candidatos = [key]
+    for sufixo in (" r", " rs", " brl", " pct"):
+        if key.endswith(sufixo):
+            candidatos.append(key[: -len(sufixo)].strip())
+    oficiais = {normalize_label(nome): str(nome) for nome in official_names or []}
+    amigos = sorted(FRIENDLY_CONTAS.items(), key=lambda item: -len(item[0]))
+    for candidato in candidatos:
+        if candidato in oficiais:
+            return oficiais[candidato]
+        if candidato in FRIENDLY_CONTAS:
+            return FRIENDLY_CONTAS[candidato]
+        for amigo, destino in amigos:
+            if candidato == amigo or candidato.startswith(f"{amigo} "):
+                return destino
+    return bruto
+
+
 def normalize_label(text: object) -> str:
     """Normaliza texto removendo acentos, simbolos e espacos redundantes."""
     repaired = repair_mojibake(text).casefold()

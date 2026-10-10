@@ -9,9 +9,10 @@ from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pypdf import PdfReader
 
-from src.config import DOCS_DIR, REPO_DOCS_DIR, ROOT
+from src.config import DOCS_DIR, ROOT
 from src.config.glossary import GLOSSARIO
 
+from .rbac import visibility_for_source
 from .config import (
     MARCA_FALA,
     MAX_FILE_BYTES,
@@ -43,31 +44,65 @@ def parece_transcricao(path: Path, texto: str = "") -> bool:
     return len(MARCA_FALA.findall(amostra)) >= 3
 
 
+def _tipo_documento(path: Path) -> str:
+    stem = path.stem.lower()
+    if "manual_executivo" in stem:
+        return "manual_executivo"
+    if DOCS_DIR in path.parents or path.parent.resolve() == DOCS_DIR.resolve():
+        return "base_conhecimento"
+    if stem.startswith(("01_", "02_", "03_", "04_", "05_")) or "conhecimento" in stem:
+        return "base_conhecimento"
+    return "manual"
+
+
+def _origem_relativa(path: Path) -> str:
+    if ROOT in path.parents:
+        return str(path.relative_to(ROOT))
+    return path.name
+
+
+GLOBS_RAG = ("**/*.md", "**/*.pdf")
+
+
+def _candidatos_documentos() -> list[Path]:
+    """Usa a varredura recursiva de Backend/services; fallback local se o import falhar."""
+    try:
+        from Backend.services.rag_indexer import listar_documentos
+
+        return listar_documentos()
+    except Exception:
+        if not DOCS_DIR.is_dir():
+            return []
+        unicos: list[Path] = []
+        vistos: set[Path] = set()
+        padroes = list(GLOBS_RAG)
+        for sufixo in sorted(TEXT_SUFFIXES | PDF_SUFFIXES):
+            padrao = f"**/*{sufixo}"
+            if padrao not in padroes:
+                padroes.append(padrao)
+        for padrao in padroes:
+            for path in DOCS_DIR.glob(padrao):
+                if not path.is_file():
+                    continue
+                resolved = path.resolve()
+                if resolved in vistos:
+                    continue
+                vistos.add(resolved)
+                unicos.append(path)
+        return unicos
+
+
 def iter_arquivos_doc() -> list[Path]:
-    """Arquivos tecnicos em Backend/documentos e na pasta documentos do repositorio."""
-    candidatos: list[Path] = []
-    pastas = [
-        DOCS_DIR,
-        REPO_DOCS_DIR,
-    ]
-    for alvo in pastas:
-        if alvo.is_file():
-            candidatos.append(alvo)
-            continue
-        if not alvo.is_dir():
-            continue
-        for path in alvo.rglob("*"):
-            if path.is_file():
-                candidatos.append(path)
-    vistos: set[Path] = set()
+    """Varre recursivamente Backend/documentos com glob **/*.md e **/*.pdf."""
     unicos: list[Path] = []
-    for path in candidatos:
+    vistos: set[Path] = set()
+    for path in _candidatos_documentos():
+        if not path.is_file():
+            continue
         resolved = path.resolve()
         if resolved in vistos:
             continue
         vistos.add(resolved)
-        if path.suffix.lower() not in TEXT_SUFFIXES | PDF_SUFFIXES:
-            continue
         if path.stem.strip().lower() in PLACEHOLDER_NAMES:
             continue
         if path.name.lower() == "base_conhecimento_cti.md":
@@ -78,11 +113,12 @@ def iter_arquivos_doc() -> list[Path]:
         except OSError:
             continue
         unicos.append(path)
+    unicos.sort(key=lambda item: str(item).lower())
     return unicos
 
 
 def docs_manuais() -> list[Document]:
-    splitter = RecursiveCharacterTextSplitter(chunk_size=900, chunk_overlap=120)
+    splitter = RecursiveCharacterTextSplitter(chunk_size=1400, chunk_overlap=200)
     docs: list[Document] = []
     for path in iter_arquivos_doc():
         try:
@@ -94,18 +130,21 @@ def docs_manuais() -> list[Document]:
             continue
         if not texto.strip() or parece_transcricao(path, texto):
             continue
-        origem = str(path.relative_to(ROOT.parent)) if ROOT.parent in path.parents else path.name
-        stem = path.stem.lower()
-        if path.parent.resolve() == REPO_DOCS_DIR.resolve() and path.suffix.lower() in TEXT_SUFFIXES:
-            tipo = "base_conhecimento"
-        elif "base_conhecimento_cti" in stem:
-            tipo = "base_conhecimento"
-        elif "manual_executivo" in stem:
-            tipo = "manual_executivo"
-        else:
-            tipo = "manual"
+        origem = _origem_relativa(path)
+        tipo = _tipo_documento(path)
+        visibilidade = sorted(visibility_for_source(origem))
         for chunk in splitter.split_text(texto):
-            docs.append(Document(page_content=chunk, metadata={"source": origem, "tipo": tipo}))
+            docs.append(
+                Document(
+                    page_content=chunk,
+                    metadata={
+                        "source": origem,
+                        "tipo": tipo,
+                        "visibility": visibilidade,
+                        "user_roles": visibilidade,
+                    },
+                )
+            )
     return docs
 
 
@@ -114,8 +153,9 @@ def status_documentos() -> dict[str, object]:
     arquivos = iter_arquivos_doc()
     return {
         "count": len(arquivos),
-        "sources": [str(path.relative_to(ROOT.parent)) if ROOT.parent in path.parents else path.name for path in arquivos],
-        "directories": [str(DOCS_DIR), str(REPO_DOCS_DIR)],
+        "sources": [_origem_relativa(path) for path in arquivos],
+        "directories": [str(DOCS_DIR)],
+        "globs": list(GLOBS_RAG),
         "suffixes": sorted(TEXT_SUFFIXES | PDF_SUFFIXES),
     }
 
@@ -129,7 +169,7 @@ def docs_glossario() -> list[Document]:
     return [
         Document(
             page_content="\n".join(linhas),
-            metadata={"source": "glossary.py", "tipo": "glossario"},
+            metadata={"source": "glossary.py", "tipo": "glossario", "visibility": ["ceo", "cfo"], "user_roles": ["ceo", "cfo"]},
         )
     ]
 
@@ -157,7 +197,12 @@ def docs_cenarios(ranking: pd.DataFrame) -> list[Document]:
         "Fórmulas: NCG = ACO − PCO; Saldo de Tesouraria = Disponível − Empréstimos CP; "
         "Ciclo Financeiro = PMR + PME − PMP; Liquidez corrente = Ativo circulante / Passivo circulante."
     )
-    docs.append(Document(page_content=resumo, metadata={"source": "indicadores/resumo", "tipo": "resumo"}))
+    docs.append(
+        Document(
+            page_content=resumo,
+            metadata={"source": "indicadores/resumo", "tipo": "resumo", "visibility": ["ceo", "cfo"], "user_roles": ["ceo", "cfo"]},
+        )
+    )
 
     if "selo" in ranking.columns:
         for selo, bloco in ranking.groupby("selo"):
@@ -176,7 +221,7 @@ def docs_cenarios(ranking: pd.DataFrame) -> list[Document]:
             docs.append(
                 Document(
                     page_content=texto,
-                    metadata={"source": f"indicadores/selo/{selo}", "tipo": "selo"},
+                    metadata={"source": f"indicadores/selo/{selo}", "tipo": "selo", "visibility": ["ceo", "cfo"], "user_roles": ["ceo", "cfo"]},
                 )
             )
 
@@ -194,5 +239,10 @@ def docs_cenarios(ranking: pd.DataFrame) -> list[Document]:
             f"caixa Ano 12 {rs(float(row['caixa_ano12'])) if pd.notna(row.get('caixa_ano12')) else '—'}; "
             f"resultado médio {rs(float(row['resultado'])) if pd.notna(row.get('resultado')) else '—'}."
         )
-        docs.append(Document(page_content=texto, metadata={"source": f"cenario/{cena}", "tipo": "cenario"}))
+        docs.append(
+            Document(
+                page_content=texto,
+                metadata={"source": f"cenario/{cena}", "tipo": "cenario", "visibility": ["ceo", "cfo"], "user_roles": ["ceo", "cfo"]},
+            )
+        )
     return docs

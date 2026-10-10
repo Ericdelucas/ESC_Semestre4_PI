@@ -6,6 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from src.config import COR_OK, COR_VERMELHO
+from src.config.i18n import t
 from src.models.formatting import cena_rotulo
 
 from .common import _safe_div
@@ -17,15 +18,15 @@ def _selecionar_cenarios(cenas: list[str], persona: str) -> list[tuple[str, str]
     opcoes_c = [None, *cenas]
     default_c = 3 if len(cenas) > 2 else 0
     with col_a:
-        cena_a = st.selectbox("Cenário A (Base):", options=cenas, index=0, format_func=cena_rotulo, key=f"cmp_abc_a_{persona}")
+        cena_a = st.selectbox(t("cmp.scene.a"), options=cenas, index=0, format_func=cena_rotulo, key=f"cmp_abc_a_{persona}")
     with col_b:
-        cena_b = st.selectbox("Cenário B (Comparativo 1):", options=cenas, index=default_b, format_func=cena_rotulo, key=f"cmp_abc_b_{persona}")
+        cena_b = st.selectbox(t("cmp.scene.b"), options=cenas, index=default_b, format_func=cena_rotulo, key=f"cmp_abc_b_{persona}")
     with col_c:
         cena_c = st.selectbox(
-            "Cenário C (Comparativo 2 / Opcional):",
+            t("cmp.scene.c"),
             options=opcoes_c,
             index=default_c,
-            format_func=lambda cena: "Nenhum" if cena is None else cena_rotulo(cena),
+            format_func=lambda cena: t("cmp.none") if cena is None else cena_rotulo(cena),
             key=f"cmp_abc_c_{persona}",
         )
     selecionados = [("A", cena_a), ("B", cena_b)]

@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from io import BytesIO, StringIO
-from pathlib import Path
+import traceback
+from io import BytesIO
 
 import pandas as pd
 import streamlit as st
 
-from src.models.loaders import normalizar_conta, otimizar_base_cti, parse_valor_br
+from src.config.i18n import get_lang, t
+from src.models.formatting.tables import render_table
+from src.models.loaders import REQUIRED_LONG_COLUMNS, importar_planilha, normalizar_upload, otimizar_base_cti
 
 DF_OVERRIDE_KEY = "cti_df_override"
 DATASETS_KEY = "cti_datasets"
@@ -18,23 +20,6 @@ UPLOAD_COUNTER_KEY = "cti_upload_counter"
 ORIGINAL_DATASET_KEY = "cti_original_dataset"
 DEFAULT_MODIFIED_KEY = "cti_default_dataset_modified"
 DEFAULT_DATASET_NAME = "Base Padrão (Original)"
-REQUIRED_LONG_COLUMNS = {"ANO", "CENA", "CONTA", "VALOR", "ano_num"}
-SCENARIO_ALIASES = {
-    "cenario": "CENA",
-    "cenário": "CENA",
-    "scenario": "CENA",
-    "cena": "CENA",
-}
-COLUMN_ALIASES = {
-    "ano": "ANO",
-    "ano_num": "ano_num",
-    "conta": "CONTA",
-    "indicador": "CONTA",
-    "métrica": "CONTA",
-    "metrica": "CONTA",
-    "valor": "VALOR",
-    **SCENARIO_ALIASES,
-}
 
 
 def has_custom_data() -> bool:
@@ -45,90 +30,97 @@ def has_custom_data() -> bool:
     )
 
 
-def _clean_col_name(col: object) -> str:
-    return str(col).strip()
+def normalizar_novos_dados(df: pd.DataFrame, *, nome_arquivo: str = "editor_manual") -> tuple[pd.DataFrame, list[str]]:
+    return normalizar_upload(df, nome_arquivo=nome_arquivo)
 
 
-def _rename_aliases(df: pd.DataFrame) -> pd.DataFrame:
-    rename: dict[str, str] = {}
-    for col in df.columns:
-        clean = _clean_col_name(col)
-        canonical = COLUMN_ALIASES.get(clean.lower(), clean)
-        rename[col] = canonical
-    return df.rename(columns=rename)
-
-
-def _to_number(series: pd.Series) -> pd.Series:
-    if pd.api.types.is_numeric_dtype(series):
-        return pd.to_numeric(series, errors="coerce")
-    return parse_valor_br(series)
-
-
-def _read_upload(uploaded_file) -> pd.DataFrame:
-    suffix = Path(uploaded_file.name).suffix.lower()
-    payload = uploaded_file.getvalue()
-    if suffix == ".xlsx":
-        return pd.read_excel(BytesIO(payload))
-    texto = payload.decode("utf-8-sig", errors="ignore")
-    try:
-        dados = pd.read_csv(StringIO(texto), sep=None, engine="python")
-        known = {str(col).strip().lower() for col in dados.columns} & set(COLUMN_ALIASES)
-        if known:
-            return dados
-        return pd.read_csv(StringIO(texto), header=None, names=["ANO", "CENA", "CONTA", "VALOR"])
-    except Exception:
-        return pd.read_csv(StringIO(texto), header=None, names=["ANO", "CENA", "CONTA", "VALOR"])
-
-
-def _long_from_wide(df: pd.DataFrame) -> pd.DataFrame:
-    id_cols = [col for col in ["ANO", "ano_num", "CENA"] if col in df.columns]
-    metric_cols = [col for col in df.columns if col not in {*id_cols, "CONTA", "VALOR"}]
-    if not {"CENA", "ano_num"}.issubset(df.columns) or not metric_cols:
-        return pd.DataFrame(columns=list(REQUIRED_LONG_COLUMNS))
-    base = df.copy()
-    if "ANO" not in base.columns:
-        base["ANO"] = "Ano " + pd.to_numeric(base["ano_num"], errors="coerce").fillna(0).astype(int).astype(str)
-    return base.melt(
-        id_vars=["ANO", "ano_num", "CENA"],
-        value_vars=metric_cols,
-        var_name="CONTA",
-        value_name="VALOR",
+def _exemplo_largo() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "ID_Cenario": ["Cen_00001", "Cen_00001", "Cen_00002"],
+            "Nome_Cenario": ["Base", "Base", "Estresse"],
+            "Ano": [1, 2, 1],
+            "Receita Bruta (R$)": [1_000_000, 1_100_000, 800_000],
+            "EBITDA": [250_000, 270_000, 120_000],
+            "Custos": [400_000, 420_000, 380_000],
+        }
     )
 
 
-def normalizar_novos_dados(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
-    erros: list[str] = []
-    if df.empty:
-        return pd.DataFrame(columns=list(REQUIRED_LONG_COLUMNS)), ["A tabela enviada esta vazia."]
+def _exemplo_longo() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "ANO": ["Ano 1", "Ano 1", "Ano 2"],
+            "CENA": ["Cen_00001", "Cen_00001", "Cen_00001"],
+            "CONTA": ["DRE - Receita", "DRE - EBITDA", "DRE - Receita"],
+            "VALOR": [1_000_000, 250_000, 1_100_000],
+        }
+    )
 
-    dados = _rename_aliases(df).copy()
-    if not {"CENA", "CONTA", "VALOR"}.issubset(dados.columns):
-        dados = _long_from_wide(dados)
 
-    missing = {"CENA", "CONTA", "VALOR"} - set(dados.columns)
-    if missing:
-        erros.append("Colunas obrigatorias ausentes: " + ", ".join(sorted(missing)))
-        return pd.DataFrame(columns=list(REQUIRED_LONG_COLUMNS)), erros
+def _bytes_template_xlsx() -> bytes:
+    buffer = BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        _exemplo_largo().to_excel(writer, index=False, sheet_name="formato_largo")
+        _exemplo_longo().to_excel(writer, index=False, sheet_name="formato_longo")
+    return buffer.getvalue()
 
-    if "ano_num" not in dados.columns:
-        if "ANO" in dados.columns:
-            dados["ano_num"] = dados["ANO"].astype(str).str.extract(r"(\d+)", expand=False)
-        else:
-            erros.append("Coluna obrigatoria ausente: ano_num ou ANO.")
-            return pd.DataFrame(columns=list(REQUIRED_LONG_COLUMNS)), erros
 
-    dados["ano_num"] = pd.to_numeric(dados["ano_num"], errors="coerce").astype("Int64")
-    if "ANO" not in dados.columns:
-        dados["ANO"] = "Ano " + dados["ano_num"].fillna(0).astype(int).astype(str)
+def _bytes_template_csv() -> bytes:
+    return _exemplo_largo().to_csv(index=False).encode("utf-8-sig")
 
-    dados = dados.dropna(subset=["ano_num"]).copy()
-    dados["CENA"] = dados["CENA"].astype(str).str.strip()
-    dados["CONTA"] = normalizar_conta(dados["CONTA"])
-    dados["VALOR"] = _to_number(dados["VALOR"]).fillna(0)
-    dados = dados.loc[(dados["CENA"] != "") & (dados["CONTA"] != "")]
-    if dados.empty:
-        erros.append("Nenhuma linha valida foi encontrada apos a normalizacao.")
-    return dados[["ANO", "CENA", "CONTA", "VALOR", "ano_num"]].reset_index(drop=True), erros
+
+def _erro_amigavel(erro: object, *, nome_arquivo: str = "") -> str:
+    texto = str(erro or "").strip()
+    baixo = texto.lower()
+    if "traceback" in baixo:
+        texto = texto.split("Traceback", 1)[0].strip()
+    if "cena" in baixo and ("nao encontrada" in baixo or "não encontrada" in baixo or "ausente" in baixo or "obrigator" in baixo):
+        return t("data.err.missing_cena")
+    if "coluna obrigatoria" in baixo or "coluna obrigatória" in baixo or "required column" in baixo:
+        return texto or t("data.err.generic")
+    if "unique requires" in baixo:
+        return t("data.err.generic")
+    if isinstance(erro, KeyError):
+        coluna = str(erro).strip("'\"")
+        if coluna in {"None", "nan", "", "CENA"}:
+            return t("data.err.missing_cena")
+        return t("data.err.missing_col", col=coluna)
+    if not texto:
+        return t("data.err.generic")
+    if nome_arquivo and nome_arquivo not in texto:
+        return f"{texto} ({nome_arquivo})"
+    return texto
+
+
+def _mostrar_erros(erros: list[str]) -> None:
+    for erro in erros:
+        st.error(_erro_amigavel(erro))
+
+
+def _render_guia_formato() -> None:
+    st.info(f"**{t('data.guide.title')}**\n\n{t('data.guide.body')}")
+    with st.expander(t("data.example.expander"), expanded=False):
+        st.caption(t("data.example.wide"))
+        render_table(_exemplo_largo())
+        st.caption(t("data.example.long"))
+        render_table(_exemplo_longo())
+        st.download_button(
+            t("data.template.xlsx"),
+            data=_bytes_template_xlsx(),
+            file_name="template_exemplo.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="download_template_xlsx",
+            use_container_width=True,
+        )
+        st.download_button(
+            t("data.template.csv"),
+            data=_bytes_template_csv(),
+            file_name="template_exemplo.csv",
+            mime="text/csv",
+            key="download_template_csv",
+            use_container_width=True,
+        )
 
 
 def _manual_template() -> pd.DataFrame:
@@ -186,8 +178,8 @@ def render_data_input(current_df: pd.DataFrame) -> pd.DataFrame:
     """Renderiza insercao de dados na sidebar e retorna o DataFrame ativo."""
     _init_datasets(current_df)
 
-    with st.sidebar.expander("Inserção de Dados", expanded=False):
-        st.subheader("Gerenciador de Bases de Dados")
+    with st.sidebar.expander(t("data.expander"), expanded=False):
+        st.subheader(t("data.manager"))
 
         dataset_names = list(st.session_state[DATASETS_KEY].keys())
         pending_name = st.session_state.pop(PENDING_ACTIVE_DATASET_KEY, None)
@@ -203,32 +195,39 @@ def render_data_input(current_df: pd.DataFrame) -> pd.DataFrame:
             st.session_state["active_dataset_selector"] = active_name
 
         selected_name = st.selectbox(
-            "Selecione a Base Ativa",
+            t("data.active_select"),
             options=dataset_names,
             index=dataset_names.index(st.session_state["active_dataset_selector"]),
+            format_func=lambda name: t("data.default_name") if name == DEFAULT_DATASET_NAME else name,
             key="active_dataset_selector",
         )
         st.session_state[ACTIVE_DATASET_KEY] = selected_name
         active_df = st.session_state[DATASETS_KEY][selected_name]
         _sync_legacy_override(selected_name, active_df)
 
-        st.caption(f"Base ativa: {len(active_df):,} linhas.")
+        st.caption(t("data.active_caption", n=f"{len(active_df):,}"))
+        with st.expander(t("data.preview"), expanded=False):
+            preview = active_df.head(40).copy()
+            render_table(preview)
         st.markdown("---")
-        st.caption("Carregue CSV/XLSX ou edite linhas manualmente no formato da base.")
-        uploaded = st.file_uploader("Arquivo de novos dados", type=["csv", "xlsx"], key="new_data_upload")
+        st.caption(t("data.help"))
+        _render_guia_formato()
+        uploaded = st.file_uploader(t("data.upload"), type=["csv", "xlsx"], key="new_data_upload")
         default_name = _default_upload_name(uploaded)
         custom_name = st.text_input(
-            "Nome da nova base",
+            t("data.new_name"),
             value="",
             placeholder=default_name,
             key="new_dataset_name",
-            help="Usado ao salvar como nova base.",
+            help=t("data.new_name_help"),
         )
+        mode_new = t("data.mode.new")
+        mode_concat = t("data.mode.concat")
         mode = st.radio(
-            "Modo de aplicação",
-            ["Salvar como Nova Base", "Concatenar à Base Selecionada"],
+            t("data.mode"),
+            [mode_new, mode_concat],
             horizontal=False,
-            key="new_data_mode",
+            key=f"new_data_mode_{get_lang()}",
         )
 
         manual = st.data_editor(
@@ -236,60 +235,72 @@ def render_data_input(current_df: pd.DataFrame) -> pd.DataFrame:
             num_rows="dynamic",
             width="stretch",
             key="manual_data_editor",
+            column_config={
+                "ANO": st.column_config.TextColumn("ANO"),
+                "ano_num": st.column_config.NumberColumn("ano_num", format="%d", min_value=1, step=1),
+                "CENA": st.column_config.TextColumn("CENA"),
+                "CONTA": st.column_config.TextColumn("CONTA"),
+                "VALOR": st.column_config.NumberColumn("VALOR", format="R$ %.2f", step=0.01),
+            },
         )
+        st.session_state["manual_data_rows"] = pd.DataFrame(manual)
 
-        if st.button("Aplicar/Salvar Novos Dados", type="primary", key="apply_new_data"):
-            frames: list[pd.DataFrame] = []
-            erros: list[str] = []
-            if uploaded is not None:
-                try:
-                    raw_upload = _read_upload(uploaded)
-                    upload_df, upload_errors = normalizar_novos_dados(raw_upload)
-                    frames.append(upload_df)
-                    erros.extend(upload_errors)
-                except Exception as exc:
-                    erros.append(f"Falha ao ler arquivo: {exc}")
+        if st.button(t("data.apply"), type="primary", key="apply_new_data"):
+            try:
+                frames: list[pd.DataFrame] = []
+                erros: list[str] = []
+                if uploaded is not None:
+                    upload_df, upload_errors = importar_planilha(uploaded.name, uploaded.getvalue())
+                    if not upload_df.empty:
+                        frames.append(upload_df)
+                    erros.extend(_erro_amigavel(item, nome_arquivo=uploaded.name) for item in upload_errors)
 
-            manual_df, manual_errors = normalizar_novos_dados(pd.DataFrame(manual))
-            if not manual_df.empty:
-                frames.append(manual_df)
-            elif uploaded is None:
-                erros.extend(manual_errors)
+                manual_df, manual_errors = normalizar_novos_dados(pd.DataFrame(manual), nome_arquivo="editor_manual")
+                if not manual_df.empty:
+                    frames.append(manual_df)
+                elif uploaded is None:
+                    erros.extend(manual_errors)
 
-            novos = pd.concat(frames, ignore_index=True, copy=False) if frames else pd.DataFrame(columns=current_df.columns)
-            if not novos.empty:
-                novos["VALOR"] = pd.to_numeric(novos["VALOR"], errors="coerce").fillna(0)
-                novos = otimizar_base_cti(novos)
-            if erros and novos.empty:
-                st.error(" ".join(erros))
-            else:
-                if mode == "Salvar como Nova Base":
-                    dataset_name = _unique_dataset_name(custom_name or default_name)
-                    st.session_state[DATASETS_KEY][dataset_name] = novos
-                    st.session_state[ACTIVE_DATASET_KEY] = dataset_name
-                    st.session_state[PENDING_ACTIVE_DATASET_KEY] = dataset_name
-                    st.session_state[UPLOAD_COUNTER_KEY] = int(st.session_state.get(UPLOAD_COUNTER_KEY, 0)) + 1
-                    st.success(f"{len(novos):,} linhas salvas em '{dataset_name}'.")
+                novos = pd.concat(frames, ignore_index=True, copy=False) if frames else pd.DataFrame(columns=list(REQUIRED_LONG_COLUMNS))
+                if not novos.empty:
+                    novos["VALOR"] = pd.to_numeric(novos["VALOR"], errors="coerce").fillna(0)
+                    novos = otimizar_base_cti(novos)
+                if novos.empty:
+                    _mostrar_erros(erros or [t("data.err.generic")])
                 else:
-                    updated_df = pd.concat([active_df, novos], ignore_index=True, copy=False)
-                    updated_df["VALOR"] = pd.to_numeric(updated_df["VALOR"], errors="coerce").fillna(0)
-                    updated_df = otimizar_base_cti(updated_df)
-                    st.session_state[DATASETS_KEY][selected_name] = updated_df
-                    st.session_state[ACTIVE_DATASET_KEY] = selected_name
-                    st.session_state[PENDING_ACTIVE_DATASET_KEY] = selected_name
-                    if selected_name == DEFAULT_DATASET_NAME:
-                        st.session_state[DEFAULT_MODIFIED_KEY] = True
-                    st.success(f"{len(novos):,} linhas concatenadas em '{selected_name}'.")
-                st.rerun()
+                    for aviso in erros:
+                        st.warning(aviso)
+                    if mode == mode_new:
+                        dataset_name = _unique_dataset_name(custom_name or default_name)
+                        st.session_state[DATASETS_KEY][dataset_name] = novos
+                        st.session_state[ACTIVE_DATASET_KEY] = dataset_name
+                        st.session_state[PENDING_ACTIVE_DATASET_KEY] = dataset_name
+                        st.session_state[UPLOAD_COUNTER_KEY] = int(st.session_state.get(UPLOAD_COUNTER_KEY, 0)) + 1
+                        st.success(t("data.saved", n=f"{len(novos):,}", name=dataset_name))
+                    else:
+                        updated_df = pd.concat([active_df, novos], ignore_index=True, copy=False)
+                        updated_df["VALOR"] = pd.to_numeric(updated_df["VALOR"], errors="coerce").fillna(0)
+                        updated_df = otimizar_base_cti(updated_df)
+                        st.session_state[DATASETS_KEY][selected_name] = updated_df
+                        st.session_state[ACTIVE_DATASET_KEY] = selected_name
+                        st.session_state[PENDING_ACTIVE_DATASET_KEY] = selected_name
+                        if selected_name == DEFAULT_DATASET_NAME:
+                            st.session_state[DEFAULT_MODIFIED_KEY] = True
+                        st.success(t("data.concatenated", n=f"{len(novos):,}", name=selected_name))
+                    st.rerun()
+            except Exception as exc:  # noqa: BLE001
+                print(f"[CTI upload] Falha no aplicar dados: {type(exc).__name__}: {exc}", flush=True)
+                traceback.print_exc()
+                st.error(_erro_amigavel(exc, nome_arquivo=getattr(uploaded, "name", "")))
 
-        if st.button("Restaurar Dados Originais", key="restore_original_data"):
+        if st.button(t("data.restore"), key="restore_original_data"):
             original_df = st.session_state.get(ORIGINAL_DATASET_KEY, current_df)
             st.session_state[DATASETS_KEY][DEFAULT_DATASET_NAME] = original_df
             st.session_state[ACTIVE_DATASET_KEY] = DEFAULT_DATASET_NAME
             st.session_state[PENDING_ACTIVE_DATASET_KEY] = DEFAULT_DATASET_NAME
             st.session_state[DEFAULT_MODIFIED_KEY] = False
             st.session_state.pop(DF_OVERRIDE_KEY, None)
-            st.success("Base original restaurada.")
+            st.success(t("data.restored"))
             st.rerun()
 
         removable = [name for name in st.session_state[DATASETS_KEY] if name != DEFAULT_DATASET_NAME]
@@ -297,14 +308,14 @@ def render_data_input(current_df: pd.DataFrame) -> pd.DataFrame:
             st.markdown("---")
             if st.session_state.get("delete_dataset_name") not in removable:
                 st.session_state["delete_dataset_name"] = removable[0]
-            delete_name = st.selectbox("Excluir base adicionada", options=removable, key="delete_dataset_name")
-            if st.button("Excluir Base Selecionada", key="delete_dataset"):
+            delete_name = st.selectbox(t("data.delete"), options=removable, key="delete_dataset_name")
+            if st.button(t("data.delete_btn"), key="delete_dataset"):
                 st.session_state[DATASETS_KEY].pop(delete_name, None)
                 if st.session_state.get(ACTIVE_DATASET_KEY) == delete_name:
                     st.session_state[ACTIVE_DATASET_KEY] = DEFAULT_DATASET_NAME
                     st.session_state[PENDING_ACTIVE_DATASET_KEY] = DEFAULT_DATASET_NAME
                     st.session_state.pop(DF_OVERRIDE_KEY, None)
-                st.success(f"Base '{delete_name}' excluida.")
+                st.success(t("data.deleted_ok", name=delete_name))
                 st.rerun()
 
     return active_df

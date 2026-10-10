@@ -5,6 +5,7 @@ from __future__ import annotations
 import pandas as pd
 
 from src.config.glossary import help_text
+from src.config.i18n import t
 from src.models.formatting import fmt_dias, fmt_rs
 
 from .ceo import _kpis_ceo
@@ -37,19 +38,19 @@ def kpis_por_persona(
         liq = _zero_se_na(k["liquidez"]) if "liquidez" in k.index else 0.0
         ciclo = _zero_se_na(k["Ciclo_Financeiro"]) if "Ciclo_Financeiro" in k.index else 0.0
         return [
-            ("Necessidade de Capital de Giro (NCG)", fmt_rs(ncg), help_text("ncg")),
+            (t("kpi.cfo.ncg"), fmt_rs(ncg), help_text("ncg")),
             (
-                "Saldo de Tesouraria",
+                t("kpi.cfo.treasury"),
                 fmt_rs(tesouraria),
                 help_text("treasury"),
             ),
             (
-                "Ciclo Financeiro",
+                t("kpi.cfo.cycle"),
                 fmt_dias(ciclo),
                 help_text("cycle"),
             ),
             (
-                "Liquidez Corrente (LC)",
+                t("kpi.cfo.lc"),
                 f"{liq:.2f}x",
                 help_text("liquidity"),
             ),

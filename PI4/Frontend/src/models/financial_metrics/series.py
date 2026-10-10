@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import pandas as pd
 
+from src.models.formatting.scenarios import is_all_scenarios
+
 from .catalog import FINANCIAL_METRICS_DICT
 from .utils import _normalizar_aliases, _to_number
 
@@ -38,15 +40,16 @@ def contas_necessarias() -> list[str]:
 
 def metric_timeseries(df: pd.DataFrame, cena: str, metric_name: str) -> pd.DataFrame:
     metric = FINANCIAL_METRICS_DICT[metric_name]
-    base = df.loc[(df["CENA"] == cena) & (df["CONTA"].isin(contas_necessarias())), ["ano_num", "CONTA", "VALOR"]].copy()
+    contas = df["CONTA"].isin(contas_necessarias())
+    base = df.loc[contas, ["ano_num", "CONTA", "VALOR"]].copy() if is_all_scenarios(cena) else df.loc[(df["CENA"] == cena) & contas, ["ano_num", "CONTA", "VALOR"]].copy()
     if base.empty:
         return pd.DataFrame(columns=["ano_num", "Valor"])
     base["ano_num"] = pd.to_numeric(base["ano_num"], errors="coerce")
     base["VALOR"] = _to_number(base["VALOR"])
+    agrupado = base.groupby(["ano_num", "CONTA"], as_index=False)["VALOR"]
+    agregado = agrupado.mean() if is_all_scenarios(cena) else agrupado.sum()
     wide = (
-        base.groupby(["ano_num", "CONTA"], as_index=False)["VALOR"]
-        .sum()
-        .pivot(index="ano_num", columns="CONTA", values="VALOR")
+        agregado.pivot(index="ano_num", columns="CONTA", values="VALOR")
         .reset_index()
         .sort_values("ano_num")
     )

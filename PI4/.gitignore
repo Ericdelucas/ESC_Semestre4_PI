@@ -4,3 +4,4 @@ __pycache__/
 cache/
 .env
 .streamlit/secrets.toml
+Backend/cache/.session_secret

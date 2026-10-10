@@ -27,13 +27,13 @@ def _grafico_prazos(foco: pd.DataFrame, cena_sel: str, ano_sel: str | int) -> No
     plot_df = plot_df.rename(columns=rename)
     y_cols = [rename[c] for c in raw_cols]
     selected_cols = st.multiselect(
-        "Exibir no gráfico:",
+        t("ui.select_lines"),
         options=y_cols,
         default=y_cols,
         key="prazos_linhas_trajetoria",
     )
     if not selected_cols:
-        st.info("Selecione ao menos uma métrica de prazo para exibir o gráfico.")
+        st.info(t("ui.select_one_metric"))
         return
     fig = px.line(
         plot_df,

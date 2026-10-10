@@ -41,7 +41,7 @@ A chave sai do [Google AI Studio](https://aistudio.google.com/apikey).
 py -m uvicorn Backend.main:app --host 127.0.0.1 --port 8000
 ```
 
-Confirme em [http://localhost:8000/api/health](http://localhost:8000/api/health). A resposta esperada é `{"status":"ok"}`. Deixe esse terminal aberto.
+Confirme em [http://localhost:8000/](http://localhost:8000/) ou [http://localhost:8000/api/v1/health](http://localhost:8000/api/v1/health). A resposta esperada é `{"status":"online","message":"API CTI Backend Ativa"}`. Deixe esse terminal aberto.
 
 ### 5. Subir o dashboard (terminal 2)
 
@@ -62,7 +62,7 @@ O Streamlit mostra o endereço, em geral [http://localhost:8501](http://localhos
 
 O chat é o botão do robô no canto inferior direito. Ele envia as perguntas para `http://localhost:8000/api/chat`. A primeira pergunta demora mais, porque o índice dos cenários é montado nesse momento.
 
-PDFs e Markdown extras para o assistente ficam em `Backend/documentos/`.
+PDFs e Markdown extras para o assistente ficam em `Backend/documentos/` (incluindo subpastas). O índice RAG varre `**/*.md` e `**/*.pdf`.
 
 ## Estrutura
 

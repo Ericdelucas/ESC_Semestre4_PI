@@ -16,8 +16,8 @@ from src.controllers.kpis.constants import (
     CONTA_TRIBUTOS,
 )
 from src.controllers.kpis.helpers import _safe_div, _valor_conta_raw
-from src.config.i18n import get_lang
-from src.models.formatting import cena_rotulo, fmt_pct, fmt_rs
+from src.config.i18n import get_lang, t
+from src.models.formatting import cena_rotulo, fmt_pct, fmt_rs, is_all_scenarios
 from src.models.rag_engine import RagEngine, build_focus_context, resolve_api_key
 from src.models.rag_engine.formatters import dias, pct, rs
 
@@ -29,7 +29,7 @@ def _fingerprint(ranking: pd.DataFrame) -> str:
     return f"{n}:{media:.4f}"
 
 
-@st.cache_resource(show_spinner="Indexando cenários e manuais da CTI…")
+@st.cache_resource(show_spinner=t("ai.indexing"))
 def _carregar_engine(_ranking: pd.DataFrame, fingerprint: str) -> RagEngine:
     _ = fingerprint
     return RagEngine.from_ranking(_ranking)
@@ -90,28 +90,30 @@ def _safe_mean(frame: pd.DataFrame, column: str) -> float:
 def _conta_total(df: pd.DataFrame, conta: str, cena_sel: str, ano_sel: str | int) -> float:
     if df.empty or not {"CENA", "CONTA", "VALOR"}.issubset(df.columns):
         return float("nan")
-    base = df.loc[(df["CENA"] == cena_sel) & (df["CONTA"] == conta)].copy()
+    base = df.loc[df["CONTA"] == conta].copy()
+    if not is_all_scenarios(cena_sel):
+        base = base.loc[base["CENA"] == cena_sel]
     if ano_sel != "Todos" and "ano_num" in base.columns:
         base = base.loc[pd.to_numeric(base["ano_num"], errors="coerce") == int(ano_sel)]
-    return float(pd.to_numeric(base["VALOR"], errors="coerce").sum()) if not base.empty else float("nan")
+    if base.empty:
+        return float("nan")
+    serie = pd.to_numeric(base["VALOR"], errors="coerce")
+    return float(serie.mean() if is_all_scenarios(cena_sel) else serie.sum())
 
 
 def _peca_resumo(df: pd.DataFrame, prefixo: str, cena_sel: str, ano_sel: str | int, limite: int = 8) -> str:
     if df.empty or not {"CENA", "CONTA", "VALOR"}.issubset(df.columns):
         return "- Sem linhas disponiveis."
-    base = df.loc[
-        (df["CENA"] == cena_sel)
-        & df["CONTA"].astype(str).str.startswith(prefixo, na=False)
-    ].copy()
+    base = df.loc[df["CONTA"].astype(str).str.startswith(prefixo, na=False)].copy()
+    if not is_all_scenarios(cena_sel):
+        base = base.loc[base["CENA"] == cena_sel]
     if ano_sel != "Todos" and "ano_num" in base.columns:
         base = base.loc[pd.to_numeric(base["ano_num"], errors="coerce") == int(ano_sel)]
     if base.empty:
         return "- Sem linhas para o recorte atual."
-    resumo = (
-        base.assign(VALOR=pd.to_numeric(base["VALOR"], errors="coerce").fillna(0))
-        .groupby("CONTA", as_index=False)["VALOR"]
-        .sum()
-    )
+    base = base.assign(VALOR=pd.to_numeric(base["VALOR"], errors="coerce").fillna(0))
+    agrupado = base.groupby("CONTA", as_index=False)["VALOR"]
+    resumo = agrupado.mean() if is_all_scenarios(cena_sel) else agrupado.sum()
     resumo["abs_valor"] = resumo["VALOR"].abs()
     resumo = resumo.sort_values("abs_valor", ascending=False).head(limite)
     return "\n".join(f"- {row.CONTA}: {rs(float(row.VALOR))}" for row in resumo.itertuples(index=False))
@@ -235,63 +237,122 @@ def contexto_dataset_ativo(
     ano_sel: str | int,
     persona: str = "cfo",
     k: pd.Series | None = None,
+    user_role: str | None = None,
 ) -> str:
     """Resume a base ativa para o motor analitico nativo do Dashboard CTI."""
+    from src.models.rag_engine.rbac import normalize_role
+
+    papel = normalize_role(user_role or persona)
     nome_base = st.session_state.get("cti_active_dataset_name", "Base Padrão (Original)")
     anos = sorted(pd.to_numeric(df.get("ano_num", pd.Series(dtype=float)), errors="coerce").dropna().astype(int).unique())
     cenas = sorted(df["CENA"].dropna().astype(str).unique()) if "CENA" in df.columns else []
-    foco = ind.loc[ind["CENA"] == cena_sel].copy() if "CENA" in ind.columns else pd.DataFrame()
+    if "CENA" not in ind.columns:
+        foco = pd.DataFrame()
+    elif is_all_scenarios(cena_sel):
+        foco = ind.copy()
+    else:
+        foco = ind.loc[ind["CENA"] == cena_sel].copy()
     if ano_sel != "Todos" and not foco.empty:
         foco = foco.loc[pd.to_numeric(foco["ano_num"], errors="coerce") == int(ano_sel)]
-    rank_foco = ranking.loc[ranking["CENA"] == cena_sel].iloc[0] if "CENA" in ranking.columns and (ranking["CENA"] == cena_sel).any() else pd.Series(dtype=object)
+    if is_all_scenarios(cena_sel) or "CENA" not in ranking.columns or ranking.empty:
+        rank_foco = ranking.mean(numeric_only=True) if isinstance(ranking, pd.DataFrame) and not ranking.empty else pd.Series(dtype=object)
+    else:
+        match = ranking.loc[ranking["CENA"] == cena_sel]
+        rank_foco = match.iloc[0] if not match.empty else pd.Series(dtype=object)
 
     linhas = [
         "Motor analitico nativo do Dashboard CTI - responda estritamente com estes dados locais recalculados da base ativa.",
         f"Base ativa: {nome_base}. Linhas: {len(df):,}. Cenarios: {len(cenas):,}. Anos: {anos[0] if anos else 'n/d'} a {anos[-1] if anos else 'n/d'}.",
         f"Recorte atual da tela: cenario {cena_rotulo(cena_sel)} ({cena_sel}); ano selecionado: {ano_sel}.",
         f"Persona/visao ativa do painel: {persona}.",
+        f"Perfil autenticado (RBAC): {papel}.",
         "Ao diagnosticar metricas, cite diretamente os valores abaixo quando estiverem disponiveis.",
         "",
         _contexto_cartoes_visuais(persona, k if isinstance(k, pd.Series) else pd.Series(dtype=float), ranking, df, cena_sel, ano_sel),
-        "",
-        _contexto_acionistas(df, cena_sel, ano_sel),
-        "",
-        _contexto_concedente(df, cena_sel, ano_sel),
-        "",
-        _contexto_dre(df, cena_sel, ano_sel),
-        "",
-        "Capital de giro, liquidez e risco do recorte:",
-        f"- NCG media: {rs(_safe_mean(foco, 'NCG'))}",
-        f"- Saldo de Tesouraria medio: {rs(_safe_mean(foco, 'Saldo_Tesouraria'))}",
-        f"- Ciclo Financeiro medio: {dias(_safe_mean(foco, 'Ciclo_Financeiro'))}",
-        f"- Liquidez corrente media: {_safe_mean(foco, 'liquidez'):.2f}x",
-        f"- Risco medio Passivo/Ativo: {pct(_safe_mean(foco, 'risco'))}",
-        f"- Selo do cenario: {rank_foco.get('selo', 'n/d')}",
-        f"- Caixa no ano de encerramento: {rs(float(rank_foco.get('caixa_ano12', float('nan')))) if len(rank_foco) else 'n/d'}",
-        "",
-        "DFC e caixa:",
-        f"- Geracao de Caixa media: {rs(_safe_mean(foco, 'geracao_caixa'))}",
-        f"- Investimentos medios: {rs(_safe_mean(foco, 'investimentos'))}",
-        f"- Saldo final medio: {rs(_conta_total(df, 'FLU - Saldo Final', cena_sel, ano_sel))}",
-        "Principais contas DFC no recorte:",
-        _peca_resumo(df, "FLU -", cena_sel, ano_sel),
-        "",
-        "Principais contas BP no recorte:",
-        _peca_resumo(df, "BAL -", cena_sel, ano_sel),
-        "",
-        "Principais contas DRE no recorte:",
-        _peca_resumo(df, "DRE -", cena_sel, ano_sel),
-        "",
-        "Formulas de negocio CTI:",
-        "- NCG = ACO - PCO.",
-        "- Saldo de Tesouraria = Disponivel - Emprestimos CP.",
-        "- Ciclo Financeiro = PMR + PME - PMP.",
-        "- PMR = Contas a Receber / Receita x 365; PME = Estoques / abs(Custos) x 365; PMP = Fornecedores / abs(Custos) x 365.",
-        "- Margem EBITDA = EBITDA / Receita Liquida.",
-        "- ROIC = NOPAT / Capital Investido; no painel, aparece em Acionistas > Retorno & ROIC.",
-        "- EVA = NOPAT - (Capital Investido x WACC).",
-        "- CAPEX = Capital Expenditure / investimentos em bens de capital; no painel, usa FLU - Investimentos e aparece em Poder Concedente > Plano de CAPEX.",
-        "- Break-Even = Custos Fixos / Margem de Contribuicao.",
-        "- Margem de Seguranca = (Receita Liquida - Break-Even) / Receita Liquida.",
     ]
+    if papel in {"ceo", "cfo", "acionistas"}:
+        linhas.extend(["", _contexto_acionistas(df, cena_sel, ano_sel)])
+    if papel in {"ceo", "cfo", "concedente"}:
+        linhas.extend(["", _contexto_concedente(df, cena_sel, ano_sel)])
+    if papel in {"ceo", "cfo"}:
+        linhas.extend(
+            [
+                "",
+                _contexto_dre(df, cena_sel, ano_sel),
+                "",
+                "Capital de giro, liquidez e risco do recorte:",
+                f"- NCG media: {rs(_safe_mean(foco, 'NCG'))}",
+                f"- Saldo de Tesouraria medio: {rs(_safe_mean(foco, 'Saldo_Tesouraria'))}",
+                f"- Ciclo Financeiro medio: {dias(_safe_mean(foco, 'Ciclo_Financeiro'))}",
+                f"- Liquidez corrente media: {_safe_mean(foco, 'liquidez'):.2f}x",
+                f"- Risco medio Passivo/Ativo: {pct(_safe_mean(foco, 'risco'))}",
+            ]
+        )
+    else:
+        linhas.extend(
+            [
+                "",
+                "Leitura regulatória/solvência do recorte:",
+                f"- Liquidez corrente media: {_safe_mean(foco, 'liquidez'):.2f}x",
+                f"- Investimentos medios: {rs(_safe_mean(foco, 'investimentos'))}",
+            ]
+        )
+    linhas.extend(
+        [
+            f"- Selo do cenario: {rank_foco.get('selo', 'n/d')}",
+            f"- Caixa no ano de encerramento: {rs(float(rank_foco.get('caixa_ano12', float('nan')))) if len(rank_foco) else 'n/d'}",
+        ]
+    )
+    if papel in {"ceo", "cfo"}:
+        linhas.extend(
+            [
+                "",
+                "DFC e caixa:",
+                f"- Geracao de Caixa media: {rs(_safe_mean(foco, 'geracao_caixa'))}",
+                f"- Investimentos medios: {rs(_safe_mean(foco, 'investimentos'))}",
+                f"- Saldo final medio: {rs(_conta_total(df, 'FLU - Saldo Final', cena_sel, ano_sel))}",
+                "Principais contas DFC no recorte:",
+                _peca_resumo(df, "FLU -", cena_sel, ano_sel),
+                "",
+                "Principais contas BP no recorte:",
+                _peca_resumo(df, "BAL -", cena_sel, ano_sel),
+                "",
+                "Principais contas DRE no recorte:",
+                _peca_resumo(df, "DRE -", cena_sel, ano_sel),
+                "",
+                "Formulas de negocio CTI:",
+                "- NCG = ACO - PCO.",
+                "- Saldo de Tesouraria = Disponivel - Emprestimos CP.",
+                "- Ciclo Financeiro = PMR + PME - PMP.",
+                "- Margem EBITDA = EBITDA / Receita Liquida.",
+                "- ROIC = NOPAT / Capital Investido.",
+                "- EVA = NOPAT - (Capital Investido x WACC).",
+                "- CAPEX = FLU - Investimentos.",
+                "- Break-Even = Custos Fixos / Margem de Contribuicao.",
+            ]
+        )
+    elif papel == "concedente":
+        linhas.extend(
+            [
+                "",
+                "Contas regulatórias do recorte:",
+                _peca_resumo(df, "FLU - Investimentos", cena_sel, ano_sel),
+                _peca_resumo(df, "BAL -", cena_sel, ano_sel),
+                "",
+                "Formulas permitidas:",
+                "- CAPEX = FLU - Investimentos.",
+                "- Liquidez Geral = Ativo total / (Passivo circulante + exigível LP).",
+                "- BAR = base líquida de ativos reversíveis da concessão.",
+            ]
+        )
+    elif papel == "acionistas":
+        linhas.extend(
+            [
+                "",
+                "Formulas permitidas:",
+                "- ROIC = NOPAT / Capital Investido.",
+                "- EVA = NOPAT - (Capital Investido x WACC).",
+                "- DY = Dividendos / Capital Investido.",
+            ]
+        )
     return "\n".join(linhas)

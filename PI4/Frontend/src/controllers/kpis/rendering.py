@@ -42,17 +42,22 @@ div[data-testid="stMetric"] {
   overflow-wrap: anywhere !important;
 }
 div[data-testid="stMetric"] label,
+div[data-testid="stMetricLabel"],
+div[data-testid="stMetricLabel"] *,
 div[data-testid="stMetricValue"],
 div[data-testid="stMetricDelta"],
 div[data-testid="stMetricDelta"] * {
   white-space: normal !important;
   overflow-wrap: anywhere !important;
+  word-break: normal !important;
   text-overflow: clip !important;
   overflow: visible !important;
+  max-width: 100% !important;
 }
 div[data-testid="stMetric"] [data-testid="stMarkdownContainer"] {
   white-space: normal !important;
   overflow-wrap: anywhere !important;
+  overflow: visible !important;
 }
 @media (max-width: 900px) {
   div[data-testid="stHorizontalBlock"] {

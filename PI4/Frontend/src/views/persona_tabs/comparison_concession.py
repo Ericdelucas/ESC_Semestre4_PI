@@ -7,6 +7,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from src.config import COR_VERMELHO
+from src.config.i18n import t
 from src.models.formatting import cena_rotulo, fmt_rs
 
 from .common import _balanco_fluxo, _conta, _dre
@@ -59,22 +60,22 @@ def _render_cmp_concedente(df: pd.DataFrame, cenarios: list[tuple[str, str]], an
 
     c1, c2, c3 = st.columns(3)
     with c1:
-        _metric_base("CAPEX Acumulado Executado", metricas["A"]["capex"], [(r, metricas[r]["capex"]) for r in comp], fmt_rs)
+        _metric_base(t("cmp.conc.capex"), metricas["A"]["capex"], [(r, metricas[r]["capex"]) for r in comp], fmt_rs)
     with c2:
-        _metric_base("Liquidez Geral Média", metricas["A"]["lg"], [(r, metricas[r]["lg"]) for r in comp], _fmt_x)
+        _metric_base(t("cmp.conc.lg_avg"), metricas["A"]["lg"], [(r, metricas[r]["lg"]) for r in comp], _fmt_x)
     with c3:
-        _metric_base("Base Final de Ativos Reversíveis", metricas["A"]["base_final"], [(r, metricas[r]["base_final"]) for r in comp], fmt_rs)
+        _metric_base(t("cmp.conc.base"), metricas["A"]["base_final"], [(r, metricas[r]["base_final"]) for r in comp], fmt_rs)
 
     fig = go.Figure()
     for rotulo, cena in cenarios:
         estilo = SERIES_STYLES[rotulo]
         base = dados[rotulo]
-        fig.add_scatter(x=base["ano_num"], y=base["Liquidez Geral"], mode="lines+markers", name=f"Série {rotulo} · {cena_rotulo(cena)}", line={"color": estilo["color"], "dash": estilo["dash"]})
-    fig.add_hline(y=1.0, line_dash="dash", line_color=COR_VERMELHO, annotation_text="Mínimo contratual 1,0x")
-    fig.update_layout(title="Liquidez Geral: base vs estresse", xaxis_title="Ano", yaxis_title="Liquidez Geral (x)", hovermode="x unified")
+        fig.add_scatter(x=base["ano_num"], y=base["Liquidez Geral"], mode="lines+markers", name=t("cmp.conc.series", rotulo=rotulo, cena=cena_rotulo(cena)), line={"color": estilo["color"], "dash": estilo["dash"]})
+    fig.add_hline(y=1.0, line_dash="dash", line_color=COR_VERMELHO, annotation_text=t("cmp.conc.hline"))
+    fig.update_layout(title=t("cmp.conc.liq_title"), xaxis_title=t("chart.year"), yaxis_title=t("cmp.conc.lg_axis"), hovermode="x unified")
     st.plotly_chart(fig, width="stretch", theme="streamlit")
-    abaixo_limite = [f"Série {rotulo} ({_fmt_x(metricas[rotulo]['lg_ref'])})" for rotulo, _ in cenarios if pd.notna(metricas[rotulo]["lg_ref"]) and metricas[rotulo]["lg_ref"] < 1.0]
+    abaixo_limite = [t("cmp.series", rotulo=f"{rotulo} ({_fmt_x(metricas[rotulo]['lg_ref'])})") for rotulo, _ in cenarios if pd.notna(metricas[rotulo]["lg_ref"]) and metricas[rotulo]["lg_ref"] < 1.0]
     if abaixo_limite:
-        st.error("Risco de Descumprimento Contratual / Caducidade: " + ", ".join(abaixo_limite))
+        st.error(t("cmp.conc.breach", itens=", ".join(abaixo_limite)))
     else:
-        st.success("Concessão em Conformidade Financeira (Liquidez ≥ 1,0x)")
+        st.success(t("cmp.conc.ok"))

@@ -14,7 +14,7 @@ from src.config import COR_ANCORA, CORES_SELO, SELOS_NEGOCIO
 from src.config.glossary import help_text
 from src.config.i18n import get_lang, t, translate_selo
 from src.models.analytics import cenas_por_percentil
-from src.models.formatting import cena_rotulo, cena_sort_key, fmt_dias, fmt_pct, fmt_rs, melhor_entre
+from src.models.formatting import cena_rotulo, cena_sort_key, fmt_dias, fmt_pct, fmt_rs, melhor_entre, render_table
 
 
 def _scatter(
@@ -177,6 +177,6 @@ def render(
                     }
                 )
             st.caption(t("map.comp_cap", a=sel_a, b=sel_b))
-            st.dataframe(pd.DataFrame(linhas), width="stretch", hide_index=True)
+            render_table(pd.DataFrame(linhas))
         except Exception as exc:  # noqa: BLE001
             st.error(str(exc))

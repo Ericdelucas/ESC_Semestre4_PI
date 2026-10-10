@@ -5,7 +5,8 @@ from .base import fmt_number_pt as _fmt_number_pt
 from .base import is_na as _is_na
 from .comparisons import cenas_padrao_comparacao, melhor_entre
 from .numbers import fmt_dias, fmt_pct, fmt_rs
-from .scenarios import _RE_CEN, cena_id, cena_rotulo, cena_sort_key
+from .scenarios import _RE_CEN, cena_id, cena_rotulo, cena_sort_key, is_all_scenarios
+from .tables import render_markdown_with_tables, render_table
 from .texts import texto_ciclo, texto_ncg, texto_tesouraria
 
 __all__ = [
@@ -17,10 +18,13 @@ __all__ = [
     "cena_id",
     "cena_rotulo",
     "cena_sort_key",
+    "is_all_scenarios",
     "fmt_dias",
     "fmt_pct",
     "fmt_rs",
     "melhor_entre",
+    "render_markdown_with_tables",
+    "render_table",
     "texto_ciclo",
     "texto_ncg",
     "texto_tesouraria",
