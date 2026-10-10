@@ -27,19 +27,20 @@ def figura_histograma_ano(
         nbins=40,
         histnorm="probability",
         color_discrete_sequence=[COR_SUAVE],
-        title=titulo or f"Distribuição de {rotulo} no Ano {ano} ({len(serie):,} cenários)",
-        labels={coluna: rotulo, "probability": "Probabilidade"},
+        title=titulo or t("faixa.dist_title", metric=rotulo) + f" · {t('filter.year_n', n=ano)} ({len(serie):,})",
+        labels={coluna: rotulo, "probability": t("chart.prob")},
     )
-    fig.update_layout(yaxis_title="Probabilidade (fração dos cenários)", bargap=0.05)
+    fig.update_layout(yaxis_title=t("chart.prob_frac"), bargap=0.05)
     if serie.empty:
         return fig
+    median_lbl, mean_lbl, worst_lbl, best_lbl = t("chart.median"), t("chart.mean"), t("chart.worst"), t("chart.best")
     marcas = [
-        (float(serie.median()), COR, "Mediana"),
-        (float(serie.mean()), COR, "Média"),
-        (float(serie.min()), COR_ALERTA, "Pior caso"),
-        (float(serie.max()), COR_OK, "Melhor caso"),
+        (float(serie.median()), COR, median_lbl),
+        (float(serie.mean()), COR, mean_lbl),
+        (float(serie.min()), COR_ALERTA, worst_lbl),
+        (float(serie.max()), COR_OK, best_lbl),
     ]
-    dash = {"Mediana": "solid", "Média": "dot", "Pior caso": "dash", "Melhor caso": "dash"}
+    dash = {median_lbl: "solid", mean_lbl: "dot", worst_lbl: "dash", best_lbl: "dash"}
     for valor, cor, nome in marcas:
         fig.add_vline(
             x=valor,
@@ -63,14 +64,14 @@ def figura_histograma_caixa_final(serie_cx: pd.Series, ano_enc: int, n_cenarios:
                 y=counts / counts.sum() if counts.sum() else counts,
                 marker_color=cores_barras,
                 width=(edges[1] - edges[0]) * 0.92 if len(edges) > 1 else None,
-                hovertemplate="Caixa ≈ %{x}<br>Prob. ≈ %{y:.2%}<extra></extra>",
-                name="Distribuição",
+                hovertemplate=t("chart.cash_hover"),
+                name=t("chart.dist"),
             )
         ]
     )
-    fig.add_vline(x=0, line_dash="dash", line_color=COR_VERMELHO, annotation_text="Zero")
+    fig.add_vline(x=0, line_dash="dash", line_color=COR_VERMELHO, annotation_text=t("cmp.cfo.zero"))
     if not serie_cx.dropna().empty:
-        fig.add_vline(x=float(serie_cx.median()), line_color=COR, annotation_text="Mediana")
+        fig.add_vline(x=float(serie_cx.median()), line_color=COR, annotation_text=t("chart.median"))
     fig.update_layout(
         title=t("dist.hist_title", ano=ano_enc, n=f"{n_cenarios:,}"),
         xaxis_title=t("dist.box_y"),

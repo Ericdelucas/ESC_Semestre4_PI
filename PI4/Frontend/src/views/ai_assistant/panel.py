@@ -5,14 +5,12 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from src.config.i18n import get_lang
+from src.config.i18n import get_lang, t
+from src.controllers.auth import can_access_persona, current_role
 from src.controllers.bootstrap import AppContext
+from src.controllers.modals import close_chat, is_chat_open, open_chat
 from src.controllers.resilience import resilient_view
-
-_BOAS_VINDAS = (
-    "Assistente de Análise CTI pronto. Como posso ajudar com os indicadores de EBITDA, "
-    "NCG, Liquidez ou navegação pelo dashboard?"
-)
+from src.models.formatting.tables import render_markdown_with_tables
 CHAT_NAV_CARDS_KEY = "cti_chat_nav_cards"
 NAV_TARGETS = {
     "acionistas_retorno": {
@@ -49,7 +47,7 @@ NAV_TARGETS = {
         "label": "Ativos Reversíveis",
         "persona": "concedente",
         "description": "Visão de Poder Concedente com base líquida de ativos reversíveis.",
-        "terms": ("ativos reversiveis", "ativos reversíveis", "base de ativos", "patrimonio", "patrimônio"),
+        "terms": ("ativos reversiveis", "ativos reversíveis", "base de ativos", "patrimonio", "patrimônio", "outorga", "imobilizado", "intangivel", "intangível"),
     },
     "ceo_geral": {
         "label": "Visão Geral & DRE",
@@ -91,7 +89,22 @@ NAV_TARGETS = {
         "label": "Como Ler",
         "persona": "cfo",
         "description": "Aba de orientação com fórmulas, leitura dos indicadores e apoio para auditoria da base.",
-        "terms": ("auditoria", "formula", "fórmula", "formulas", "fórmulas", "como ler", "regras de negocio", "regras de negócio"),
+        "terms": (
+            "auditoria",
+            "formula",
+            "fórmula",
+            "formulas",
+            "fórmulas",
+            "como ler",
+            "regras de negocio",
+            "regras de negócio",
+            "bal -",
+            "dre -",
+            "flu -",
+            "plano de contas",
+            "conta contabil",
+            "conta contábil",
+        ),
     },
 }
 
@@ -99,18 +112,23 @@ NAV_TARGETS = {
 def _inicializar_historico() -> None:
     if "messages" in st.session_state and isinstance(st.session_state.messages, list):
         st.session_state.messages = _sanitize_messages(st.session_state.messages)
+        if (
+            len(st.session_state.messages) == 1
+            and st.session_state.messages[0].get("role") == "assistant"
+        ):
+            st.session_state.messages[0]["content"] = t("ai.welcome")
         st.session_state.setdefault(CHAT_NAV_CARDS_KEY, {})
         return
     legado = st.session_state.get("chat_history", st.session_state.get("ai_chat_history"))
     st.session_state.messages = _sanitize_messages(legado) if isinstance(legado, list) and legado else [
-        {"role": "assistant", "content": _BOAS_VINDAS}
+        {"role": "assistant", "content": t("ai.welcome")}
     ]
     st.session_state.setdefault(CHAT_NAV_CARDS_KEY, {})
     _sync_historico_legado()
 
 
 def _resetar_historico() -> None:
-    st.session_state.messages = [{"role": "assistant", "content": _BOAS_VINDAS}]
+    st.session_state.messages = [{"role": "assistant", "content": t("ai.welcome")}]
     st.session_state[CHAT_NAV_CARDS_KEY] = {}
     _sync_historico_legado()
 
@@ -139,7 +157,7 @@ def _render_mensagens() -> None:
         if papel not in {"user", "assistant"}:
             papel = "assistant"
         with st.chat_message(papel):
-            st.markdown(msg.get("content", ""))
+            render_markdown_with_tables(str(msg.get("content", "")))
             nav_card = st.session_state.get(CHAT_NAV_CARDS_KEY, {}).get(str(idx))
             if isinstance(nav_card, dict) and not nav_card.get("dismissed"):
                 render_navigation_card(nav_card, idx)
@@ -148,12 +166,12 @@ def _render_mensagens() -> None:
 def _render_chat_input_panel() -> str:
     with st.form("cti_chat_input_form", clear_on_submit=True, border=False):
         prompt = st.text_input(
-            "Mensagem",
-            placeholder="Pergunte algo sobre o projeto ou peça para ir a uma aba...",
+            t("ai.message"),
+            placeholder=t("ai.placeholder"),
             label_visibility="collapsed",
             key="cti_chat_text_input",
         )
-        enviar = st.form_submit_button("Enviar", type="primary", width="stretch")
+        enviar = st.form_submit_button(t("ai.send"), type="primary", width="stretch")
     return str(prompt or "").strip() if enviar else ""
 
 
@@ -177,11 +195,6 @@ def detectar_intencao_navegacao(user_prompt: str, *, exigir_gatilho: bool = True
         "aba",
         "secao",
         "seção",
-        "o que e",
-        "o que é",
-        "explique",
-        "analise",
-        "analisar",
     )
     if exigir_gatilho and not any(_normalizar_texto(gatilho) in texto for gatilho in gatilhos):
         return None
@@ -189,30 +202,35 @@ def detectar_intencao_navegacao(user_prompt: str, *, exigir_gatilho: bool = True
         if any(_normalizar_texto(term) in texto for term in cfg["terms"]):
             return {
                 "nav_key": nav_key,
-                "target_tab_name": cfg["label"],
+                "target_tab_name": t(f"nav.{nav_key}"),
                 "persona": cfg["persona"],
-                "description": cfg["description"],
+                "description": t(f"ai.navdesc.{nav_key}"),
             }
     return None
 
 
 def render_navigation_card(nav_card: dict[str, str], message_idx: int) -> None:
     target_tab_name = nav_card["target_tab_name"]
-    st.info(f"Atalho para visualização: {nav_card['description']}")
+    st.info(t("ai.nav_shortcut", desc=nav_card["description"]))
     col1, col2 = st.columns([1, 1])
+    destino_persona = str(nav_card.get("persona") or "")
 
     with col1:
-        if st.button(f"🔗 Abrir {target_tab_name}", key=f"nav_open_{message_idx}_{nav_card['nav_key']}"):
-            st.session_state["pending_nav_key"] = nav_card["nav_key"]
-            st.session_state["pending_persona_id"] = nav_card.get("persona")
-            st.session_state["active_tab"] = target_tab_name
+        if st.button(t("ai.open_tab", tab=target_tab_name), key=f"nav_open_{message_idx}_{nav_card['nav_key']}"):
+            if destino_persona and not can_access_persona(destino_persona):
+                st.toast(t("login.error"))
+            else:
+                st.session_state["pending_nav_key"] = nav_card["nav_key"]
+                st.session_state["pending_persona_id"] = destino_persona
+                st.session_state["active_tab"] = target_tab_name
+                close_chat()
             st.rerun()
 
     with col2:
-        if st.button("❌ Cancelar", key=f"nav_cancel_{message_idx}_{nav_card['nav_key']}"):
+        if st.button(t("ai.cancel_nav"), key=f"nav_cancel_{message_idx}_{nav_card['nav_key']}"):
             st.session_state[CHAT_NAV_CARDS_KEY][str(message_idx)]["dismissed"] = True
             _sync_historico_legado()
-            st.toast("Navegação cancelada.")
+            st.toast(t("ai.nav_cancelled"))
             st.rerun()
 
 
@@ -234,6 +252,7 @@ def gerar_resposta_ia(
     from .context import _carregar_engine, _chave_api, _contexto_foco, _fingerprint, contexto_dataset_ativo
 
     engine = _carregar_engine(ranking, _fingerprint(ranking))
+    papel = current_role() or persona
     contexto = "\n\n".join(
         [
             contexto_dataset_ativo(
@@ -244,6 +263,7 @@ def gerar_resposta_ia(
                 ano_sel=ano_sel,
                 persona=persona,
                 k=k,
+                user_role=papel,
             ),
             _contexto_foco(ranking, n_cenarios, p_ruina, cena_sel, k, ano_enc, ano_sel),
         ]
@@ -255,15 +275,16 @@ def gerar_resposta_ia(
         api_key=_chave_api(),
         extra_context=contexto,
         cena_sel=cena_sel,
+        user_role=papel,
     )
     _ = fontes
     return resposta
 
 
 def _render_configuracoes() -> None:
-    with st.expander("Configurações da API & Dados", expanded=False):
-        st.text_input("Chave API Gemini", type="password", key="gemini_api_key_input")
-        if st.button("Limpar Conversa"):
+    with st.expander(t("ai.settings"), expanded=False):
+        st.text_input(t("ai.api_key"), type="password", key="gemini_api_key_input", help=t("ai.api_key_help"))
+        if st.button(t("ai.clear")):
             _resetar_historico()
             st.rerun()
 
@@ -281,10 +302,7 @@ def _ind_or_ranking(ind: pd.DataFrame | None, ranking: pd.DataFrame) -> pd.DataF
 def _garantir_fechamento_conversacional(texto: str) -> str:
     if texto.strip().endswith("?"):
         return texto
-    return (
-        texto.rstrip()
-        + "\n\nGostaria que eu direcionasse você para uma aba relacionada ou quer analisar outro indicador?"
-    )
+    return texto.rstrip() + "\n\n" + t("ai.followup")
 
 
 _CHAT_PANEL_CSS = """
@@ -443,30 +461,21 @@ div[data-testid="stPopoverBody"], .floating-chat-container {
 """
 
 
-def _abrir_chat() -> None:
-    st.session_state.chat_open = True
-
-
-def _fechar_chat() -> None:
-    st.session_state.chat_open = False
-
-
 def render_floating_chat(ctx: AppContext) -> None:
     """Renderiza o assistente em um painel flutuante acionado por botao."""
-    st.session_state.setdefault("chat_open", False)
     st.markdown(_FLOATING_CHAT_CSS, unsafe_allow_html=True)
 
-    if not st.session_state.chat_open:
+    if not is_chat_open():
         with st.container(key="cti_chat_fab"):
-            st.button("🤖", key="cti_chat_open_btn", help="Abrir Assistente CTI", on_click=_abrir_chat)
+            st.button("🤖", key="cti_chat_open_btn", help=t("ai.toggle"), on_click=open_chat)
         return
 
     with st.container(key="cti_chat_panel", border=False):
         col_title, col_close = st.columns([0.82, 0.18], vertical_alignment="center")
         with col_title:
-            st.subheader("Assistente CTI")
+            st.subheader(t("ai.title"))
         with col_close:
-            st.button("×", key="cti_chat_close_btn", help="Fechar", on_click=_fechar_chat)
+            st.button("×", key="cti_chat_close_btn", help=t("ai.close"), on_click=close_chat)
         render_chat_panel(
             ctx.ranking,
             ctx.n_cenarios,
@@ -498,7 +507,7 @@ def render_chat_panel(
 ) -> None:
     st.markdown(_CHAT_PANEL_CSS, unsafe_allow_html=True)
     if show_title:
-        st.subheader("Assistente CTI")
+        st.subheader(t("ai.title"))
     _render_configuracoes()
     _inicializar_historico()
     with st.container(key="cti_chat_messages", border=False):
@@ -511,9 +520,19 @@ def render_chat_panel(
 
     st.session_state.messages.append({"role": "user", "content": user_prompt})
 
-    nav_card = detectar_intencao_navegacao(user_prompt, exigir_gatilho=False)
+    from src.models.rag_engine.rbac import deny_message, nav_target_allowed, question_is_blocked, sanitize_answer
+
+    papel = current_role() or persona
+    nav_card = nav_target_allowed(detectar_intencao_navegacao(user_prompt, exigir_gatilho=False), papel)
+    if question_is_blocked(user_prompt, papel):
+        response_text = deny_message(papel, get_lang())
+        assistant_message_idx = len(st.session_state.messages)
+        st.session_state.messages.append({"role": "assistant", "content": response_text})
+        _sync_historico_legado()
+        st.rerun()
+        return
     try:
-        with st.spinner("Consultando cenários, DRE, BP, DFC e manuais..."):
+        with st.spinner(t("ai.thinking_full")):
             response_text = gerar_resposta_ia(
                 user_prompt,
                 df_ativo=_df_or_empty(df_ativo),
@@ -528,14 +547,12 @@ def render_chat_panel(
                 persona=persona,
             )
     except Exception as exc:
-        response_text = f"Não consegui responder agora: {exc}"
-    if nav_card is None:
-        nav_card = detectar_intencao_navegacao(response_text, exigir_gatilho=False)
+        response_text = t("ai.error", exc=exc)
+    response_text = sanitize_answer(response_text, papel, get_lang())
+    if response_text.startswith("Acesso restrito") or response_text.startswith("Restricted access"):
+        nav_card = None
     if nav_card:
-        response_text = (
-            f"{response_text}\n\n"
-            f"Também encontrei uma seção relacionada: **{nav_card['target_tab_name']}**."
-        )
+        response_text = f"{response_text}\n\n{t('ai.related', tab=nav_card['target_tab_name'])}"
     response_text = _garantir_fechamento_conversacional(response_text)
 
     assistant_message_idx = len(st.session_state.messages)

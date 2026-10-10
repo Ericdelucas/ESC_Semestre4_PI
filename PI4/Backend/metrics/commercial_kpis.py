@@ -5,12 +5,14 @@ from __future__ import annotations
 import pandas as pd
 
 from .column_resolver import normalize_label, series_by_alias
-from .financial_kpis import build_break_even
+from .financial_kpis import build_break_even, is_all_scenarios
 
 
 def _scenario_rows(df: pd.DataFrame, cena: str) -> pd.DataFrame:
     if df.empty or "CENA" not in df.columns:
         return df.iloc[0:0]
+    if is_all_scenarios(cena):
+        return df.copy()
     return df.loc[df["CENA"].astype(str) == str(cena)].copy()
 
 

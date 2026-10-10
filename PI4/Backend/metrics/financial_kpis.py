@@ -6,12 +6,20 @@ import numpy as np
 import pandas as pd
 
 from Backend.data_loader import magnitude
-from Backend.metrics.column_resolver import normalize_label
+from Backend.metrics.column_resolver import normalize_label, resolve_account_name
 
 
 WACC = 0.10
 PAYOUT = 0.35
 ALIQUOTA_IR_FALLBACK = 0.34
+ALL_SCENARIO_VALUES = frozenset({"Todos", "__all__", "All", "all", "None", ""})
+
+
+def is_all_scenarios(cena: object) -> bool:
+    """True quando o recorte pede a consolidação de todos os cenários."""
+    if cena is None:
+        return True
+    return str(cena).strip() in ALL_SCENARIO_VALUES
 
 CONTAS_RECEBER = [
     "BAL - Contas a Receber - Clientes",
@@ -144,18 +152,54 @@ def classificar_cenarios(ranking: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def _esqueleto_indicadores(df: pd.DataFrame) -> pd.DataFrame:
+    """Garante eixos ANO/CENA mesmo quando nenhuma conta oficial foi reconhecida."""
+    colunas = [col for col in ("ANO", "ano_num", "CENA") if col in df.columns]
+    if "CENA" not in colunas:
+        return pd.DataFrame(columns=["ANO", "ano_num", "CENA"])
+    eixos = df[colunas].drop_duplicates().copy()
+    if "ANO" not in eixos.columns:
+        eixos["ANO"] = "Ano 1"
+    if "ano_num" not in eixos.columns:
+        eixos["ano_num"] = pd.to_numeric(eixos["ANO"].astype(str).str.extract(r"(\d+)", expand=False), errors="coerce").fillna(1)
+    return eixos.reset_index(drop=True)
+
+
 def montar_indicadores(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Calcula NCG, prazos, liquidez, risco e ranking de cenarios."""
     mapa = mapa_contas()
-    slim = df.loc[df["CONTA"].isin(set(mapa)), ["ANO", "ano_num", "CENA", "CONTA", "VALOR"]].copy()
-    slim["campo"] = slim["CONTA"].map(mapa)
-    wide = (
-        slim.groupby(["ANO", "ano_num", "CENA", "campo"], as_index=False, observed=True)["VALOR"]
-        .sum()
-        .pivot(index=["ANO", "ano_num", "CENA"], columns="campo", values="VALOR")
-        .reset_index()
-    )
+    if df is None or df.empty or "CENA" not in getattr(df, "columns", []):
+        vazio = pd.DataFrame(columns=["ANO", "ano_num", "CENA"])
+        ranking_vazio = pd.DataFrame(columns=["CENA", "selo", "caixa_ano12", "ano_encerramento"])
+        return compactar_indicadores(vazio), compactar_indicadores(ranking_vazio)
+
+    trabalho = df.copy()
+    if "CONTA" in trabalho.columns:
+        trabalho["CONTA"] = trabalho["CONTA"].map(lambda valor: resolve_account_name(valor, mapa.keys()))
+    else:
+        trabalho["CONTA"] = ""
+    if "VALOR" not in trabalho.columns:
+        trabalho["VALOR"] = 0
+    if "ANO" not in trabalho.columns:
+        trabalho["ANO"] = "Ano 1"
+    if "ano_num" not in trabalho.columns:
+        trabalho["ano_num"] = pd.to_numeric(trabalho["ANO"].astype(str).str.extract(r"(\d+)", expand=False), errors="coerce").fillna(1)
+
+    reconhecidas = trabalho["CONTA"].isin(set(mapa))
+    slim = trabalho.loc[reconhecidas, ["ANO", "ano_num", "CENA", "CONTA", "VALOR"]].copy()
+    if slim.empty:
+        wide = _esqueleto_indicadores(trabalho)
+    else:
+        slim["campo"] = slim["CONTA"].map(mapa)
+        wide = (
+            slim.groupby(["ANO", "ano_num", "CENA", "campo"], as_index=False, observed=True)["VALOR"]
+            .sum()
+            .pivot(index=["ANO", "ano_num", "CENA"], columns="campo", values="VALOR")
+            .reset_index()
+        )
     wide.columns.name = None
+    if "CENA" not in wide.columns:
+        wide = _esqueleto_indicadores(trabalho)
     metric_cols = [col for col in wide.columns if col not in {"ANO", "ano_num", "CENA"}]
     if metric_cols:
         wide[metric_cols] = wide[metric_cols].fillna(0)
@@ -208,7 +252,11 @@ def montar_indicadores(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
         .agg(caixa_ano12=("caixa_final_sinal", "mean"), disponivel_ano12=("caixa_mag", "mean"))
     )
     ranking = ranking.merge(encerramento, on="CENA", how="left")
-    ranking = classificar_cenarios(ranking)
+    if ranking.empty:
+        ranking["selo"] = pd.Series(dtype="object")
+        ranking["caixa_ano12"] = pd.Series(dtype="float64")
+    else:
+        ranking = classificar_cenarios(ranking)
     ranking["ano_encerramento"] = ano_max
     if "selo" in ranking.columns:
         ranking["selo"] = ranking["selo"].astype("category")
@@ -231,16 +279,18 @@ def calcular_kpis_recorte(foco: pd.DataFrame, foco_ano: pd.DataFrame) -> pd.Seri
 
 def _wide(df: pd.DataFrame, cena: str, contas: list[str]) -> pd.DataFrame:
     conta_keys = {normalize_label(conta): conta for conta in contas}
-    source = df.loc[df["CENA"] == cena, ["ano_num", "CONTA", "VALOR"]].copy()
+    cols = [c for c in ("ano_num", "CONTA", "VALOR") if c in df.columns]
+    source = df[cols].copy() if is_all_scenarios(cena) or "CENA" not in df.columns else df.loc[df["CENA"] == cena, cols].copy()
     source["CONTA"] = source["CONTA"].map(lambda value: conta_keys.get(normalize_label(value)))
     base = source.loc[source["CONTA"].notna()].copy()
     if base.empty:
         return pd.DataFrame(columns=["ano_num", *contas])
     base["ano_num"] = pd.to_numeric(base["ano_num"], errors="coerce")
     base["VALOR"] = pd.to_numeric(base["VALOR"], errors="coerce")
+    agregador = "mean" if is_all_scenarios(cena) else "sum"
     out = (
         base.groupby(["ano_num", "CONTA"], as_index=False)["VALOR"]
-        .sum()
+        .agg(agregador)
         .pivot(index="ano_num", columns="CONTA", values="VALOR")
         .reset_index()
         .sort_values("ano_num")

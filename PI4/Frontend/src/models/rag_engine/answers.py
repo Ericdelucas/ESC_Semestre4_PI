@@ -10,6 +10,7 @@ from google.genai import types
 from langchain_core.documents import Document
 
 from .config import GEMINI_MODELS, MARCA_FALA, SYSTEM_PROMPT_EN, SYSTEM_PROMPT_PT, TERMOS_FIN
+from .rbac import normalize_role, rbac_system_prompt
 
 
 def resolve_api_key(explicit: str | None = None) -> str | None:
@@ -59,9 +60,15 @@ def gerar_llm(
     lang: str,
     history: list[dict[str, str]],
     api_key: str,
+    user_role: str | None = None,
 ) -> str:
     client = genai.Client(api_key=api_key)
-    system = SYSTEM_PROMPT_EN if lang == "en" else SYSTEM_PROMPT_PT
+    papel = normalize_role(user_role)
+    if papel in {"concedente", "acionistas"}:
+        system = rbac_system_prompt(papel, lang)
+    else:
+        system = SYSTEM_PROMPT_EN if lang == "en" else SYSTEM_PROMPT_PT
+        system = rbac_system_prompt(papel, lang) + "\n\n" + system
     system += (
         "\n\nNative CTI Dashboard instruction: you are not an external persona. You are the "
         "native analytical engine of the CTI Financial Dashboard. Answer strictly from the "
@@ -92,7 +99,13 @@ def gerar_llm(
         "final navigation suggestion. Write conversationally and educationally. Avoid dumping "
         "raw bullet blocks unless the user explicitly asks for a list. Every visible answer "
         "must end with an engaging follow-up question offering to continue the analysis or "
-        "navigate to the relevant dashboard tab."
+        "navigate to the relevant dashboard tab. Never answer only with a short EBITDA/DRE "
+        "fragment or only with a navigation button or shortcut. If the user asks about any "
+        "BAL, DRE or FLU account — including BAL - Outorga da Concessao, BAL - Obrigacoes "
+        "com o Poder Concedente, DRE - EBITDA, FLU - Investimentos or any other ledger line "
+        "in the indexed dictionary — give the exact definition, the related BAL/DRE/FLU "
+        "accounts, the impact on the CTI concession model, and the dashboard location "
+        "(tab, chart, card, or raw-data audit). Do not say an in-model account is unknown."
     )
     if contexto.strip():
         system += (

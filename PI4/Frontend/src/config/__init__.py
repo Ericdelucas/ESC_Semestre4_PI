@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 _FRONTEND = Path(__file__).resolve().parents[2]
@@ -11,8 +12,8 @@ BACKEND = PI4 / "Backend"
 CSV_PATH = BACKEND / "Cti.csv"
 CACHE_DIR = BACKEND / "cache"
 DOCS_DIR = BACKEND / "documentos"
-REPO_DOCS_DIR = PI4.parent / "documentos"
 VENV_PY = ROOT / ".venv" / "bin" / "python"
+API_BASE_URL = os.environ.get("CTI_API_URL", "http://127.0.0.1:8000").rstrip("/")
 
 COR = "#1F4E45"
 COR_SUAVE = "#5B8A7A"

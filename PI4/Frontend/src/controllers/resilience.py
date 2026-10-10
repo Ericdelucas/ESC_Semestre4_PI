@@ -9,6 +9,8 @@ from typing import Any, TypeVar
 
 import streamlit as st
 
+from src.config.i18n import t
+
 T = TypeVar("T")
 
 
@@ -19,8 +21,8 @@ def safe_render(label: str, fn: Callable[..., T], *args: Any, **kwargs: Any) -> 
     except Exception as exc:  # noqa: BLE001 — isolamento deliberado por componente
         # Evita shortcodes :nome: do Markdown engolirem a mensagem
         detalhe = f"{type(exc).__name__}: {exc}".replace(":", "∶")
-        st.error(f"Erro ao renderizar **{label}** — {detalhe}")
-        with st.expander("Detalhe técnico (traceback)", expanded=True):
+        st.error(t("ui.render_error", label=label, detail=detalhe))
+        with st.expander(t("ui.tech_detail"), expanded=True):
             st.code(traceback.format_exc())
         return None
 

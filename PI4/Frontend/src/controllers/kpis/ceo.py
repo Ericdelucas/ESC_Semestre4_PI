@@ -7,6 +7,7 @@ import pandas as pd
 from Backend.metrics import summarize_ltv_cac
 from Backend.metrics.column_resolver import series_by_alias
 from Backend.metrics.financial_kpis import build_break_even
+from src.config.i18n import t
 from src.models.formatting import fmt_rs
 
 from .constants import CONTA_EBITDA, CONTA_RECEITA, KpiItem
@@ -28,7 +29,7 @@ def _mean_break_even(df: pd.DataFrame, cena: str, ano_sel: str | int) -> float:
 
 
 def _kpis_ceo(df: pd.DataFrame | None, cena: str | None, ano_sel: str | int) -> list[KpiItem]:
-    if df is None or cena is None:
+    if df is None:
         return []
 
     receita = _zero_se_na(_valor_conta_raw(df, cena, CONTA_RECEITA, ano_sel))
@@ -42,21 +43,21 @@ def _kpis_ceo(df: pd.DataFrame | None, cena: str | None, ano_sel: str | int) -> 
 
     return [
         (
-            "EBITDA Operacional",
+            t("kpi.ceo.ebitda"),
             fmt_rs(ebitda),
-            f"Margem: {margem_ebitda * 100:.1f}%",
+            t("kpi.ceo.ebitda_delta", pct=margem_ebitda * 100),
             None,
         ),
         (
-            "Ponto de Equilibrio (Break-Even)",
+            t("kpi.ceo.be"),
             fmt_rs(break_even),
-            "Faturamento minimo exigido para cobrir despesas fixas",
+            t("kpi.ceo.be_delta"),
             None,
         ),
         (
-            "Eficiencia Comercial (LTV / CAC)",
+            t("kpi.ceo.ltv"),
             f"{ltv_cac:.1f}x",
-            "Multiplicador de retorno por cliente atraido",
+            t("kpi.ceo.ltv_delta"),
             None,
         ),
     ]

@@ -8,7 +8,8 @@ import streamlit as st
 from src.config import COR_ANCORA
 from src.config.glossary import help_text
 from src.config.i18n import t
-from src.models.formatting import cena_rotulo
+from src.models.formatting import cena_rotulo, is_all_scenarios
+from src.models.formatting.tables import render_table
 
 
 def recorte_label(ano_sel: str | int) -> str:
@@ -39,7 +40,7 @@ def banner_auditoria_filtro(cena_sel: str, ano_sel: str | int) -> None:
 
 
 def expander_auditoria_base(df: pd.DataFrame, cena_sel: str, ano_sel: str | int) -> None:
-    bruto = df.loc[df["CENA"] == cena_sel]
+    bruto = df if is_all_scenarios(cena_sel) else df.loc[df["CENA"] == cena_sel]
     if ano_sel != "Todos":
         bruto = bruto.loc[bruto["ano_num"] == ano_sel]
     n = len(bruto)
@@ -56,7 +57,10 @@ def expander_auditoria_base(df: pd.DataFrame, cena_sel: str, ano_sel: str | int)
             st.warning(t("audit.empty"))
             return
         visao = bruto[["ANO", "CENA", "CONTA", "VALOR"]].copy()
-        st.dataframe(visao, width="stretch", hide_index=True)
+        if is_all_scenarios(cena_sel) and n > 300:
+            st.caption(t("audit.sample", n=300, total=f"{n:,}"))
+            visao = visao.head(300)
+        render_table(visao)
 
 
 def heading_with_help(title: str, gloss_key: str) -> None:
