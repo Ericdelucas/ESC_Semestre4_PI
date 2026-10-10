@@ -7,6 +7,14 @@ import re
 from src.config.i18n import t
 
 _RE_CEN = re.compile(r"(?:Cen[_ ]?|cenário\s*|scenario\s*)(\d+)", re.IGNORECASE)
+ALL_SCENARIO_VALUES = frozenset({"Todos", "__all__", "All", "all", "None", ""})
+
+
+def is_all_scenarios(cena: object) -> bool:
+    """True quando o filtro de cenário pede a consolidação de Monte Carlo."""
+    if cena is None:
+        return True
+    return str(cena).strip() in ALL_SCENARIO_VALUES
 
 
 def cena_id(cena: str) -> int | None:
@@ -23,6 +31,8 @@ def cena_id(cena: str) -> int | None:
 
 def cena_rotulo(cena: str) -> str:
     """Converte ``Total Cen_00001`` -> ``Cenario 00001`` / ``Scenario 00001``."""
+    if is_all_scenarios(cena):
+        return t("filter.all_scenarios")
     s = str(cena)
     m = _RE_CEN.search(s)
     prefix = t("scenario.prefix")

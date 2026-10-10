@@ -11,7 +11,9 @@ from plotly.subplots import make_subplots
 from Backend.metrics import calculate_ltv_cac, summarize_ltv_cac
 from Backend.metrics.column_resolver import series_by_alias
 from src.config import COR, COR_ALERTA, COR_OK, COR_SUAVE, COR_VERMELHO
+from src.config.i18n import t
 from src.models.formatting import fmt_rs
+from src.models.formatting.tables import render_table
 
 from .common import _break_even_df, _dre
 
@@ -21,7 +23,7 @@ def _s(dados: pd.DataFrame, *aliases: str) -> pd.Series:
 
 
 def _ano_axis(fig: go.Figure) -> None:
-    fig.update_xaxes(title_text="Ano", tickmode="linear", tick0=1, dtick=1)
+    fig.update_xaxes(title_text=t("chart.year"), tickmode="linear", tick0=1, dtick=1)
 
 
 def render_ceo_visao_geral(df: pd.DataFrame, cena: str, ano_sel: str | int) -> None:
@@ -29,7 +31,7 @@ def render_ceo_visao_geral(df: pd.DataFrame, cena: str, ano_sel: str | int) -> N
     _ = ano_sel
     dados = _dre(df, cena)
     if dados.empty:
-        st.info("Sem dados de DRE para este cenario.")
+        st.info(t("ceo.empty.dre"))
         return
 
     medias = dados.mean(numeric_only=True)
@@ -44,12 +46,21 @@ def render_ceo_visao_geral(df: pd.DataFrame, cena: str, ano_sel: str | int) -> N
     custos_delta = -abs(custos)
     opex_delta = -abs(opex)
     dep_delta = -abs(dep)
-    labels = ["Receita Liquida", "Custos", "OPEX", "EBITDA", "Depreciacao", "Resultado Financeiro", "IR/CS", "Lucro Liquido"]
+    labels = [
+        t("ceo.wf.revenue"),
+        t("ceo.wf.costs"),
+        t("ceo.wf.opex"),
+        t("ceo.wf.ebitda"),
+        t("ceo.wf.da"),
+        t("ceo.wf.fin"),
+        t("ceo.wf.tax"),
+        t("ceo.wf.net"),
+    ]
     values = [receita, custos_delta, opex_delta, float(_s(medias.to_frame().T, "EBITDA").iloc[0]), dep_delta, resultado_fin, ir_cs, lucro]
     text = [fmt_rs(v) if v else "" for v in values]
     waterfall = go.Figure(
         go.Waterfall(
-            name="DRE media",
+            name=t("ceo.chart.waterfall_name"),
             orientation="v",
             measure=["relative", "relative", "relative", "total", "relative", "relative", "relative", "total"],
             x=labels,
@@ -64,7 +75,7 @@ def render_ceo_visao_geral(df: pd.DataFrame, cena: str, ano_sel: str | int) -> N
         )
     )
     waterfall.update_layout(
-        title="Cascata media da DRE",
+        title=t("ceo.chart.waterfall"),
         yaxis_title="R$",
         uniformtext_minsize=10,
         uniformtext_mode="show",
@@ -74,12 +85,12 @@ def render_ceo_visao_geral(df: pd.DataFrame, cena: str, ano_sel: str | int) -> N
 
     evol = pd.DataFrame(
         {
-            "Ano": pd.to_numeric(dados["ano_num"], errors="coerce").astype(int),
-            "Receita Liquida": _s(dados, "Receita Líquida", "Receita Liquida"),
-            "EBITDA": _s(dados, "EBITDA"),
+            t("chart.year"): pd.to_numeric(dados["ano_num"], errors="coerce").astype(int),
+            t("ceo.wf.revenue"): _s(dados, "Receita Líquida", "Receita Liquida"),
+            t("ceo.wf.ebitda"): _s(dados, "EBITDA"),
         }
-    ).melt("Ano", var_name="Indicador", value_name="Valor")
-    fig = px.line(evol, x="Ano", y="Valor", color="Indicador", markers=True, title="Receita Liquida vs EBITDA")
+    ).melt(t("chart.year"), var_name="Indicador", value_name="Valor")
+    fig = px.line(evol, x=t("chart.year"), y="Valor", color="Indicador", markers=True, title=t("ceo.chart.rev_ebitda"))
     fig.update_layout(yaxis_title="R$", hovermode="x unified")
     _ano_axis(fig)
     st.plotly_chart(fig, width="stretch", theme="streamlit")
@@ -90,7 +101,7 @@ def render_ceo_dre_operacional(df: pd.DataFrame, cena: str, ano_sel: str | int) 
     _ = ano_sel
     dados = _dre(df, cena)
     if dados.empty:
-        st.info("Sem dados de DRE operacional para este cenario.")
+        st.info(t("ceo.empty.dre_op"))
         return
 
     receita = _s(dados, "Receita Líquida", "Receita Liquida").replace(0, pd.NA)
@@ -101,20 +112,20 @@ def render_ceo_dre_operacional(df: pd.DataFrame, cena: str, ano_sel: str | int) 
 
     comp = pd.DataFrame(
         {
-            "Ano": pd.to_numeric(dados["ano_num"], errors="coerce").astype(int),
-            "Custos": _s(dados, "Custos").abs() / receita,
-            "OPEX": _s(dados, "OPEX").abs() / receita,
-            "Depreciacao": _s(dados, "Depreciação", "Depreciacao").abs() / receita,
+            t("chart.year"): pd.to_numeric(dados["ano_num"], errors="coerce").astype(int),
+            t("ceo.comp.costs"): _s(dados, "Custos").abs() / receita,
+            t("ceo.comp.opex"): _s(dados, "OPEX").abs() / receita,
+            t("ceo.comp.da"): _s(dados, "Depreciação", "Depreciacao").abs() / receita,
         }
-    ).melt("Ano", var_name="Conta", value_name="% Receita Liquida")
-    comp = comp.dropna(subset=["% Receita Liquida"])
+    ).melt(t("chart.year"), var_name="Conta", value_name=t("ceo.comp.share"))
+    comp = comp.dropna(subset=[t("ceo.comp.share")])
     fig = px.bar(
         comp,
-        x="Ano",
-        y="% Receita Liquida",
+        x=t("chart.year"),
+        y=t("ceo.comp.share"),
         color="Conta",
-        title="Composicao operacional sobre Receita Liquida",
-        color_discrete_map={"Custos": COR_VERMELHO, "OPEX": COR_ALERTA, "Depreciacao": COR_SUAVE},
+        title=t("ceo.chart.composition"),
+        color_discrete_map={t("ceo.comp.costs"): COR_VERMELHO, t("ceo.comp.opex"): COR_ALERTA, t("ceo.comp.da"): COR_SUAVE},
     )
     fig.update_traces(opacity=0.9)
     fig.update_layout(barmode="stack", yaxis_tickformat=".0%")
@@ -123,20 +134,20 @@ def render_ceo_dre_operacional(df: pd.DataFrame, cena: str, ano_sel: str | int) 
 
     tabela = pd.DataFrame(
         {
-            "Ano": pd.to_numeric(dados["ano_num"], errors="coerce").astype(int),
-            "Receita Liquida": _s(dados, "Receita Líquida", "Receita Liquida"),
-            "Custos": _s(dados, "Custos"),
-            "OPEX": _s(dados, "OPEX"),
-            "EBITDA": _s(dados, "EBITDA"),
+            t("chart.year"): pd.to_numeric(dados["ano_num"], errors="coerce").astype(int),
+            t("ceo.wf.revenue"): _s(dados, "Receita Líquida", "Receita Liquida"),
+            t("ceo.wf.costs"): _s(dados, "Custos"),
+            t("ceo.wf.opex"): _s(dados, "OPEX"),
+            t("ceo.wf.ebitda"): _s(dados, "EBITDA"),
             "EBIT": _s(dados, "EBIT"),
-            "Lucro Liquido": _s(dados, "Lucro Líquido", "Lucro Liquido"),
-            "Margem Bruta (%)": dados["Margem Bruta (%)"],
-            "Margem EBITDA (%)": dados["Margem EBITDA (%)"],
-            "Margem EBIT (%)": dados["Margem EBIT (%)"],
-            "YoY OPEX (%)": dados["YoY OPEX (%)"],
+            t("ceo.wf.net"): _s(dados, "Lucro Líquido", "Lucro Liquido"),
+            t("ceo.tbl.gross"): dados["Margem Bruta (%)"],
+            t("ceo.tbl.mebitda"): dados["Margem EBITDA (%)"],
+            t("ceo.tbl.mebit"): dados["Margem EBIT (%)"],
+            t("ceo.tbl.yoy"): dados["YoY OPEX (%)"],
         }
     )
-    st.dataframe(tabela, width="stretch", hide_index=True)
+    render_table(tabela)
 
 
 def render_ceo_break_even(df: pd.DataFrame, cena: str, ano_sel: str | int) -> None:
@@ -144,7 +155,7 @@ def render_ceo_break_even(df: pd.DataFrame, cena: str, ano_sel: str | int) -> No
     _ = ano_sel
     dados = _break_even_df(df, cena)
     if dados.empty:
-        st.info("Sem dados suficientes para Break-Even.")
+        st.info(t("ceo.empty.be"))
         return
     be = float(_s(dados, "Break-Even").mean())
     margem = float(_s(dados, "Margem de Contribuição (%)", "Margem de Contribuicao (%)").mean())
@@ -155,30 +166,30 @@ def render_ceo_break_even(df: pd.DataFrame, cena: str, ano_sel: str | int) -> No
     custo_fixo = be * margem
     eixo = pd.Series([0.0, be, max(receita_media, be * 1.15)]).dropna().drop_duplicates().sort_values()
     chart = pd.DataFrame({"Receita": eixo})
-    chart["Receita Total"] = chart["Receita"]
-    chart["Custos Totais"] = custo_fixo + (chart["Receita"] * (1 - margem))
+    chart[t("ceo.line.revenue")] = chart["Receita"]
+    chart[t("ceo.line.costs")] = custo_fixo + (chart["Receita"] * (1 - margem))
     fig = px.line(
         chart.melt("Receita", var_name="Linha", value_name="Valor"),
         x="Receita",
         y="Valor",
         color="Linha",
         markers=True,
-        title="Ponto de equilibrio medio",
+        title=t("ceo.chart.be"),
     )
     fig.add_vline(x=be, line_dash="dash", line_color=COR_ALERTA, annotation_text=f"Break-Even {fmt_rs(be)}")
-    fig.update_layout(xaxis_title="Receita", yaxis_title="R$")
+    fig.update_layout(xaxis_title=t("ceo.axis.revenue"), yaxis_title="R$")
     st.plotly_chart(fig, width="stretch", theme="streamlit")
 
     fig_area = px.area(
         pd.DataFrame(
             {
-                "Ano": pd.to_numeric(dados["ano_num"], errors="coerce").astype(int),
-                "Margem de Seguranca (%)": _s(dados, "Margem de Segurança (%)", "Margem de Seguranca (%)"),
+                t("chart.year"): pd.to_numeric(dados["ano_num"], errors="coerce").astype(int),
+                t("ceo.tbl.safety"): _s(dados, "Margem de Segurança (%)", "Margem de Seguranca (%)"),
             }
         ),
-        x="Ano",
-        y="Margem de Seguranca (%)",
-        title="Margem de seguranca ao longo do horizonte",
+        x=t("chart.year"),
+        y=t("ceo.tbl.safety"),
+        title=t("ceo.chart.safety"),
     )
     fig_area.update_layout(yaxis_tickformat=".1%")
     _ano_axis(fig_area)
@@ -190,13 +201,13 @@ def render_ceo_ltv_cac(df: pd.DataFrame, cena: str, ano_sel: str | int) -> None:
     _ = ano_sel
     dados = calculate_ltv_cac(df, cena)
     if dados.empty:
-        st.info("Sem dados suficientes para LTV/CAC.")
+        st.info(t("ceo.empty.ltv"))
         return
     resumo = summarize_ltv_cac(df, cena, ano_sel)
     c1, c2, c3 = st.columns(3)
-    c1.metric("LTV medio", fmt_rs(resumo["ltv"]))
-    c2.metric("CAC medio", fmt_rs(resumo["cac"]))
-    c3.metric("Razao LTV/CAC", f"{resumo['ratio']:.1f}x")
+    c1.metric(t("ceo.metric.ltv"), fmt_rs(resumo["ltv"]))
+    c2.metric(t("ceo.metric.cac"), fmt_rs(resumo["cac"]))
+    c3.metric(t("ceo.metric.ratio"), f"{resumo['ratio']:.1f}x")
 
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     anos = pd.to_numeric(dados["ano_num"], errors="coerce").astype(int)
@@ -211,8 +222,8 @@ def render_ceo_ltv_cac(df: pd.DataFrame, cena: str, ano_sel: str | int) -> None:
         textposition="top center",
         secondary_y=True,
     )
-    fig.update_layout(title="LTV vs CAC por ano", hovermode="x unified", margin={"t": 70})
-    fig.update_xaxes(title_text="Ano", tickmode="linear", tick0=1, dtick=1)
+    fig.update_layout(title=t("ceo.chart.ltv_cac"), hovermode="x unified", margin={"t": 70})
+    fig.update_xaxes(title_text=t("chart.year"), tickmode="linear", tick0=1, dtick=1)
     fig.update_yaxes(title_text="LTV (R$)", secondary_y=False)
     fig.update_yaxes(title_text="CAC (R$)", secondary_y=True)
     st.plotly_chart(fig, width="stretch", theme="streamlit")

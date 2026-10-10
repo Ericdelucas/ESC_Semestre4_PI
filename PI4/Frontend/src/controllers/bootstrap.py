@@ -17,10 +17,12 @@ if str(PI4_ROOT) not in sys.path:
 from Backend.services import build_context_metrics, prepare_dashboard_data  # noqa: E402
 from src.config import CSV_PATH  # noqa: E402
 from src.config.i18n import t  # noqa: E402
+from src.controllers.modals import open_relatorio  # noqa: E402
 from src.controllers.headers import banner_auditoria_filtro  # noqa: E402
+from src.controllers.ops_menu import garantir_varredura_silenciosa, render_ops_menu  # noqa: E402
 from src.controllers.kpis import kpis_por_persona, render_kpi_row  # noqa: E402
 from src.controllers.resilience import safe_render  # noqa: E402
-from src.models.formatting import cena_rotulo, texto_ciclo, texto_ncg, texto_tesouraria  # noqa: E402
+from src.models.formatting import cena_rotulo, is_all_scenarios, texto_ciclo, texto_ncg, texto_tesouraria  # noqa: E402
 
 
 @dataclass
@@ -57,18 +59,15 @@ def carregar_pipeline(csv_path: str, mtime: float) -> tuple[pd.DataFrame, pd.Dat
 def carregar_estado() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame] | None:
     """Carrega o estado base do dashboard ou exibe erro amigavel."""
     if not CSV_PATH.exists():
-        st.error(f"Arquivo nao encontrado: {CSV_PATH}")
+        st.error(t("boot.missing_file", path=CSV_PATH))
         return None
     try:
         return carregar_pipeline(str(CSV_PATH), CSV_PATH.stat().st_mtime)
     except MemoryError:
-        st.error(
-            "A base excedeu a memoria disponivel durante a preparacao. "
-            "Tente reduzir o arquivo de entrada ou usar os caches parquet ja gerados."
-        )
+        st.error(t("boot.memory"))
         return None
     except Exception as exc:  # noqa: BLE001 - evita queda abrupta do processo no deploy
-        st.error(f"Nao foi possivel preparar a base de dados: {type(exc).__name__}: {exc}")
+        st.error(t("boot.prep_error", err=f"{type(exc).__name__}: {exc}"))
         return None
 
 
@@ -84,10 +83,12 @@ def montar_contexto(
     persona: str,
 ) -> AppContext:
     """Monta contexto visual usando metricas calculadas pelo backend."""
-    ranking = ranking.copy()
+    ranking = ranking.copy() if isinstance(ranking, pd.DataFrame) else pd.DataFrame()
+    if "CENA" not in ranking.columns:
+        ranking["CENA"] = pd.Series(dtype="object")
     ranking["rotulo"] = ranking["CENA"].map(cena_rotulo)
     mapa_rotulo = dict(zip(ranking["rotulo"], ranking["CENA"], strict=False))
-    n_cenarios = int(ranking["CENA"].nunique())
+    n_cenarios = int(ranking["CENA"].nunique()) if not ranking.empty else 0
     ano_enc, p_ruina, foco, foco_ano, k = build_context_metrics(
         ind,
         ranking,
@@ -115,15 +116,23 @@ def montar_contexto(
 
 def render_cabecalho(ctx: AppContext) -> None:
     """Renderiza titulo, banner e KPIs ja processados."""
-    title_col, report_col = st.columns([0.80, 0.20], vertical_alignment="center")
-    with title_col:
-        st.subheader(t("header.focus", cena=cena_rotulo(ctx.cena_sel)))
-    with report_col:
-        if ctx.persona != "teste" and st.button("Criar Relatório", key="header_create_report", use_container_width=True):
-            st.session_state["show_report_modal"] = True
+    with st.container(key="cti_header_bar"):
+        title_col, report_col, menu_col = st.columns([0.74, 0.18, 0.08], vertical_alignment="center")
+        with title_col:
+            st.subheader(t("header.focus", cena=cena_rotulo(ctx.cena_sel)))
+        with report_col:
+            if ctx.persona != "teste" and st.button(t("header.report"), key="header_create_report", use_container_width=True):
+                open_relatorio()
+                st.rerun()
+        with menu_col:
+            if ctx.persona != "teste":
+                render_ops_menu()
     if ctx.persona == "teste":
         return
+    garantir_varredura_silenciosa()
     safe_render("banner de auditoria", banner_auditoria_filtro, ctx.cena_sel, ctx.ano_sel)
+    if is_all_scenarios(ctx.cena_sel):
+        st.write(t("header.avg_scenes"))
     st.write(t("header.avg_all") if ctx.ano_sel == "Todos" else t("header.avg_year", ano=ctx.ano_sel))
     render_kpi_row(kpis_por_persona(ctx.persona, ctx.k, ctx.ranking, ctx.df, ctx.cena_sel, ctx.ano_sel))
     st.info(t(f"persona.blurb.{ctx.persona}"))

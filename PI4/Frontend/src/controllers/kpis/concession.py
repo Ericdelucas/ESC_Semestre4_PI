@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pandas as pd
 
+from src.config.i18n import t
 from src.models.formatting import fmt_rs
 
 from .constants import (
@@ -36,21 +37,21 @@ def _kpis_poder_concedente(df: pd.DataFrame | None, cena: str | None, ano_sel: s
 
     return [
         (
-            "CAPEX Investido (Infraestrutura)",
+            t("kpi.pc.capex"),
             fmt_rs(investimentos),
-            "Investimento acumulado em infraestrutura",
-            "CAPEX executado no recorte selecionado, associado aos investimentos da concessão.",
+            t("kpi.pc.capex_delta"),
+            t("kpi.pc.capex_help"),
         ),
         (
-            "Liquidez Geral (Solvência de Longo Prazo)",
+            t("kpi.pc.liq"),
             f"{liquidez_geral:.2f}x",
-            "Capacidade de solvência a longo prazo",
-            "Mede a capacidade de cumprir obrigações de curto e longo prazo ao longo da concessão.",
+            t("kpi.pc.liq_delta"),
+            t("kpi.pc.liq_help"),
         ),
         (
-            "Base de Ativos Reversíveis (Ativo Total)",
+            t("kpi.pc.bar"),
             fmt_rs(ativo_total),
-            "Patrimônio total afetado ao serviço",
-            "Base patrimonial associada à prestação do serviço público concedido.",
+            t("kpi.pc.bar_delta"),
+            t("kpi.pc.bar_help"),
         ),
     ]

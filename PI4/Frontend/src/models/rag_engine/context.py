@@ -60,11 +60,18 @@ def build_focus_context(
             f"liquidez corrente {liq_txt}; rentabilidade {pct(rent)}; risco {pct(risco)}.",
         ]
 
-    bloco = ranking.loc[ranking["CENA"] == cena_sel] if "CENA" in ranking.columns else ranking.iloc[0:0]
+    from src.models.formatting.scenarios import is_all_scenarios
+
+    if "CENA" not in ranking.columns:
+        bloco = ranking.iloc[0:0]
+    elif is_all_scenarios(cena_sel):
+        bloco = ranking
+    else:
+        bloco = ranking.loc[ranking["CENA"] == cena_sel]
     if not bloco.empty:
-        row = bloco.iloc[0]
-        selo = row["selo"] if "selo" in bloco.columns else "—"
-        caixa = row["caixa_ano12"] if "caixa_ano12" in bloco.columns else float("nan")
+        row = bloco.mean(numeric_only=True) if is_all_scenarios(cena_sel) else bloco.iloc[0]
+        selo = "—" if is_all_scenarios(cena_sel) else (row["selo"] if "selo" in bloco.columns else "—")
+        caixa = row["caixa_ano12"] if "caixa_ano12" in getattr(row, "index", bloco.columns) else float("nan")
         if en:
             linhas.append(
                 f"Focus scenario row: badge {selo}; Year-12 cash {rs(float(caixa)) if pd.notna(caixa) else '—'}; "

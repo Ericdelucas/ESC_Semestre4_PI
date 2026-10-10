@@ -4,11 +4,19 @@ from __future__ import annotations
 
 import streamlit as st
 
-from src.models.financial_metrics import FINANCIAL_METRICS_DICT
+from src.config.i18n import t
+from src.models.financial_metrics import FINANCIAL_METRICS_DICT, metric_label
 
 CUSTOM_ANALYSES_KEY = "custom_financial_analyses"
 MODAL_CUSTOM_ANALYSIS_KEY = "modal_custom_analysis_open"
-CHART_TYPES = ["Linha", "Barra", "Área", "Card KPI"]
+CHART_TYPES = ["Linha", "Barra", "Área", "Card KPI", "Tabela"]
+CHART_TYPE_I18N = {
+    "Linha": "chart.type.line",
+    "Barra": "chart.type.bar",
+    "Área": "chart.type.area",
+    "Card KPI": "chart.type.kpi",
+    "Tabela": "chart.type.table",
+}
 
 
 def custom_analysis_modal_key(persona: str) -> str:
@@ -39,7 +47,10 @@ def custom_key(analysis: dict[str, str]) -> str:
 
 
 def custom_label(analysis: dict[str, str]) -> str:
-    return analysis.get("label", f"{analysis['metric']} · {analysis['chart_type']}")
+    metric = analysis.get("metric", "")
+    chart = analysis.get("chart_type", "")
+    chart_key = CHART_TYPE_I18N.get(chart, chart)
+    return f"{metric_label(metric)} · {t(chart_key)}"
 
 
 def insert_custom_tabs(nav_keys: list[str], custom_keys: list[str]) -> list[str]:
@@ -52,13 +63,18 @@ def insert_custom_tabs(nav_keys: list[str], custom_keys: list[str]) -> list[str]
 def _render_custom_analysis_form(persona: str) -> None:
     metric_names = sorted(FINANCIAL_METRICS_DICT)
     metric_name = st.selectbox(
-        "Indicador financeiro",
+        t("custom.metric"),
         options=metric_names,
-        format_func=lambda nome: nome,
+        format_func=metric_label,
         key=f"custom_metric_{persona}",
     )
-    chart_type = st.selectbox("Tipo de gráfico", options=CHART_TYPES, key=f"custom_chart_{persona}")
-    if st.button("Adicionar ao Dashboard", type="primary", key=f"custom_add_{persona}"):
+    chart_type = st.selectbox(
+        t("custom.chart"),
+        options=CHART_TYPES,
+        format_func=lambda tipo: t(CHART_TYPE_I18N.get(tipo, tipo)),
+        key=f"custom_chart_{persona}",
+    )
+    if st.button(t("custom.add"), type="primary", key=f"custom_add_{persona}"):
         analyses = custom_analyses(persona)
         numero = len(analyses) + 1
         analysis = {
@@ -78,11 +94,11 @@ def render_custom_analysis_dialog(persona: str) -> None:
     if not st.session_state.get(flag):
         return
     if hasattr(st, "dialog"):
-        @st.dialog("Adicionar análise customizada")
+        @st.dialog(t("custom.dialog"))
         def _dialog() -> None:
             _render_custom_analysis_form(persona)
 
         _dialog()
         return
-    with st.expander("Adicionar análise customizada", expanded=True):
+    with st.expander(t("custom.dialog"), expanded=True):
         _render_custom_analysis_form(persona)

@@ -13,7 +13,7 @@ from src.config import METRICAS_NUVEM
 from src.config.glossary import NUVEM_HELP, help_join, help_text
 from src.config.i18n import get_lang, t
 from src.models.analytics import resumo_envelope
-from src.models.formatting import fmt_rs
+from src.models.formatting import fmt_rs, is_all_scenarios
 
 
 @resilient_view("aba Faixa de risco")
@@ -41,17 +41,17 @@ def render(
     rotulo_nuvem = t(metric_key)
     ano_nuvem = None if ano_sel == "Todos" else int(ano_sel)
     envelope_options = [
-        "Otimista (melhor caso)",
-        "Pessimista (pior caso)",
-        "Média",
-        "Mais provável (mediana)",
-        "Faixa 5-95%",
+        t("faixa.series.opt"),
+        t("faixa.series.pess"),
+        t("faixa.series.mean"),
+        t("faixa.series.median"),
+        t("faixa.series.band"),
     ]
     envelope_selected = st.multiselect(
-        "Linhas visíveis no envelope",
+        t("faixa.series.visible"),
         options=envelope_options,
         default=envelope_options,
-        key=f"faixa_envelope_linhas_{metric_key}",
+        key=f"faixa_envelope_linhas_{metric_key}_{get_lang()}",
     )
 
     def _envelope() -> None:
@@ -63,7 +63,7 @@ def render(
                 maior_melhor,
                 titulo=titulo_filtro(t("faixa.risk_title", metric=rotulo_nuvem), cena_sel, ano_sel),
                 ano_destaque=ano_nuvem,
-                cena_destaque=cena_sel,
+                cena_destaque=None if is_all_scenarios(cena_sel) else cena_sel,
                 series_visiveis=set(envelope_selected),
             ),
             width="stretch",

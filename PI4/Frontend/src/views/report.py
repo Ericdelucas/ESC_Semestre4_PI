@@ -8,6 +8,8 @@ from datetime import datetime
 import pandas as pd
 import streamlit as st
 
+from src.config.i18n import t
+from src.controllers.modals import close_relatorio, dialog_kwargs
 from src.models.formatting import cena_rotulo
 
 
@@ -63,18 +65,34 @@ def display_pdf_preview(pdf_bytes: bytes) -> None:
     st.markdown(pdf_display, unsafe_allow_html=True)
 
 
-@st.dialog("Criar Relatorio", width="large")
 def render_dialog(df: pd.DataFrame, cena_sel: str, ano_sel: str | int) -> None:
     """Renderiza o report builder em modal estavel com formulario."""
+    titulo = t("report.title")
+    try:
+        decorator = st.dialog(titulo, **dialog_kwargs(width="large", on_dismiss=close_relatorio))
+    except TypeError:
+        decorator = st.dialog(titulo, width="large")
+
+    @decorator
+    def _dialog() -> None:
+        _render_report_body(df, cena_sel, ano_sel)
+
+    _dialog()
+
+
+def _render_report_body(df: pd.DataFrame, cena_sel: str, ano_sel: str | int) -> None:
     _ = ano_sel
-    st.caption("Monte o PDF executivo. Os campos abaixo so atualizam quando voce confirma o formulario.")
+    st.caption(t("report.caption"))
 
     try:
         block_options, default_block_notes, generate_custom_report_pdf = _load_report_backend()
         blocks = block_options()
         suggested_notes = default_block_notes(df, cena_sel)
     except Exception as exc:  # noqa: BLE001
-        st.error(f"Nao foi possivel inicializar o gerador de relatorios: {type(exc).__name__}: {exc}")
+        st.error(t("report.init_error", err=f"{type(exc).__name__}: {exc}"))
+        if st.button(t("report.close"), key="report_init_close"):
+            close_relatorio()
+            st.rerun()
         return
 
     st.session_state.setdefault("report_c_level", "CEO")
@@ -83,18 +101,20 @@ def render_dialog(df: pd.DataFrame, cena_sel: str, ano_sel: str | int) -> None:
     with st.form("form_report_builder", clear_on_submit=False):
         profile_col, author_col, company_col = st.columns([0.22, 0.38, 0.4])
         with profile_col:
-            profile = st.selectbox("Perfil C-Level", ["CEO", "CFO", "CTO"], key="report_c_level")
+            profile = st.selectbox(t("report.profile"), ["CEO", "CFO", "CTO"], key="report_c_level")
         with author_col:
-            author = st.text_input("Autor", value="Equipe ESC", key="report_author")
+            if "report_author" not in st.session_state:
+                st.session_state["report_author"] = t("report.author_default")
+            author = st.text_input(t("report.author"), key="report_author")
         with company_col:
-            company_name = st.text_input("Empresa", value="Grupo ESC", key="report_company_name")
+            company_name = st.text_input(t("report.company"), value="Grupo ESC", key="report_company_name")
 
         selected_blocks = st.multiselect(
-            "Blocos do relatorio",
+            t("report.blocks"),
             options=list(blocks),
-            format_func=lambda block_id: blocks[block_id],
+            format_func=lambda block_id: t(f"report.block.{block_id}"),
             key="report_selected_blocks",
-            help="Selecione apenas as secoes que devem entrar no PDF final.",
+            help=t("report.blocks_help"),
         )
 
         comparison_scenarios: list[str] = []
@@ -105,17 +125,17 @@ def render_dialog(df: pd.DataFrame, cena_sel: str, ano_sel: str | int) -> None:
                 item for item in st.session_state.get("report_scenarios", []) if item in comparison_options
             ]
             comparison_scenarios = st.multiselect(
-                "Cenarios para comparacao",
+                t("report.scenarios"),
                 options=comparison_options,
                 key="report_scenarios",
             )
 
-        st.markdown("#### Pareceres executivos")
+        st.markdown(f"#### {t('report.notes')}")
         if not selected_blocks:
-            st.warning("Selecione ao menos um bloco para gerar o relatorio.")
+            st.warning(t("report.need_block"))
         for block_id in selected_blocks:
-            label = blocks[block_id]
-            with st.expander(f"✏️ Editar Parecer Executivo - {label}", expanded=False):
+            label = t(f"report.block.{block_id}")
+            with st.expander(t("report.edit_note", label=label), expanded=False):
                 st.text_area(
                     label,
                     height=150,
@@ -125,14 +145,14 @@ def render_dialog(df: pd.DataFrame, cena_sel: str, ano_sel: str | int) -> None:
 
         confirm_col, generate_col, close_col = st.columns([0.36, 0.36, 0.28])
         with confirm_col:
-            confirmed = st.form_submit_button("Atualizar Previa / Confirmar Dados", use_container_width=True)
+            confirmed = st.form_submit_button(t("report.confirm"), use_container_width=True)
         with generate_col:
-            generate_pdf = st.form_submit_button("Gerar PDF Executivo", type="primary", use_container_width=True)
+            generate_pdf = st.form_submit_button(t("report.generate"), type="primary", use_container_width=True)
         with close_col:
-            close_dialog = st.form_submit_button("Fechar", use_container_width=True)
+            close_dialog = st.form_submit_button(t("report.close"), use_container_width=True)
 
     if close_dialog:
-        st.session_state["show_report_modal"] = False
+        close_relatorio()
         st.rerun()
 
     notes = _build_notes(selected_blocks)
@@ -142,10 +162,10 @@ def render_dialog(df: pd.DataFrame, cena_sel: str, ano_sel: str | int) -> None:
 
     if confirmed or generate_pdf:
         if not selected_blocks:
-            st.error("Selecione ao menos um bloco antes de gerar o PDF.")
+            st.error(t("report.need_block_pdf"))
             return
         try:
-            with st.spinner("Montando pre-visualizacao em PDF..."):
+            with st.spinner(t("report.spinner")):
                 pdf_bytes = generate_custom_report_pdf(
                     df,
                     scenario=cena_sel,
@@ -157,23 +177,23 @@ def render_dialog(df: pd.DataFrame, cena_sel: str, ano_sel: str | int) -> None:
                     comparison_scenarios=comparison_scenarios,
                 )
         except Exception as exc:  # noqa: BLE001
-            st.error(f"Nao foi possivel gerar o PDF personalizado: {type(exc).__name__}: {exc}")
+            st.error(t("report.pdf_error", err=f"{type(exc).__name__}: {exc}"))
             return
         st.session_state["custom_report_pdf"] = pdf_bytes
         st.session_state["custom_report_filename"] = filename
         st.session_state["custom_report_signature"] = signature
         if confirmed and not generate_pdf:
-            st.success("Pre-visualizacao atualizada. Revise o PDF abaixo antes do download.")
+            st.success(t("report.preview_ok"))
 
     # Exibicao fora do formulario: permanece visivel apos o submit do form.
     preview_pdf = st.session_state.get("custom_report_pdf")
     if isinstance(preview_pdf, dict):
         preview_pdf = preview_pdf.get("bytes")
     if preview_pdf:
-        st.subheader("👁️ Pré-visualização do Relatório")
+        st.subheader(t("report.preview"))
         display_pdf_preview(preview_pdf)
         st.download_button(
-            "Download do Relatorio Personalizado (.pdf)",
+            t("report.download"),
             data=preview_pdf,
             file_name=st.session_state.get("custom_report_filename", filename),
             mime="application/pdf",

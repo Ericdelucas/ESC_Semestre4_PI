@@ -8,6 +8,7 @@ import streamlit as st
 
 from Backend.metrics.column_resolver import series_by_alias
 from src.config import COR_VERMELHO
+from src.config.i18n import t
 from src.models.formatting import cena_rotulo, fmt_dias, fmt_rs
 
 from .common import _break_even_df, _dre, _safe_div
@@ -41,40 +42,40 @@ def _render_cmp_ceo(df: pd.DataFrame, cenarios: list[tuple[str, str]]) -> None:
     comp = [rotulo for rotulo, _ in cenarios if rotulo != "A"]
     c1, c2, c3 = st.columns(3)
     with c1:
-        _metric_base("Receita Liquida Acumulada", metricas["A"]["receita"], [(r, metricas[r]["receita"]) for r in comp], fmt_rs)
+        _metric_base(t("cmp.ceo.rev_acc"), metricas["A"]["receita"], [(r, metricas[r]["receita"]) for r in comp], fmt_rs)
     with c2:
         margem_a = metricas["A"]["margem"]
         margem_a = 0.0 if pd.isna(margem_a) else margem_a
         _metric_base(
-            "EBITDA Acumulado",
+            t("cmp.ceo.ebitda_acc"),
             metricas["A"]["ebitda"],
             [(r, metricas[r]["ebitda"]) for r in comp],
             fmt_rs,
-            extra=f"Margem media A: {margem_a * 100:.1f}%",
+            extra=t("cmp.ceo.margin_a", pct=margem_a * 100),
         )
     with c3:
-        _metric_base("Break-Even Medio", metricas["A"]["break_even"], [(r, metricas[r]["break_even"]) for r in comp], fmt_rs, maior_melhor=False)
+        _metric_base(t("cmp.ceo.be_avg"), metricas["A"]["break_even"], [(r, metricas[r]["break_even"]) for r in comp], fmt_rs, maior_melhor=False)
 
-    metric_options = {"Receita Líquida": "receita", "EBITDA": "ebitda"}
+    metric_options = {t("cmp.ceo.metric.rev"): "receita", "EBITDA": "ebitda"}
     selected_metric_labels = st.multiselect(
-        "Métricas do gráfico",
+        t("cmp.ceo.metrics"),
         options=list(metric_options),
         default=list(metric_options),
-        key="cmp_ceo_metricas_receita_ebitda",
+        key=f"cmp_ceo_metricas_receita_ebitda_{t('cmp.ceo.metric.rev')}",
     )
     selected_metrics = {metric_options[label] for label in selected_metric_labels}
 
     series_options = {
-        "A": "Cenário A (Base)",
-        "B": "Cenário B (Comparativo 1)",
-        "C": "Cenário C (Comparativo 2)",
+        "A": t("cmp.scene.a").rstrip(":"),
+        "B": t("cmp.scene.b").rstrip(":"),
+        "C": t("cmp.scene.c").split("/")[0].strip().rstrip(":"),
     }
-    available_series = [(rotulo, series_options.get(rotulo, f"Cenário {rotulo}")) for rotulo, _ in cenarios]
+    available_series = [(rotulo, series_options.get(rotulo, t("cmp.series", rotulo=rotulo))) for rotulo, _ in cenarios]
     selected_series_labels = st.multiselect(
-        "Exibir no gráfico",
+        t("cmp.show"),
         options=[label for _, label in available_series],
         default=[label for _, label in available_series],
-        key="cmp_ceo_series_receita_ebitda",
+        key=f"cmp_ceo_series_receita_ebitda_{t('cmp.scene.a')}",
     )
     selected_series = {rotulo for rotulo, label in available_series if label in selected_series_labels}
 
@@ -84,13 +85,13 @@ def _render_cmp_ceo(df: pd.DataFrame, cenarios: list[tuple[str, str]]) -> None:
             continue
         estilo = SERIES_STYLES[rotulo]
         base = dados[rotulo]
-        nome = f"Serie {rotulo} - {cena_rotulo(cena)}"
+        nome = t("cmp.series_named", rotulo=rotulo, cena=cena_rotulo(cena))
         if "receita" in selected_metrics:
             fig.add_scatter(
                 x=base["ano_num"],
                 y=_col(base, "Receita Líquida", "Receita Liquida"),
                 mode="lines+markers",
-                name=f"{nome} - Receita",
+                name=t("cmp.series_metric", nome=nome, metric=t("ceo.axis.revenue")),
                 line={"color": estilo["color"], "dash": estilo["dash"]},
             )
         if "ebitda" in selected_metrics:
@@ -98,15 +99,15 @@ def _render_cmp_ceo(df: pd.DataFrame, cenarios: list[tuple[str, str]]) -> None:
                 x=base["ano_num"],
                 y=_col(base, "EBITDA"),
                 mode="lines+markers",
-                name=f"{nome} - EBITDA",
+                name=t("cmp.series_metric", nome=nome, metric="EBITDA"),
                 line={"color": estilo["color"], "dash": estilo["dash"], "width": 2},
             )
-    fig.update_layout(title="Receita Liquida e EBITDA: comparacao de cenarios", xaxis_title="Ano", yaxis_title="R$", hovermode="x unified")
+    fig.update_layout(title=t("cmp.ceo.rev_ebitda"), xaxis_title=t("chart.year"), yaxis_title="R$", hovermode="x unified")
     fig.update_xaxes(tickmode="linear", tick0=1, dtick=1)
     if fig.data:
         st.plotly_chart(fig, width="stretch", theme="streamlit")
     else:
-        st.info("Selecione ao menos uma métrica e um cenário para exibir o gráfico.")
+        st.info(t("cmp.empty_metric"))
 
 
 def _render_cmp_cfo(ind: pd.DataFrame, cenarios: list[tuple[str, str]]) -> None:
@@ -119,11 +120,11 @@ def _render_cmp_cfo(ind: pd.DataFrame, cenarios: list[tuple[str, str]]) -> None:
 
     c1, c2, c3 = st.columns(3)
     with c1:
-        _metric_base("NCG Media", metricas["A"]["ncg"], [(r, metricas[r]["ncg"]) for r in comp], fmt_rs, maior_melhor=False)
+        _metric_base(t("cmp.cfo.ncg"), metricas["A"]["ncg"], [(r, metricas[r]["ncg"]) for r in comp], fmt_rs, maior_melhor=False)
     with c2:
-        _metric_base("Menor Saldo de Tesouraria", metricas["A"]["tesouraria"], [(r, metricas[r]["tesouraria"]) for r in comp], fmt_rs)
+        _metric_base(t("cmp.cfo.treasury"), metricas["A"]["tesouraria"], [(r, metricas[r]["tesouraria"]) for r in comp], fmt_rs)
     with c3:
-        _metric_base("Ciclo Financeiro Medio", metricas["A"]["ciclo"], [(r, metricas[r]["ciclo"]) for r in comp], fmt_dias, maior_melhor=False)
+        _metric_base(t("cmp.cfo.cycle"), metricas["A"]["ciclo"], [(r, metricas[r]["ciclo"]) for r in comp], fmt_dias, maior_melhor=False)
 
     fig = go.Figure()
     for rotulo, cena in cenarios:
@@ -135,11 +136,11 @@ def _render_cmp_cfo(ind: pd.DataFrame, cenarios: list[tuple[str, str]]) -> None:
             mode="lines",
             fill="tozeroy",
             fillcolor=estilo["fill"],
-            name=f"Serie {rotulo} - {cena_rotulo(cena)}",
+            name=t("cmp.series_named", rotulo=rotulo, cena=cena_rotulo(cena)),
             line={"color": estilo["color"], "dash": estilo["dash"]},
         )
-    fig.add_hline(y=0, line_dash="dash", line_color=COR_VERMELHO, annotation_text="Zero")
-    fig.update_layout(title="Teste de estresse de tesouraria", xaxis_title="Ano", yaxis_title="R$", hovermode="x unified")
+    fig.add_hline(y=0, line_dash="dash", line_color=COR_VERMELHO, annotation_text=t("cmp.cfo.zero"))
+    fig.update_layout(title=t("cmp.cfo.stress"), xaxis_title=t("chart.year"), yaxis_title="R$", hovermode="x unified")
     fig.update_xaxes(tickmode="linear", tick0=1, dtick=1)
     st.plotly_chart(fig, width="stretch", theme="streamlit")
 

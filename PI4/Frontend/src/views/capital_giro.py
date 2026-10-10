@@ -20,13 +20,13 @@ def _grafico_evolucao(foco: pd.DataFrame, cena_sel: str, ano_sel: str | int) -> 
     plot_df = plot_df.rename(columns={"NCG": ncg_lbl, "Saldo_Tesouraria": tes_lbl})
     available_lines = [ncg_lbl, tes_lbl]
     selected_lines = st.multiselect(
-        "Exibir no gráfico:",
+        t("ui.select_lines"),
         options=available_lines,
         default=available_lines,
         key="capital_giro_linhas_evolucao",
     )
     if not selected_lines:
-        st.info("Selecione ao menos uma linha para exibir o gráfico.")
+        st.info(t("ui.select_one_line"))
         return
     fig_ncg = px.line(
         plot_df,
@@ -49,13 +49,13 @@ def _grafico_evolucao(foco: pd.DataFrame, cena_sel: str, ano_sel: str | int) -> 
 def _grafico_composicao(foco_ano: pd.DataFrame, cena_sel: str, ano_sel: str | int) -> None:
     faltando = [c for c in ("ACO", "PCO", "NCG") if c not in foco_ano.columns]
     if faltando:
-        raise KeyError(f"Colunas ausentes na composição da NCG: {faltando}")
+        raise KeyError(t("cap.err.missing", cols=faltando))
     if foco_ano.empty:
-        raise ValueError("Recorte sem linhas — escolha outro ano ou cenário.")
+        raise ValueError(t("cap.err.empty"))
 
     decomp = foco_ano[["ACO", "PCO", "NCG"]].apply(pd.to_numeric, errors="coerce").mean()
     if decomp.isna().all():
-        raise ValueError("Valores de ACO/PCO/NCG indisponíveis para este recorte.")
+        raise ValueError(t("cap.err.na"))
 
     decomp_df = pd.DataFrame(
         {

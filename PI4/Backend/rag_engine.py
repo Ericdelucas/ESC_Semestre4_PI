@@ -35,6 +35,7 @@ class CTIRag:
         self,
         message: str,
         history: list[dict[str, str]] | None = None,
+        user_role: str | None = None,
     ) -> tuple[str, list[str]]:
         resposta, fontes = self._engine.ask(
             message,
@@ -43,6 +44,7 @@ class CTIRag:
             api_key=resolve_api_key(),
             extra_context="",
             cena_sel=None,
+            user_role=user_role,
         )
         return resposta, fontes
 

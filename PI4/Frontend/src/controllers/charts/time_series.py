@@ -22,7 +22,7 @@ def serie_temporal_plotavel(dados: pd.DataFrame, y_cols: list[str]) -> pd.DataFr
     """Normaliza ano_num (Int64/NA) e remove linhas invalidas antes do Plotly."""
     faltando = [c for c in ["ano_num", *y_cols] if c not in dados.columns]
     if faltando:
-        raise KeyError(f"Colunas ausentes para o gráfico: {faltando}")
+        raise KeyError(t("chart.missing_cols", cols=faltando))
     out = dados.loc[:, ["ano_num", *y_cols]].copy()
     out["ano_num"] = pd.to_numeric(out["ano_num"], errors="coerce")
     out = out.dropna(subset=["ano_num"]).sort_values("ano_num")
@@ -30,7 +30,7 @@ def serie_temporal_plotavel(dados: pd.DataFrame, y_cols: list[str]) -> pd.DataFr
     for col in y_cols:
         out[col] = pd.to_numeric(out[col], errors="coerce")
     if out.empty:
-        raise ValueError("Sem pontos válidos no horizonte para este cenário/recorte.")
+        raise ValueError(t("chart.no_points"))
     return out
 
 
@@ -43,12 +43,13 @@ def ancorar_ano_temporal(
     if ano_sel == "Todos":
         return fig
     ano = int(ano_sel)
+    year_label = t("filter.year_n", n=ano)
     fig.add_vline(
         x=ano,
         line_dash="dash",
         line_color=COR_ANCORA,
         line_width=2,
-        annotation_text=f"Filtro: Ano {ano}",
+        annotation_text=t("chart.filter_year", label=year_label),
         annotation_position="top",
         annotation_font={"color": COR_ANCORA, "size": 12},
     )
@@ -68,9 +69,9 @@ def ancorar_ano_temporal(
                     "symbol": "diamond",
                     "line": {"width": 2, "color": "#111111"},
                 },
-                name=f"Âncora do filtro (Ano {ano})",
+                name=t("chart.anchor_name", label=year_label),
                 showlegend=primeira,
-                hovertemplate=f"{col}<br>Ano {ano}: %{{y}}<extra></extra>",
+                hovertemplate=f"{col}<br>{year_label}: %{{y}}<extra></extra>",
             )
         )
         primeira = False

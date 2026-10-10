@@ -8,6 +8,8 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from src.config import COR, COR_SUAVE, COR_VERMELHO
+from src.config.i18n import t
+from src.models.formatting.tables import render_table
 
 from .common import _balanco_fluxo, _conta, _dre
 
@@ -23,9 +25,9 @@ def render_concedente_capex(df: pd.DataFrame, cena: str, ano_sel: str | int) -> 
     dados["CAPEX Acumulado"] = dados["CAPEX"].cumsum()
     dados["CAPEX / Receita Líquida"] = dados["CAPEX"] / dados["Receita Líquida"].replace(0, pd.NA)
     fig = go.Figure()
-    fig.add_bar(x=dados["ano_num"], y=dados["CAPEX"], name="CAPEX anual", marker_color=COR_SUAVE)
-    fig.add_scatter(x=dados["ano_num"], y=dados["CAPEX Acumulado"], name="CAPEX acumulado", mode="lines+markers", line={"color": COR})
-    fig.update_layout(title="Plano de CAPEX", xaxis_title="Ano", yaxis_title="R$")
+    fig.add_bar(x=dados["ano_num"], y=dados["CAPEX"], name=t("pc.capex_annual"), marker_color=COR_SUAVE)
+    fig.add_scatter(x=dados["ano_num"], y=dados["CAPEX Acumulado"], name=t("pc.capex_cumul"), mode="lines+markers", line={"color": COR})
+    fig.update_layout(title=t("pc.chart.capex"), xaxis_title=t("chart.year"), yaxis_title="R$")
     st.plotly_chart(fig, width="stretch", theme="streamlit")
 
 
@@ -38,10 +40,19 @@ def render_concedente_solvencia(df: pd.DataFrame, cena: str, ano_sel: str | int)
     dados["Liquidez Geral"] = lg
     dados["Endividamento"] = _conta(dados, "BAL - Total do Passivo").abs() / _conta(dados, "BAL - Total do Ativo").abs().replace(0, pd.NA)
     dados["Cobertura de Juros"] = dados["EBIT"] / _conta(dados, "DRE - Despesas Financeiras").abs().replace(0, pd.NA)
-    fig = px.line(dados, x="ano_num", y="Liquidez Geral", markers=True, title="Liquidez Geral com limite de risco")
-    fig.add_hline(y=1.0, line_dash="dash", line_color=COR_VERMELHO, annotation_text="Mínimo 1,0x")
+    fig = px.line(dados, x="ano_num", y="Liquidez Geral", markers=True, title=t("pc.chart.liq"))
+    fig.add_hline(y=1.0, line_dash="dash", line_color=COR_VERMELHO, annotation_text=t("pc.hline.min"))
     st.plotly_chart(fig, width="stretch", theme="streamlit")
-    st.dataframe(dados[["ano_num", "Liquidez Geral", "Endividamento", "Cobertura de Juros"]], width="stretch", hide_index=True)
+    render_table(
+        dados[["ano_num", "Liquidez Geral", "Endividamento", "Cobertura de Juros"]].rename(
+            columns={
+                "ano_num": t("chart.year"),
+                "Liquidez Geral": t("pc.liq"),
+                "Endividamento": t("pc.debt"),
+                "Cobertura de Juros": t("pc.coverage"),
+            }
+        )
+    )
 
 
 def render_concedente_ativos(df: pd.DataFrame, cena: str, ano_sel: str | int) -> None:
@@ -49,8 +60,8 @@ def render_concedente_ativos(df: pd.DataFrame, cena: str, ano_sel: str | int) ->
     dados = _balanco_fluxo(df, cena)
     bruto = _conta(dados, "BAL - Investimentos - Imobilizado").abs() + _conta(dados, "BAL - Investimentos - Intangível").abs()
     dep = _conta(dados, "BAL - Depreciação Acumulada").abs() + _conta(dados, "BAL - Amortização Acumulada").abs()
-    dados["Base Líquida"] = bruto - dep
-    dados["Depreciação/Amortização Acumulada"] = dep
-    comp = dados[["ano_num", "Base Líquida", "Depreciação/Amortização Acumulada"]].melt("ano_num", var_name="Componente", value_name="Valor")
-    fig = px.area(comp, x="ano_num", y="Valor", color="Componente", title="Ativos reversíveis líquidos vs depreciação acumulada")
+    dados[t("pc.net_base")] = bruto - dep
+    dados[t("pc.dep_acc")] = dep
+    comp = dados[["ano_num", t("pc.net_base"), t("pc.dep_acc")]].melt("ano_num", var_name="Componente", value_name="Valor")
+    fig = px.area(comp, x="ano_num", y="Valor", color="Componente", title=t("pc.chart.assets"))
     st.plotly_chart(fig, width="stretch", theme="streamlit")
