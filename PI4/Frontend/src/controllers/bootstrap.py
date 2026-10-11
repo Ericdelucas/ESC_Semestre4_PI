@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -48,10 +47,9 @@ class AppContext:
     k: pd.Series
 
 
-@st.cache_data(show_spinner="A ler cache da base...", ttl=None)
-def _ler_cache_parquet(assinatura: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Uma leitura dos parquets por processo. Reruns seguintes saem do cache."""
-    _ = assinatura
+@st.cache_data(show_spinner=False)
+def carregar_pipeline() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Cacheia o resultado. A primeira carga tenta parquet e cai no CSV se falhar."""
     df, ind, ranking = prepare_dashboard_data(CSV_PATH)
     ranking = ranking.copy()
     if "CENA" in ranking.columns:
@@ -60,39 +58,21 @@ def _ler_cache_parquet(assinatura: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.
 
 
 def carregar_estado() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame] | None:
-    """Le o cache pre-computado. Nao recalcula indicadores no pedido HTTP."""
+    """Nunca fica preso no spinner: parquet ou fallback CSV, com erro limpo."""
     raw_path, ind_path, rank_path = cache_paths()
-    if not cache_disponivel():
-        print(f"[boot] cache em falta em {CACHE_DIR}", flush=True)
-        if os.environ.get("RENDER"):
-            st.error(t("boot.cache_missing", path=str(CACHE_DIR)))
-            st.caption(f"Esperado: {raw_path.name}, {ind_path.name}, {rank_path.name}")
-            return None
-        with st.spinner("A gerar cache local (primeira vez)..."):
-            try:
-                df, ind, ranking = prepare_dashboard_data(CSV_PATH)
-            except MemoryError:
-                st.error(t("boot.memory"))
-                return None
-            except Exception as exc:  # noqa: BLE001
-                st.error(t("boot.prep_error", err=f"{type(exc).__name__}: {exc}"))
-                return None
-        ranking = ranking.copy()
-        if "CENA" in ranking.columns:
-            ranking["rotulo"] = ranking["CENA"].map(cena_rotulo)
-        return df, ind, ranking
-    assinatura = "|".join(
-        f"{p.name}:{p.stat().st_size}:{int(p.stat().st_mtime)}"
-        for p in (raw_path, ind_path, rank_path)
-        if p.exists()
-    )
+    print(f"[boot] cwd={Path.cwd()}", flush=True)
+    print(f"[boot] CACHE_DIR={CACHE_DIR.resolve()} disponivel={cache_disponivel()}", flush=True)
+    for path in (raw_path, ind_path, rank_path, CSV_PATH):
+        print(f"[boot] {path.resolve()} existe={path.exists()}", flush=True)
     try:
-        print(f"[boot] a ler parquet {assinatura}", flush=True)
-        return _ler_cache_parquet(assinatura)
+        with st.spinner("A carregar base (cache ou CSV)..."):
+            return carregar_pipeline()
     except MemoryError:
+        print("[boot] MemoryError no carregamento", flush=True)
         st.error(t("boot.memory"))
         return None
     except Exception as exc:  # noqa: BLE001
+        print(f"[boot] ERRO {type(exc).__name__}: {exc}", flush=True)
         st.error(t("boot.prep_error", err=f"{type(exc).__name__}: {exc}"))
         return None
 
