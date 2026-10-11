@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pandas as pd
@@ -47,26 +46,49 @@ def load_cached_dashboard() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     return df, ind, ranking
 
 
-def prepare_dashboard_data(csv_path: str | Path = CSV_PATH) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Prefere cache parquet. Em producao nunca recalcula a base de 1M de linhas."""
-    if cache_disponivel() or (CACHE_DIR / "indicadores.parquet").exists():
-        return load_cached_dashboard()
+def _log_ficheiros_cache(csv: Path) -> None:
+    print(f"[cache] CACHE_DIR={CACHE_DIR.resolve()}", flush=True)
+    print(f"[cache] CSV={csv.resolve()} existe={csv.exists()}", flush=True)
+    for path in cache_paths():
+        if path.exists():
+            print(f"[cache] HIT {path.resolve()} bytes={path.stat().st_size}", flush=True)
+        else:
+            print(f"[cache] MISS {path.resolve()}", flush=True)
 
-    if os.environ.get("RENDER"):
-        raise RuntimeError(
-            "Cache parquet nao encontrado. Rode `python PI4/Backend/scripts/precompute_cache.py` no build."
-        )
 
-    csv = Path(csv_path)
+def _carregar_csv(csv: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    print(f"[cache] FALLBACK CSV a ler {csv.resolve()}", flush=True)
     df = load_cti_csv(csv)
+    print(f"[cache] CSV carregado linhas={len(df):,}; a calcular indicadores", flush=True)
     ind, ranking = montar_indicadores(df)
     CACHE_DIR.mkdir(exist_ok=True)
     raw_path, ind_path, rank_path = cache_paths()
-    ind.to_parquet(ind_path, index=False)
-    ranking.to_parquet(rank_path, index=False)
-    if not raw_path.exists():
-        df.to_parquet(raw_path, index=False)
+    try:
+        ind.to_parquet(ind_path, index=False)
+        ranking.to_parquet(rank_path, index=False)
+        if not raw_path.exists():
+            df.to_parquet(raw_path, index=False)
+        print("[cache] fallback gravou parquets para a proxima subida", flush=True)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[cache] aviso: nao gravou parquet ({type(exc).__name__}: {exc})", flush=True)
     return df, ind, ranking
+
+
+def prepare_dashboard_data(csv_path: str | Path = CSV_PATH) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Tenta parquet; se faltar ou falhar, calcula uma vez a partir do CSV."""
+    csv = Path(csv_path)
+    _log_ficheiros_cache(csv)
+    if cache_disponivel():
+        try:
+            print("[cache] a ler os 3 parquets", flush=True)
+            dados = load_cached_dashboard()
+            print("[cache] parquet OK", flush=True)
+            return dados
+        except Exception as exc:  # noqa: BLE001
+            print(f"[cache] leitura parquet falhou {type(exc).__name__}: {exc}", flush=True)
+    else:
+        print("[cache] parquet incompleto — fallback CSV", flush=True)
+    return _carregar_csv(csv)
 
 
 def _media_por_ano(frame: pd.DataFrame) -> pd.DataFrame:
