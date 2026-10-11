@@ -96,6 +96,6 @@ py -m streamlit run Frontend/app.py
 
 Na raiz do repositório (`ESC_Semestre4_PI`) estão `requirements.txt`, `Procfile`, `start.sh` e `render.yaml`.
 
-- **Blueprint (recomendado):** New → Blueprint. Sobe dois Web Services: `cti-api` (FastAPI em `$PORT`) e `cti-dashboard` (Streamlit em `$PORT`). O dashboard recebe `CTI_API_URL` do host da API.
-- **Um serviço só:** Root Directory vazio, Build `pip install -r requirements.txt`, Start `bash start.sh`. O script sobe a API numa porta interna e o Streamlit na `$PORT` pública.
+- **Um serviço só (recomendado):** Root Directory vazio, Build `pip install -r requirements.txt`, Start `bash start.sh`. O script sobe a API em `127.0.0.1:8081` e o Streamlit na `$PORT` pública. O dashboard lê `BACKEND_URL`.
+- No painel, defina `BACKEND_URL=http://127.0.0.1:8081` (o `start.sh` também exporta isto).
 - Preencha no painel: `GOOGLE_API_KEY`, SMTP e demais secrets. Não commite `.env`.
