@@ -27,7 +27,8 @@ API_PID=$!
 shutdown() {
   kill "${API_PID}" 2>/dev/null || true
 }
-trap shutdown EXIT INT TERM
+# Nao usar trap EXIT: o exec do Streamlit dispararia o trap e matava o uvicorn.
+trap shutdown INT TERM
 
 ready=0
 for _ in $(seq 1 30); do

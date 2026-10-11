@@ -23,6 +23,7 @@ from src.controllers.auth import (
 )
 from src.controllers.bootstrap import carregar_estado, montar_contexto
 from src.controllers.data_input import has_custom_data, render_data_input
+from src.controllers.local_api import ensure_local_api
 from src.controllers.modals import ensure_modal_state, is_relatorio_open
 from src.controllers.navigation import render_pagina
 from src.controllers.page_setup import configure_page
@@ -47,6 +48,7 @@ def montar_indicadores_customizados(df):
 
 def main() -> None:
     configure_page()
+    ensure_local_api()
     restore_persistent_session()
     ensure_modal_state()
     render_language_selector()
