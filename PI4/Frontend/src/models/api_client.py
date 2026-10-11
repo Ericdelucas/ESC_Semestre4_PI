@@ -7,11 +7,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from src.config import API_BASE_URL
+from src.config import resolve_api_base_url
 
 
 def _url(caminho: str, params: dict[str, object] | None = None) -> str:
-    base = f"{API_BASE_URL}{caminho}"
+    base = f"{resolve_api_base_url()}{caminho}"
     if not params:
         return base
     query = urllib.parse.urlencode({k: v for k, v in params.items() if v is not None})
@@ -51,7 +51,7 @@ def request_json(
             dados = {"detail": str(exc.reason)}
         return dados, int(exc.code)
     except urllib.error.URLError as exc:
-        return {"detail": f"Backend indisponivel em {API_BASE_URL}: {exc.reason}"}, 503
+        return {"detail": f"Backend indisponivel em {resolve_api_base_url()}: {exc.reason}"}, 503
 
 
 def post_json(

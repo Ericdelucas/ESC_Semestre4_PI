@@ -5,12 +5,26 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-def _env_url(name: str, default: str) -> str:
-    value = (os.environ.get(name) or default).strip().rstrip("/")
-    if value and "://" not in value:
+def _normalize_url(value: str) -> str:
+    url = (value or "").strip().rstrip("/")
+    if url and "://" not in url:
         scheme = "https" if os.environ.get("RENDER") else "http"
-        value = f"{scheme}://{value}"
-    return value
+        url = f"{scheme}://{url}"
+    return url
+
+
+def resolve_api_base_url() -> str:
+    """URL da API: BACKEND_URL, depois CTI_API_URL, senão host/porta locais."""
+    for name in ("BACKEND_URL", "CTI_API_URL"):
+        raw = (os.environ.get(name) or "").strip()
+        if raw:
+            return _normalize_url(raw)
+    host = os.environ.get("API_HOST", "127.0.0.1")
+    if os.environ.get("RENDER"):
+        port = os.environ.get("API_PORT", "8081")
+    else:
+        port = os.environ.get("API_PORT", "8000")
+    return _normalize_url(f"http://{host}:{port}")
 
 
 _FRONTEND = Path(__file__).resolve().parents[2]
@@ -23,7 +37,7 @@ DOCS_DIR = BACKEND / "documentos"
 VENV_PY = ROOT / ".venv" / "bin" / "python"
 API_HOST = os.environ.get("API_HOST", "127.0.0.1")
 API_PORT = os.environ.get("API_PORT", "8000")
-API_BASE_URL = _env_url("CTI_API_URL", f"http://{API_HOST}:{API_PORT}")
+API_BASE_URL = resolve_api_base_url()
 
 COR = "#1F4E45"
 COR_SUAVE = "#5B8A7A"

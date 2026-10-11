@@ -1,30 +1,30 @@
-# Blueprint da Render: API FastAPI + dashboard Streamlit.
-# Na UI: New → Blueprint → este repositório.
-# Variáveis secretas (SMTP, GOOGLE_API_KEY) ficam no painel e não neste ficheiro.
+# Blueprint da Render: um Web Service unificado (FastAPI interno + Streamlit em $PORT).
+# Start Command no painel: bash start.sh
+# Variáveis secretas (SMTP, GOOGLE_API_KEY) ficam no painel.
 
 databases: []
 
 services:
   - type: web
-    name: cti-api
+    name: cti
     runtime: python
     plan: free
-    rootDir: PI4
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
-    startCommand: uvicorn Backend.main:app --host 0.0.0.0 --port $PORT
-    healthCheckPath: /api/v1/health
+    startCommand: bash start.sh
+    healthCheckPath: /_stcore/health
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.9"
       - key: RENDER
         value: "true"
-      - key: CORS_ORIGIN_REGEX
-        value: "https://.*\\.onrender\\.com"
-      - key: CORS_ORIGINS
-        fromService:
-          name: cti-dashboard
-          type: web
-          property: host
+      - key: API_HOST
+        value: "127.0.0.1"
+      - key: API_PORT
+        value: "8081"
+      - key: BACKEND_URL
+        value: "http://127.0.0.1:8081"
+      - key: CTI_API_URL
+        value: "http://127.0.0.1:8081"
       - key: GOOGLE_API_KEY
         sync: false
       - key: GEMINI_API_KEY
@@ -40,27 +40,4 @@ services:
       - key: EMAIL_REMETENTE
         sync: false
       - key: EMAIL_ALERTA_CEO
-        sync: false
-
-  - type: web
-    name: cti-dashboard
-    runtime: python
-    plan: free
-    rootDir: PI4
-    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
-    startCommand: streamlit run Frontend/app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
-    healthCheckPath: /_stcore/health
-    envVars:
-      - key: PYTHON_VERSION
-        value: "3.11.9"
-      - key: RENDER
-        value: "true"
-      - key: CTI_API_URL
-        fromService:
-          name: cti-api
-          type: web
-          property: host
-      - key: GOOGLE_API_KEY
-        sync: false
-      - key: GEMINI_API_KEY
         sync: false
