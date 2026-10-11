@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Serviço unificado: FastAPI interno + Streamlit na $PORT da Render.
+# Servico unificado: FastAPI interno + Streamlit na $PORT da Render.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
@@ -15,26 +15,68 @@ export API_HOST API_PORT
 export BACKEND_URL="http://${API_HOST}:${API_PORT}"
 export CTI_API_URL="${BACKEND_URL}"
 
-echo "[start] FastAPI em ${BACKEND_URL}"
-echo "[start] Streamlit em 0.0.0.0:${PORT}"
+echo "[start] =========================================="
+echo "[start] cwd=$(pwd) ROOT=${ROOT} APP_DIR=${APP_DIR}"
+echo "[start] RENDER=${RENDER} PYTHONPATH=${PYTHONPATH}"
+echo "[start] PORT publica Streamlit=${PORT}"
+echo "[start] API_HOST=${API_HOST} API_PORT=${API_PORT}"
+echo "[start] BACKEND_URL=${BACKEND_URL}"
+echo "[start] CTI_API_URL=${CTI_API_URL}"
+if [ "${PORT}" = "${API_PORT}" ]; then
+  echo "[start] CONFLITO: PORT publica e API_PORT sao iguais (${PORT})"
+fi
+echo "[start] a iniciar uvicorn Backend.main:app --host ${API_HOST} --port ${API_PORT}"
+echo "[start] =========================================="
 
-uvicorn Backend.main:app --host "${API_HOST}" --port "${API_PORT}" &
+uvicorn Backend.main:app --host "${API_HOST}" --port "${API_PORT}" --log-level info &
 API_PID=$!
+echo "[start] uvicorn PID=${API_PID}"
 
-sleep 3
+HEALTH_URL="${BACKEND_URL}/api/v1/health"
+ready=0
+for tentativa in 1 2 3 4 5 6 7 8 9 10; do
+  echo "[start] health tentativa ${tentativa}/10 GET ${HEALTH_URL}"
+  if python - <<PY
+import urllib.error
+import urllib.request
+url = "${HEALTH_URL}"
+print(f"[start-py] GET {url}", flush=True)
+try:
+    with urllib.request.urlopen(url, timeout=4) as resp:
+        body = resp.read()[:240]
+        print(f"[start-py] status={resp.status} body={body!r}", flush=True)
+except urllib.error.HTTPError as exc:
+    print(f"[start-py] HTTPError status={exc.code} reason={exc.reason}", flush=True)
+    raise SystemExit(1)
+except Exception as exc:
+    print(f"[start-py] ERRO {type(exc).__name__}: {exc}", flush=True)
+    raise SystemExit(1)
+PY
+  then
+    ready=1
+    echo "[start] FastAPI pronta em ${BACKEND_URL}"
+    break
+  fi
+  echo "[start] health ainda falhou; a esperar 1s"
+  sleep 1
+done
 
-if ! python -c "import urllib.request; urllib.request.urlopen('${BACKEND_URL}/api/v1/health', timeout=5)" >/dev/null 2>&1; then
-  echo "[start] erro: FastAPI nao respondeu em ${BACKEND_URL}/api/v1/health"
+if [ "${ready}" -ne 1 ]; then
+  echo "[start] uvicorn ainda no ar? pid=${API_PID}"
+  ps -p "${API_PID}" -o pid,cmd || echo "[start] processo uvicorn nao encontrado"
+  echo "[start] erro: FastAPI nao respondeu em ${HEALTH_URL}"
   kill "${API_PID}" 2>/dev/null || true
   exit 1
 fi
 
-echo "[start] FastAPI pronta. A subir o Streamlit."
+echo "[start] URL base que o Streamlit vai usar: ${BACKEND_URL}"
+echo "[start] a subir streamlit run Frontend/app.py --server.port=${PORT}"
 
-# Sem exec e sem trap EXIT: o shell fica pai do uvicorn e o Streamlit corre em primeiro plano.
 streamlit run Frontend/app.py \
   --server.port="${PORT}" \
   --server.address=0.0.0.0 \
-  --server.headless=true
+  --server.headless=true \
+  --logger.level=info
 
+echo "[start] Streamlit saiu; a terminar uvicorn pid=${API_PID}"
 kill "${API_PID}" 2>/dev/null || true

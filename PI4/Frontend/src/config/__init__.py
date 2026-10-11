@@ -13,6 +13,12 @@ def _normalize_url(value: str) -> str:
     return url
 
 
+def default_api_port() -> str:
+    if os.environ.get("API_PORT"):
+        return os.environ["API_PORT"]
+    return "8081" if os.environ.get("RENDER") else "8000"
+
+
 def resolve_api_base_url() -> str:
     """URL da API: BACKEND_URL, depois CTI_API_URL, senão host/porta locais."""
     for name in ("BACKEND_URL", "CTI_API_URL"):
@@ -20,11 +26,7 @@ def resolve_api_base_url() -> str:
         if raw:
             return _normalize_url(raw)
     host = os.environ.get("API_HOST", "127.0.0.1")
-    if os.environ.get("RENDER"):
-        port = os.environ.get("API_PORT", "8081")
-    else:
-        port = os.environ.get("API_PORT", "8000")
-    return _normalize_url(f"http://{host}:{port}")
+    return _normalize_url(f"http://{host}:{default_api_port()}")
 
 
 _FRONTEND = Path(__file__).resolve().parents[2]
@@ -36,7 +38,7 @@ CACHE_DIR = BACKEND / "cache"
 DOCS_DIR = BACKEND / "documentos"
 VENV_PY = ROOT / ".venv" / "bin" / "python"
 API_HOST = os.environ.get("API_HOST", "127.0.0.1")
-API_PORT = os.environ.get("API_PORT", "8000")
+API_PORT = default_api_port()
 API_BASE_URL = resolve_api_base_url()
 
 COR = "#1F4E45"
