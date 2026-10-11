@@ -96,6 +96,5 @@ py -m streamlit run Frontend/app.py
 
 Na raiz do repositório (`ESC_Semestre4_PI`) estão `requirements.txt`, `Procfile`, `start.sh` e `render.yaml`.
 
-- **Um serviço só (recomendado):** Root Directory vazio, Build `pip install -r requirements.txt`, Start `bash start.sh`. O script sobe a API em `127.0.0.1:8081` e o Streamlit na `$PORT` pública. O dashboard lê `BACKEND_URL`.
-- No painel, defina `BACKEND_URL=http://127.0.0.1:8081` (o `start.sh` também exporta isto).
+- **Um serviço só (recomendado):** Root Directory vazio, Build `pip install -r requirements.txt && chmod +x start.sh`, Start `./start.sh`. O script sobe a API em `127.0.0.1:8081` e o Streamlit na `$PORT` pública.
 - Preencha no painel: `GOOGLE_API_KEY`, SMTP e demais secrets. Não commite `.env`.
