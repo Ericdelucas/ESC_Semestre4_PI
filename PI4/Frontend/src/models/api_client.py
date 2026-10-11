@@ -68,6 +68,11 @@ class ApiClient:
             method = "GET"
             caminho = HEALTH_PATH if caminho in {"", "/"} else caminho
         url = self._url(caminho, params)
+        seguro = dict(payload) if isinstance(payload, dict) else payload
+        if isinstance(seguro, dict) and "password" in seguro:
+            senha = str(seguro.get("password") or "")
+            seguro = {**seguro, "password": f"***len={len(senha)}"}
+        _emit(f"ANTES DE ENVIAR {method} {url} timeout={timeout}s payload={seguro} params={params}")
         corpo = None if payload is None else json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(
             url,
@@ -77,18 +82,39 @@ class ApiClient:
         )
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
-                return _ler(resp), int(resp.status)
+                dados = _ler(resp)
+                _emit(
+                    f"RESPOSTA OK {method} {url} status={resp.status} "
+                    f"headers={dict(resp.headers)} corpo={dados}"
+                )
+                return dados, int(resp.status)
         except urllib.error.HTTPError as exc:
             try:
                 dados = _ler(exc)
-            except Exception:
+            except Exception as read_exc:
                 dados = {"detail": str(exc.reason)}
+                _emit(f"HTTPError sem corpo {type(read_exc).__name__}: {read_exc}")
+            _emit(
+                f"HTTPError {type(exc).__name__} {method} {url} status={exc.code} "
+                f"reason={exc.reason!r} headers={dict(exc.headers or {})} corpo={dados}"
+            )
             if int(exc.code) == 429:
-                _emit(f"429 em {url} — sleep {_RETRY_SLEEP}s, sem novo loop")
+                _emit(f"STATUS 429 Too Many Requests em {url} — sleep {_RETRY_SLEEP}s, sem novo loop")
                 time.sleep(_RETRY_SLEEP)
             return dados, int(exc.code)
-        except (TimeoutError, urllib.error.URLError, OSError) as exc:
-            _emit(f"{type(exc).__name__} {url}: {exc} — sleep {_RETRY_SLEEP}s")
+        except TimeoutError as exc:
+            _emit(f"TimeoutError {method} {url}: {exc} — sleep {_RETRY_SLEEP}s")
+            time.sleep(_RETRY_SLEEP)
+            return {"detail": f"Timeout em {url}: {exc}"}, 503
+        except urllib.error.URLError as exc:
+            _emit(
+                f"URLError/ConnectionError {method} {url} reason={exc.reason!r} "
+                f"tipo={type(exc.reason).__name__} — sleep {_RETRY_SLEEP}s"
+            )
+            time.sleep(_RETRY_SLEEP)
+            return {"detail": f"Backend indisponivel em {url}: {exc.reason}"}, 503
+        except OSError as exc:
+            _emit(f"OSError {method} {url}: {exc} — sleep {_RETRY_SLEEP}s")
             time.sleep(_RETRY_SLEEP)
             return {"detail": f"Backend indisponivel em {url}: {exc}"}, 503
 

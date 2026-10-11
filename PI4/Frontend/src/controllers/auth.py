@@ -2,9 +2,24 @@
 
 from __future__ import annotations
 
+import logging
+import sys
 import time
 
 import streamlit as st
+
+_log_auth = logging.getLogger("cti.login")
+if not _log_auth.handlers:
+    _h = logging.StreamHandler(sys.stdout)
+    _h.setFormatter(logging.Formatter("%(asctime)s [login-ui] %(levelname)s %(message)s"))
+    _log_auth.addHandler(_h)
+    _log_auth.setLevel(logging.INFO)
+    _log_auth.propagate = False
+
+
+def _login_emit(message: str) -> None:
+    print(f"[login-ui] {message}", flush=True)
+    _log_auth.info(message)
 
 from src.config import resolve_api_base_url
 from src.config.i18n import get_lang, t
@@ -154,7 +169,17 @@ def _detalhe_erro(payload: dict[str, object]) -> str:
 
 
 def authenticate(email: str, password: str) -> tuple[bool, str]:
+    destino = f"{resolve_api_base_url()}/api/v1/auth/login"
+    _login_emit(
+        f"authenticate() a enviar POST {destino} email={email!r} senha=***len={len(password or '')}"
+    )
     payload, status = post_json("/api/v1/auth/login", {"email": email, "password": password})
+    _login_emit(
+        f"authenticate() resposta status={status} ok={payload.get('ok')} "
+        f"keys={list(payload)} detail={payload.get('detail')!r} message={payload.get('message')!r}"
+    )
+    if status == 429:
+        _login_emit("authenticate() recebeu 429 Too Many Requests do cliente HTTP")
     if status == 200 and payload.get("ok"):
         user = payload.get("user") if isinstance(payload.get("user"), dict) else {}
         role = str(user.get("role") or "")
@@ -231,8 +256,18 @@ def render_login() -> None:
             email = st.text_input(t("login.email"), placeholder="ceo@gmail.com")
             password = st.text_input(t("login.password"), type="password")
             enviado = st.form_submit_button(t("login.submit"), type="primary", use_container_width=True)
+        _login_emit(
+            f"formulario renderizado enviado={enviado} email={email!r} "
+            f"senha=***len={len(password or '')} url={resolve_api_base_url()}/api/v1/auth/login"
+        )
         if enviado:
+            _login_emit(
+                f"BOTAO/FORM SUBMIT premido email={email!r} senha=***len={len(password or '')} "
+                f"destino={resolve_api_base_url()}/api/v1/auth/login"
+            )
             ok, mensagem = authenticate(email, password)
+            _login_emit(f"submit resultado ok={ok} mensagem={mensagem!r}")
             if ok:
+                _login_emit("login OK — st.rerun()")
                 st.rerun()
             st.error(mensagem or t("login.error"))

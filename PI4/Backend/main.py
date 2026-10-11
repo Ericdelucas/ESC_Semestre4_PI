@@ -229,10 +229,22 @@ def health_v1() -> dict[str, object]:
 
 @app.post("/api/v1/auth/login")
 def login(body: LoginIn, request: Request) -> dict[str, object]:
+    ip = _ip_cliente(request)
+    _emit(
+        f"LOGIN CHEGOU method={request.method} url={request.url} ip={ip} "
+        f"email={body.email!r} senha=***len={len(body.password or '')} "
+        f"headers={dict(request.headers)}"
+    )
     with session_scope() as db:
-        usuario, mensagem = autenticar(db, body.email, body.password, ip_origem=_ip_cliente(request))
+        usuario, mensagem = autenticar(db, body.email, body.password, ip_origem=ip)
         publico = usuario_publico(usuario) if usuario is not None else None
+    _emit(
+        f"LOGIN VALIDACAO email={body.email!r} ok={usuario is not None} "
+        f"mensagem={mensagem!r} role={(publico or {}).get('role')!r} "
+        f"funcao={(publico or {}).get('funcao')!r}"
+    )
     if usuario is None or publico is None:
+        _emit(f"LOGIN REJEITADO 401 email={body.email!r} detalhe={mensagem!r}")
         raise HTTPException(status_code=401, detail=mensagem)
     risco: dict[str, object] | None = None
     if str(publico.get("funcao") or "") in FUNCOES_EXECUTIVAS or bool(publico.get("is_super_admin")):
@@ -245,6 +257,8 @@ def login(body: LoginIn, request: Request) -> dict[str, object]:
             )
         except Exception as exc:  # noqa: BLE001
             risco = {"critical": False, "sent": False, "summary": f"Varredura indisponivel: {type(exc).__name__}: {exc}"}
+            _emit(f"LOGIN alerta risco falhou: {risco}")
+    _emit(f"LOGIN OK 200 email={publico.get('email')!r} role={publico.get('role')!r} risco_sent={(risco or {}).get('sent')}")
     return {"ok": True, "message": mensagem, "user": publico, "risk_alert": risco}
 
 

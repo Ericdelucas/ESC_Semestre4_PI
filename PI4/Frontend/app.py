@@ -53,6 +53,7 @@ def main() -> None:
     ensure_modal_state()
     render_language_selector()
     if not is_authenticated():
+        print("[app] ecran de login — utilizador nao autenticado", flush=True)
         render_login()
         st.stop()
     refresh_session_cookie()
