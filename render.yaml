@@ -9,7 +9,7 @@ services:
     name: cti
     runtime: python
     plan: free
-    buildCommand: pip install --upgrade pip && pip install -r requirements.txt && chmod +x start.sh
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt && chmod +x start.sh && python PI4/Backend/scripts/precompute_cache.py
     startCommand: ./start.sh
     healthCheckPath: /_stcore/health
     envVars:
