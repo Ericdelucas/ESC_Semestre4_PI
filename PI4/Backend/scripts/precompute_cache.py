@@ -30,8 +30,12 @@ def main() -> None:
     rank_path = CACHE_DIR / "ranking.parquet"
     ind.to_parquet(ind_path, index=False)
     ranking.to_parquet(rank_path, index=False)
+    raw_path = CACHE_DIR / "cti_limpo.parquet"
+    if not raw_path.exists():
+        df.to_parquet(raw_path, index=False)
 
     print(f"[precompute] Cache salvo em: {CACHE_DIR}")
+    print(f"[precompute] cti_limpo={raw_path.stat().st_size:,} bytes")
     print(f"[precompute] indicadores={ind_path.stat().st_size:,} bytes")
     print(f"[precompute] ranking={rank_path.stat().st_size:,} bytes")
 

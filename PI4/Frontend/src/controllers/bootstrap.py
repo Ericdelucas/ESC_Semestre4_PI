@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,6 +16,7 @@ if str(PI4_ROOT) not in sys.path:
     sys.path.insert(0, str(PI4_ROOT))
 
 from Backend.services import build_context_metrics, prepare_dashboard_data  # noqa: E402
+from Backend.services.dashboard_pipeline import CACHE_DIR, cache_disponivel, cache_paths  # noqa: E402
 from src.config import CSV_PATH  # noqa: E402
 from src.config.i18n import t  # noqa: E402
 from src.controllers.modals import open_relatorio  # noqa: E402
@@ -46,27 +48,51 @@ class AppContext:
     k: pd.Series
 
 
-@st.cache_resource(show_spinner="Preparando base e indicadores...", max_entries=1)
-def carregar_pipeline(csv_path: str, mtime: float) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Carrega base e indicadores processados pelo backend."""
-    _ = mtime
-    df, ind, ranking = prepare_dashboard_data(csv_path)
+@st.cache_data(show_spinner="A ler cache da base...", ttl=None)
+def _ler_cache_parquet(assinatura: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Uma leitura dos parquets por processo. Reruns seguintes saem do cache."""
+    _ = assinatura
+    df, ind, ranking = prepare_dashboard_data(CSV_PATH)
     ranking = ranking.copy()
-    ranking["rotulo"] = ranking["CENA"].map(cena_rotulo)
+    if "CENA" in ranking.columns:
+        ranking["rotulo"] = ranking["CENA"].map(cena_rotulo)
     return df, ind, ranking
 
 
 def carregar_estado() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame] | None:
-    """Carrega o estado base do dashboard ou exibe erro amigavel."""
-    if not CSV_PATH.exists():
-        st.error(t("boot.missing_file", path=CSV_PATH))
-        return None
+    """Le o cache pre-computado. Nao recalcula indicadores no pedido HTTP."""
+    raw_path, ind_path, rank_path = cache_paths()
+    if not cache_disponivel():
+        print(f"[boot] cache em falta em {CACHE_DIR}", flush=True)
+        if os.environ.get("RENDER"):
+            st.error(t("boot.cache_missing", path=str(CACHE_DIR)))
+            st.caption(f"Esperado: {raw_path.name}, {ind_path.name}, {rank_path.name}")
+            return None
+        with st.spinner("A gerar cache local (primeira vez)..."):
+            try:
+                df, ind, ranking = prepare_dashboard_data(CSV_PATH)
+            except MemoryError:
+                st.error(t("boot.memory"))
+                return None
+            except Exception as exc:  # noqa: BLE001
+                st.error(t("boot.prep_error", err=f"{type(exc).__name__}: {exc}"))
+                return None
+        ranking = ranking.copy()
+        if "CENA" in ranking.columns:
+            ranking["rotulo"] = ranking["CENA"].map(cena_rotulo)
+        return df, ind, ranking
+    assinatura = "|".join(
+        f"{p.name}:{p.stat().st_size}:{int(p.stat().st_mtime)}"
+        for p in (raw_path, ind_path, rank_path)
+        if p.exists()
+    )
     try:
-        return carregar_pipeline(str(CSV_PATH), CSV_PATH.stat().st_mtime)
+        print(f"[boot] a ler parquet {assinatura}", flush=True)
+        return _ler_cache_parquet(assinatura)
     except MemoryError:
         st.error(t("boot.memory"))
         return None
-    except Exception as exc:  # noqa: BLE001 - evita queda abrupta do processo no deploy
+    except Exception as exc:  # noqa: BLE001
         st.error(t("boot.prep_error", err=f"{type(exc).__name__}: {exc}"))
         return None
 

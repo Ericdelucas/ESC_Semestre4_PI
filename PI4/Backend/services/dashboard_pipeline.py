@@ -17,39 +17,55 @@ CACHE_DIR = BACKEND_DIR / "cache"
 CSV_PATH = BACKEND_DIR / "Cti.csv"
 
 
-def prepare_dashboard_data(csv_path: str | Path = CSV_PATH) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Carrega base, indicadores e ranking usando caches frescos quando existem."""
-    csv = Path(csv_path)
-    CACHE_DIR.mkdir(exist_ok=True)
-    ind_path = CACHE_DIR / "indicadores.parquet"
-    rank_path = CACHE_DIR / "ranking.parquet"
-    raw_path = CACHE_DIR / "cti_limpo.parquet"
+def cache_paths() -> tuple[Path, Path, Path]:
+    return (
+        CACHE_DIR / "cti_limpo.parquet",
+        CACHE_DIR / "indicadores.parquet",
+        CACHE_DIR / "ranking.parquet",
+    )
 
-    if (
-        ind_path.exists()
-        and rank_path.exists()
-        and raw_path.exists()
-        and ind_path.stat().st_mtime >= csv.stat().st_mtime
-        and rank_path.stat().st_mtime >= csv.stat().st_mtime
-        and raw_path.stat().st_mtime >= csv.stat().st_mtime
-    ):
-        df = otimizar_base_cti(pd.read_parquet(raw_path))
-        ind = compactar_indicadores(pd.read_parquet(ind_path))
-        ranking = compactar_indicadores(pd.read_parquet(rank_path)).copy()
-        if "selo" in ranking.columns:
-            ranking["selo"] = ranking["selo"].astype("category")
-        return df, ind, ranking
+
+def cache_disponivel() -> bool:
+    raw_path, ind_path, rank_path = cache_paths()
+    return ind_path.exists() and rank_path.exists() and raw_path.exists()
+
+
+def load_cached_dashboard() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Le apenas os parquets do precompute. Nao relê o CSV nem recalcula KPIs."""
+    raw_path, ind_path, rank_path = cache_paths()
+    if not (ind_path.exists() and rank_path.exists()):
+        raise FileNotFoundError(
+            f"Cache em falta: {ind_path.name} / {rank_path.name} em {CACHE_DIR}"
+        )
+    df = pd.read_parquet(raw_path) if raw_path.exists() else pd.DataFrame()
+    if not df.empty:
+        df = otimizar_base_cti(df)
+    ind = compactar_indicadores(pd.read_parquet(ind_path))
+    ranking = compactar_indicadores(pd.read_parquet(rank_path)).copy()
+    if "selo" in ranking.columns:
+        ranking["selo"] = ranking["selo"].astype("category")
+    return df, ind, ranking
+
+
+def prepare_dashboard_data(csv_path: str | Path = CSV_PATH) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Prefere cache parquet. Em producao nunca recalcula a base de 1M de linhas."""
+    if cache_disponivel() or (CACHE_DIR / "indicadores.parquet").exists():
+        return load_cached_dashboard()
 
     if os.environ.get("RENDER"):
         raise RuntimeError(
-            "Cache parquet nao encontrado no runtime. "
-            "Confirme se o Build Command executa `python scripts/precompute_cache.py` antes do start."
+            "Cache parquet nao encontrado. Rode `python PI4/Backend/scripts/precompute_cache.py` no build."
         )
 
+    csv = Path(csv_path)
     df = load_cti_csv(csv)
     ind, ranking = montar_indicadores(df)
+    CACHE_DIR.mkdir(exist_ok=True)
+    raw_path, ind_path, rank_path = cache_paths()
     ind.to_parquet(ind_path, index=False)
     ranking.to_parquet(rank_path, index=False)
+    if not raw_path.exists():
+        df.to_parquet(raw_path, index=False)
     return df, ind, ranking
 
 
