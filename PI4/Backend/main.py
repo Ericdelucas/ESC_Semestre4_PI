@@ -186,8 +186,8 @@ def _status_banco() -> dict[str, object]:
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
 
-@app.get("/")
-@app.get("/api/health")
+@app.api_route("/", methods=["GET", "HEAD"])
+@app.api_route("/api/health", methods=["GET", "HEAD"])
 def health_root() -> dict[str, str]:
     return dict(_HEALTH)
 
@@ -197,7 +197,7 @@ def json_version() -> dict[str, str]:
     return {"version": APP_VERSION, "status": "ok"}
 
 
-@app.get("/api/v1/health")
+@app.api_route("/api/v1/health", methods=["GET", "HEAD"])
 def health_v1() -> dict[str, object]:
     _emit("handler /api/v1/health")
     banco = _status_banco()

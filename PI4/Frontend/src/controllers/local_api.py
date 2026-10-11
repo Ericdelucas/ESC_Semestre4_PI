@@ -1,22 +1,28 @@
-"""Sonda de observabilidade da API local. Nao inicia o Uvicorn."""
+"""Sonda unica da API local. Nao inicia o Uvicorn e nao usa HEAD /."""
 
 from __future__ import annotations
 
 import logging
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
 
 from src.config import default_api_port, resolve_api_base_url
 
-logging.basicConfig(
-    level=logging.INFO,
-    stream=sys.stdout,
-    format="%(asctime)s [local_api] %(levelname)s %(message)s",
-    force=False,
-)
 _log = logging.getLogger("cti.local_api")
+if not _log.handlers:
+    _handler = logging.StreamHandler(sys.stdout)
+    _handler.setFormatter(logging.Formatter("%(asctime)s [local_api] %(levelname)s %(message)s"))
+    _log.addHandler(_handler)
+    _log.setLevel(logging.INFO)
+    _log.propagate = False
+
+HEALTH_PATH = "/api/v1/health"
+_COOLDOWN_SECONDS = 60.0
+_LAST_PROBE_AT = 0.0
+_LAST_PROBE_OK: bool | None = None
 
 
 def _emit(message: str) -> None:
@@ -26,36 +32,46 @@ def _emit(message: str) -> None:
 
 def dump_api_env() -> str:
     url = resolve_api_base_url()
-    _emit("=== Streamlit a resolver a URL da API ===")
-    _emit(f"cwd={os.getcwd()}")
-    _emit(f"RENDER={os.environ.get('RENDER')} PORT_publica={os.environ.get('PORT')}")
-    _emit(f"API_HOST={os.environ.get('API_HOST')} API_PORT={os.environ.get('API_PORT')} default_api_port={default_api_port()}")
-    _emit(f"BACKEND_URL={os.environ.get('BACKEND_URL')}")
-    _emit(f"CTI_API_URL={os.environ.get('CTI_API_URL')}")
-    _emit(f"URL base que o Streamlit vai usar AGORA: {url}")
-    if os.environ.get("PORT") and os.environ.get("PORT") == default_api_port():
-        _emit("CONFLITO: PORT publica da Render e igual a API_PORT")
+    _emit(f"URL base do cliente: {url}")
+    _emit(f"health GET {url}{HEALTH_PATH} (nunca HEAD /)")
+    _emit(
+        f"BACKEND_URL={os.environ.get('BACKEND_URL')} "
+        f"CTI_API_URL={os.environ.get('CTI_API_URL')} "
+        f"API_PORT={default_api_port()} PORT={os.environ.get('PORT')}"
+    )
     return url
 
 
 def probe_api(url: str | None = None, timeout: float = 3.0) -> bool:
+    """Um GET /api/v1/health por janela de cooldown. Sucesso so com HTTP 200."""
+    global _LAST_PROBE_AT, _LAST_PROBE_OK
+    now = time.monotonic()
+    if _LAST_PROBE_OK is not None and (now - _LAST_PROBE_AT) < _COOLDOWN_SECONDS:
+        _emit(f"health ignorado (cooldown {_COOLDOWN_SECONDS:.0f}s, ultimo_ok={_LAST_PROBE_OK})")
+        return _LAST_PROBE_OK
+
     target = (url or resolve_api_base_url()).rstrip("/")
-    health = f"{target}/api/v1/health"
-    _emit(f"tentativa HTTP GET {health} timeout={timeout}s")
+    health = f"{target}{HEALTH_PATH}"
+    req = urllib.request.Request(
+        health,
+        method="GET",
+        headers={"Accept": "application/json"},
+    )
+    _emit(f"GET {health} timeout={timeout}s")
+    _LAST_PROBE_AT = now
     try:
-        with urllib.request.urlopen(health, timeout=timeout) as resp:
-            body = resp.read()[:300]
-            _emit(f"health OK status={resp.status} headers={dict(resp.headers)} body={body!r}")
-            return True
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            status = int(resp.status)
+            _emit(f"health status={status}")
+            _LAST_PROBE_OK = status == 200
+            return _LAST_PROBE_OK
     except urllib.error.HTTPError as exc:
-        _emit(f"health HTTPError status={exc.code} reason={exc.reason} url={exc.url}")
+        _emit(f"health HTTPError status={exc.code} reason={exc.reason} method=GET path={HEALTH_PATH}")
+        _LAST_PROBE_OK = False
+        if exc.code == 429:
+            time.sleep(2)
         return False
-    except urllib.error.URLError as exc:
-        _emit(f"health URLError reason={exc.reason!r} tipo={type(exc.reason).__name__}")
-        return False
-    except TimeoutError as exc:
-        _emit(f"health TimeoutError {exc}")
-        return False
-    except Exception as exc:  # noqa: BLE001
-        _emit(f"health ERRO {type(exc).__name__}: {exc}")
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        _emit(f"health falhou {type(exc).__name__}: {exc}")
+        _LAST_PROBE_OK = False
         return False
