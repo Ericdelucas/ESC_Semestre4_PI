@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 import streamlit as st
 
 from src.config import resolve_api_base_url
@@ -100,20 +102,24 @@ def restore_persistent_session() -> bool:
     email = str(payload.get("email") or "")
     funcao = str(payload.get("funcao") or "")
     _aplicar_usuario(email, role, funcao)
-    write_session_cookie(email, role, funcao)
     st.session_state[EMAIL_ALERTA_FLAG] = True
     return True
 
 
 def refresh_session_cookie() -> None:
-    """Renova o TTL de 5 minutos a cada interacao autenticada (inatividade)."""
+    """Renova o cookie no maximo a cada 90s, para nao forcar reruns em cadeia."""
     if not is_authenticated():
+        return
+    agora = time.time()
+    ultimo = float(st.session_state.get("_cti_cookie_refresh_at") or 0)
+    if agora - ultimo < 90:
         return
     email = str(st.session_state.get(EMAIL_KEY) or "")
     role = str(st.session_state.get(ROLE_KEY) or "")
     funcao = str(st.session_state.get(FUNCAO_KEY) or "")
     if email and role in ROLE_PERSONAS:
         write_session_cookie(email, role, funcao)
+        st.session_state["_cti_cookie_refresh_at"] = agora
 
 
 def current_role() -> str | None:
