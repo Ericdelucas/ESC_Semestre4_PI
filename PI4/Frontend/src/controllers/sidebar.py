@@ -45,29 +45,57 @@ def render_language_selector() -> str:
     return get_lang()
 
 
+ALL_FILTER_SENTINELS = frozenset({"__all__", "Todos", "All", "All Scenarios", None})
+
+
 def _valores_unicos(frame: pd.DataFrame, coluna: str) -> list:
     if frame is None or frame.empty or coluna not in frame.columns:
         return []
     return [valor for valor in frame[coluna].dropna().tolist() if valor is not None and str(valor).strip() not in {"", "None", "nan"}]
 
 
+def _eh_filtro_todos(valor: object) -> bool:
+    return valor in ALL_FILTER_SENTINELS or str(valor).strip() in ALL_FILTER_SENTINELS
+
+
+def _rotulo_ano(valor: object) -> str:
+    return t("filter.all") if _eh_filtro_todos(valor) else str(valor)
+
+
+def _rotulo_cena(valor: object) -> str:
+    return t("filter.all_scenarios") if _eh_filtro_todos(valor) else cena_rotulo(str(valor))
+
+
+def _sincronizar_filtro(widget_key: str, legado_key: str, opcoes: list, padrao: object) -> None:
+    atual = st.session_state.get(widget_key, st.session_state.get(legado_key, padrao))
+    if _eh_filtro_todos(atual):
+        atual = padrao
+    if atual not in opcoes:
+        atual = padrao
+    st.session_state[widget_key] = atual
+    st.session_state[legado_key] = atual
+
+
 def render_sidebar(df: pd.DataFrame, ind: pd.DataFrame, n_cenarios: int) -> tuple[str | int, str, list[int], list[str]]:
+    lang = get_lang()
     with st.sidebar:
         st.header(t("sidebar.filters"))
         if "CENA" not in getattr(ind, "columns", []):
             st.warning(t("sidebar.missing_cena"))
         anos = sorted({int(float(a)) for a in _valores_unicos(ind, "ano_num") if pd.notna(a)})
-        # Valor interno estável "__all__" — rótulo muda com o idioma sem perder o filtro
+        # Valor interno estável "__all__" — o rótulo segue o idioma sem perder o filtro
         ano_opts: list[str | int] = ["__all__", *anos]
+        ano_key = f"filtro_ano_{lang}"
+        _sincronizar_filtro(ano_key, "filtro_ano", ano_opts, "__all__")
         ano_choice = st.selectbox(
             t("sidebar.year"),
             options=ano_opts,
-            index=0,
-            format_func=lambda x: t("filter.all") if x == "__all__" else str(x),
-            key="filtro_ano",
+            format_func=_rotulo_ano,
+            key=ano_key,
             help=help_text("sidebar_year"),
         )
-        ano_sel: str | int = "Todos" if ano_choice in {None, "__all__"} else int(ano_choice)
+        st.session_state["filtro_ano"] = ano_choice
+        ano_sel: str | int = "Todos" if _eh_filtro_todos(ano_choice) else int(ano_choice)
 
         cenas_brutas = _valores_unicos(ind, "CENA")
         if not cenas_brutas:
@@ -78,15 +106,17 @@ def render_sidebar(df: pd.DataFrame, ind: pd.DataFrame, n_cenarios: int) -> tupl
             cena_sel = "Todos"
         else:
             cena_opts = ["__all__", *cenas]
+            cena_key = f"filtro_cena_{lang}"
+            _sincronizar_filtro(cena_key, "filtro_cena", cena_opts, "__all__")
             cena_choice = st.selectbox(
                 t("sidebar.scenario"),
                 options=cena_opts,
-                index=0,
-                format_func=lambda x: t("filter.all_scenarios") if x == "__all__" else cena_rotulo(x),
-                key="filtro_cena",
+                format_func=_rotulo_cena,
+                key=cena_key,
                 help=help_text("sidebar_scenario"),
             )
-            cena_sel = "Todos" if cena_choice in {None, "__all__"} else str(cena_choice)
+            st.session_state["filtro_cena"] = cena_choice
+            cena_sel = "Todos" if _eh_filtro_todos(cena_choice) else str(cena_choice)
 
         st.markdown("---")
         active_base = st.session_state.get("cti_active_dataset_name", Path(CSV_PATH).name)

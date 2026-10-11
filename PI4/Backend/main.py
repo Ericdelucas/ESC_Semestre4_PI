@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -32,12 +33,33 @@ from Backend.services.risk_alerts import FUNCOES_EXECUTIVAS, disparar_alerta_ris
 
 APP_VERSION = "1.0.0"
 _HEALTH = {"status": "online", "message": "API CTI Backend Ativa"}
-_CORS_ORIGINS = [
+_LOCAL_ORIGINS = [
     "http://localhost:8501",
     "http://127.0.0.1:8501",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
 ]
+
+
+def _cors_origins() -> list[str]:
+    extras = [item.strip() for item in os.environ.get("CORS_ORIGINS", "").split(",") if item.strip()]
+    normalized: list[str] = []
+    for origin in extras + _LOCAL_ORIGINS:
+        if origin and "://" not in origin:
+            origin = f"https://{origin}"
+        if origin and origin not in normalized:
+            normalized.append(origin)
+    render_url = (os.environ.get("RENDER_EXTERNAL_URL") or "").rstrip("/")
+    if render_url and render_url not in normalized:
+        normalized.append(render_url)
+    return normalized
+
+
+def _cors_origin_regex() -> str:
+    return os.environ.get(
+        "CORS_ORIGIN_REGEX",
+        r"https?://(localhost|127\.0\.0\.1)(:\d+)?|https://.*\.onrender\.com",
+    )
 
 
 @asynccontextmanager
@@ -52,8 +74,8 @@ app.include_router(users_router)
 app.include_router(email_router)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_CORS_ORIGINS,
-    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_origins=_cors_origins(),
+    allow_origin_regex=_cors_origin_regex(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
