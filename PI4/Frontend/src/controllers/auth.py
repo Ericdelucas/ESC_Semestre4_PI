@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from src.config import API_BASE_URL
 from src.config.i18n import get_lang, t
 from src.controllers.session_cookie import (
     COOKIE_NAME,
@@ -169,7 +170,7 @@ def authenticate(email: str, password: str) -> tuple[bool, str]:
         st.session_state[EMAIL_ALERTA_FLAG] = True
         return True, str(payload.get("message") or "")
     if status == 503:
-        return False, t("login.backend_offline")
+        return False, t("login.backend_offline", url=API_BASE_URL)
     return False, _detalhe_erro(payload)
 
 
@@ -196,7 +197,7 @@ def fetch_access_logs(limite: int = 200) -> tuple[list[dict[str, object]], str |
         logs = payload.get("logs")
         return list(logs) if isinstance(logs, list) else [], None
     if status == 503:
-        return [], t("login.backend_offline")
+        return [], t("login.backend_offline", url=API_BASE_URL)
     return [], _detalhe_erro(payload)
 
 

@@ -5,6 +5,14 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+def _env_url(name: str, default: str) -> str:
+    value = (os.environ.get(name) or default).strip().rstrip("/")
+    if value and "://" not in value:
+        scheme = "https" if os.environ.get("RENDER") else "http"
+        value = f"{scheme}://{value}"
+    return value
+
+
 _FRONTEND = Path(__file__).resolve().parents[2]
 PI4 = _FRONTEND.parent
 ROOT = PI4
@@ -13,7 +21,9 @@ CSV_PATH = BACKEND / "Cti.csv"
 CACHE_DIR = BACKEND / "cache"
 DOCS_DIR = BACKEND / "documentos"
 VENV_PY = ROOT / ".venv" / "bin" / "python"
-API_BASE_URL = os.environ.get("CTI_API_URL", "http://127.0.0.1:8000").rstrip("/")
+API_HOST = os.environ.get("API_HOST", "127.0.0.1")
+API_PORT = os.environ.get("API_PORT", "8000")
+API_BASE_URL = _env_url("CTI_API_URL", f"http://{API_HOST}:{API_PORT}")
 
 COR = "#1F4E45"
 COR_SUAVE = "#5B8A7A"

@@ -1,0 +1,66 @@
+# Blueprint da Render: API FastAPI + dashboard Streamlit.
+# Na UI: New → Blueprint → este repositório.
+# Variáveis secretas (SMTP, GOOGLE_API_KEY) ficam no painel e não neste ficheiro.
+
+databases: []
+
+services:
+  - type: web
+    name: cti-api
+    runtime: python
+    plan: free
+    rootDir: PI4
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt && python Backend/scripts/precompute_cache.py
+    startCommand: uvicorn Backend.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: RENDER
+        value: "true"
+      - key: CORS_ORIGIN_REGEX
+        value: "https://.*\\.onrender\\.com"
+      - key: CORS_ORIGINS
+        fromService:
+          name: cti-dashboard
+          type: web
+          property: host
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SMTP_SERVER
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: EMAIL_REMETENTE
+        sync: false
+      - key: EMAIL_ALERTA_CEO
+        sync: false
+
+  - type: web
+    name: cti-dashboard
+    runtime: python
+    plan: free
+    rootDir: PI4
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: streamlit run Frontend/app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
+    healthCheckPath: /_stcore/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: RENDER
+        value: "true"
+      - key: CTI_API_URL
+        fromService:
+          name: cti-api
+          type: web
+          property: host
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
