@@ -48,8 +48,10 @@ def montar_indicadores_customizados(df):
 
 def main() -> None:
     configure_page()
-    dump_api_env()
-    probe_api()
+    if not st.session_state.get("_cti_api_boot_logged"):
+        dump_api_env()
+        probe_api()
+        st.session_state["_cti_api_boot_logged"] = True
     restore_persistent_session()
     ensure_modal_state()
     render_language_selector()

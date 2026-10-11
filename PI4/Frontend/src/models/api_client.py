@@ -11,6 +11,8 @@ import urllib.request
 
 from src.config import resolve_api_base_url
 
+HEALTH_PATH = "/api/v1/health"
+
 _log = logging.getLogger("cti.api_client")
 if not _log.handlers:
     _handler = logging.StreamHandler(sys.stdout)
@@ -49,6 +51,10 @@ def request_json(
     params: dict[str, object] | None = None,
     timeout: float = 8,
 ) -> tuple[dict[str, object], int]:
+    if method.upper() == "HEAD" or caminho in {"", "/"}:
+        _emit(f"recusado {method} {caminho!r} — redirecionado para GET {HEALTH_PATH}")
+        method = "GET"
+        caminho = HEALTH_PATH if caminho in {"", "/"} else caminho
     url = _url(caminho, params)
     _emit(f"a chamar {method} {url} timeout={timeout}s payload={payload} params={params}")
     corpo = None if payload is None else json.dumps(payload).encode("utf-8")
@@ -70,6 +76,8 @@ def request_json(
             dados = {"detail": str(exc.reason)}
             _emit(f"HTTPError sem corpo {method} {url} status={exc.code} read_exc={read_exc}")
         _emit(f"HTTPError {method} {url} status={exc.code} reason={exc.reason} body={dados}")
+        if int(exc.code) == 429:
+            _emit("429 Too Many Requests — sem retentativa automatica")
         return dados, int(exc.code)
     except TimeoutError as exc:
         _emit(f"TimeoutError {method} {url} {exc}")
@@ -91,5 +99,18 @@ def post_json(
     return request_json("POST", caminho, payload=payload, params=params, timeout=timeout)
 
 
-def get_json(caminho: str, params: dict[str, object] | None = None) -> tuple[dict[str, object], int]:
-    return request_json("GET", caminho, params=params)
+def get_json(
+    caminho: str,
+    params: dict[str, object] | None = None,
+    timeout: float = 8,
+) -> tuple[dict[str, object], int]:
+    return request_json("GET", caminho, params=params, timeout=timeout)
+
+
+def check_health(timeout: float = 5) -> tuple[bool, int]:
+    """Valida a API com GET /api/v1/health. Nao usa HEAD nem GET /."""
+    _emit(f"check_health GET {resolve_api_base_url()}{HEALTH_PATH}")
+    _payload, status = request_json("GET", HEALTH_PATH, timeout=timeout)
+    ok = status == 200
+    _emit(f"check_health resultado status={status} ok={ok}")
+    return ok, status
