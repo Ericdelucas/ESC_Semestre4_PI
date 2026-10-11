@@ -1,5 +1,5 @@
 # Blueprint da Render: um Web Service unificado (FastAPI interno + Streamlit em $PORT).
-# Start Command no painel: bash start.sh
+# Start Command no painel: ./start.sh
 # Variáveis secretas (SMTP, GOOGLE_API_KEY) ficam no painel.
 
 databases: []
@@ -9,8 +9,8 @@ services:
     name: cti
     runtime: python
     plan: free
-    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
-    startCommand: bash start.sh
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt && chmod +x start.sh
+    startCommand: ./start.sh
     healthCheckPath: /_stcore/health
     envVars:
       - key: PYTHON_VERSION
