@@ -27,9 +27,13 @@ if str(PI4_ROOT) not in sys.path:
 
 from Backend.metrics import montar_indicadores
 from src.controllers.auth import (
+    AUTH_KEY,
+    EMAIL_ALERTA_FLAG,
+    EMAIL_KEY,
+    FUNCAO_KEY,
+    ROLE_KEY,
     flush_login_email_toast,
     is_authenticated,
-    render_login,
     render_logout_button,
 )
 from src.controllers.bootstrap import carregar_estado, montar_contexto
@@ -56,16 +60,27 @@ def montar_indicadores_customizados(df):
     return cache["value"]
 
 
+def _bypass_login_temporario() -> None:
+    """TEMPORARIO: abre o dashboard como CEO sem passar pelo formulario."""
+    st.session_state[AUTH_KEY] = True
+    st.session_state[ROLE_KEY] = "ceo"
+    st.session_state[EMAIL_KEY] = "ericdelucass@gmail.com"
+    st.session_state[FUNCAO_KEY] = "CEO"
+    st.session_state[EMAIL_ALERTA_FLAG] = True
+    st.session_state.setdefault("persona_id", "ceo")
+    print("[app] BYPASS LOGIN ativo — sessao CEO forcada", flush=True)
+    logging.info("[app] BYPASS LOGIN ativo — sessao CEO forcada")
+
+
 def main() -> None:
     configure_page()
-    print("[app] arranque do script — sem health check e sem pedido a API", flush=True)
-    logging.info("[app] arranque do script — sem health check e sem pedido a API")
+    _bypass_login_temporario()
+    print("[app] arranque direto do painel CTI", flush=True)
+    logging.info("[app] arranque direto do painel CTI")
     ensure_modal_state()
     render_language_selector()
     if not is_authenticated():
-        print("[app] ecran de login — a API so sera chamada no clique Entrar", flush=True)
-        logging.info("[app] ecran de login — a API so sera chamada no clique Entrar")
-        render_login()
+        print("[app] bypass falhou — sem ecran de login neste modo", flush=True)
         st.stop()
     flush_login_email_toast()
     render_logout_button()
