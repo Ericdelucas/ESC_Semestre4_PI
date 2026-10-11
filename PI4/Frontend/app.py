@@ -29,10 +29,8 @@ from Backend.metrics import montar_indicadores
 from src.controllers.auth import (
     flush_login_email_toast,
     is_authenticated,
-    refresh_session_cookie,
     render_login,
     render_logout_button,
-    restore_persistent_session,
 )
 from src.controllers.bootstrap import carregar_estado, montar_contexto
 from src.controllers.data_input import has_custom_data, render_data_input
@@ -69,8 +67,6 @@ def main() -> None:
         logging.info("[app] ecran de login — a API so sera chamada no clique Entrar")
         render_login()
         st.stop()
-    restore_persistent_session()
-    refresh_session_cookie()
     flush_login_email_toast()
     render_logout_button()
     estado = carregar_estado()

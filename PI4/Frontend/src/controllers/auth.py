@@ -188,7 +188,6 @@ def authenticate(email: str, password: str) -> tuple[bool, str]:
         email_norm = str(user.get("email") or email).strip().lower()
         funcao = str(user.get("funcao") or "")
         _aplicar_usuario(email_norm, role, funcao)
-        write_session_cookie(email_norm, role, funcao, force=True)
         risco = payload.get("risk_alert") if isinstance(payload.get("risk_alert"), dict) else None
         if risco is not None:
             st.session_state["risk_scan"] = risco
@@ -207,7 +206,6 @@ def authenticate(email: str, password: str) -> tuple[bool, str]:
 
 def logout() -> None:
     email = str(st.session_state.get(EMAIL_KEY) or "").strip()
-    delete_session_cookie()
     if email:
         post_json("/api/v1/auth/logout", {"email": email})
     lang = get_lang()
@@ -256,18 +254,20 @@ def render_login() -> None:
             email = st.text_input(t("login.email"), placeholder="ceo@gmail.com")
             password = st.text_input(t("login.password"), type="password")
             enviado = st.form_submit_button(t("login.submit"), type="primary", use_container_width=True)
+        if not enviado:
+            return
+        if st.session_state.get("_cti_login_in_flight"):
+            _login_emit("submit ignorado — ja existe um pedido de login em curso")
+            return
+        st.session_state["_cti_login_in_flight"] = True
         _login_emit(
-            f"formulario renderizado enviado={enviado} email={email!r} "
-            f"senha=***len={len(password or '')} url={resolve_api_base_url()}/api/v1/auth/login"
+            f"BOTAO ENTRAR email={email!r} senha=***len={len(password or '')} "
+            f"destino={resolve_api_base_url()}/api/v1/auth/login"
         )
-        if enviado:
-            _login_emit(
-                f"BOTAO/FORM SUBMIT premido email={email!r} senha=***len={len(password or '')} "
-                f"destino={resolve_api_base_url()}/api/v1/auth/login"
-            )
-            ok, mensagem = authenticate(email, password)
-            _login_emit(f"submit resultado ok={ok} mensagem={mensagem!r}")
-            if ok:
-                _login_emit("login OK — st.rerun()")
-                st.rerun()
-            st.error(mensagem or t("login.error"))
+        ok, mensagem = authenticate(email, password)
+        st.session_state["_cti_login_in_flight"] = False
+        _login_emit(f"submit resultado ok={ok} mensagem={mensagem!r}")
+        if ok:
+            _login_emit("login OK — um unico st.rerun para abrir o dashboard")
+            st.rerun()
+        st.error(mensagem or t("login.error"))
