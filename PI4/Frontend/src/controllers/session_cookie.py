@@ -85,13 +85,11 @@ def cookie_manager():
 
 
 def bootstrap_cookies() -> Any:
-    """Monta o CookieManager. Um unico rerun, com pausa, para nao saturar o proxy."""
+    """Le cookies sem st.rerun — o rerun automatico gerava 429 no proxy da Render."""
+    print("[cookies] bootstrap sem rerun e sem pedido a API", flush=True)
     gerente = cookie_manager()
     _ = gerente.get_all()
-    if not st.session_state.get(_BOOTSTRAP_KEY):
-        st.session_state[_BOOTSTRAP_KEY] = True
-        time.sleep(2)
-        st.rerun()
+    st.session_state[_BOOTSTRAP_KEY] = True
     return gerente
 
 

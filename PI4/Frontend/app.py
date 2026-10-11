@@ -2,8 +2,21 @@
 
 from __future__ import annotations
 
+import logging
 import sys
 from pathlib import Path
+
+try:
+    sys.stdout.reconfigure(line_buffering=True)
+except Exception:
+    pass
+
+logging.basicConfig(
+    level=logging.INFO,
+    stream=sys.stdout,
+    format="%(asctime)s %(name)s %(levelname)s %(message)s",
+    force=True,
+)
 
 import pandas as pd
 import streamlit as st
@@ -23,7 +36,6 @@ from src.controllers.auth import (
 )
 from src.controllers.bootstrap import carregar_estado, montar_contexto
 from src.controllers.data_input import has_custom_data, render_data_input
-from src.controllers.local_api import probe_api
 from src.controllers.modals import ensure_modal_state, is_relatorio_open
 from src.controllers.navigation import render_pagina
 from src.controllers.page_setup import configure_page
@@ -48,14 +60,16 @@ def montar_indicadores_customizados(df):
 
 def main() -> None:
     configure_page()
-    probe_api()
-    restore_persistent_session()
+    print("[app] arranque do script — sem health check e sem pedido a API", flush=True)
+    logging.info("[app] arranque do script — sem health check e sem pedido a API")
     ensure_modal_state()
     render_language_selector()
     if not is_authenticated():
-        print("[app] ecran de login — utilizador nao autenticado", flush=True)
+        print("[app] ecran de login — a API so sera chamada no clique Entrar", flush=True)
+        logging.info("[app] ecran de login — a API so sera chamada no clique Entrar")
         render_login()
         st.stop()
+    restore_persistent_session()
     refresh_session_cookie()
     flush_login_email_toast()
     render_logout_button()
