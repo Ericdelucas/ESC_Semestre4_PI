@@ -2,10 +2,24 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+logging.basicConfig(
+    level=logging.INFO,
+    stream=sys.stdout,
+    format="%(asctime)s [fastapi] %(levelname)s %(message)s",
+    force=True,
+)
+_log = logging.getLogger("cti.fastapi")
+
+
+def _emit(message: str) -> None:
+    print(f"[fastapi] {message}", flush=True)
+    _log.info(message)
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
@@ -38,6 +52,8 @@ _LOCAL_ORIGINS = [
     "http://127.0.0.1:8501",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
+    "http://localhost:8081",
+    "http://127.0.0.1:8081",
 ]
 
 
@@ -62,11 +78,39 @@ def _cors_origin_regex() -> str:
     )
 
 
+def _log_bind_info() -> None:
+    public_port = os.environ.get("PORT", "<nao definido>")
+    api_host = os.environ.get("API_HOST", "127.0.0.1")
+    api_port = os.environ.get("API_PORT", "8081")
+    _emit(f"processo API a iniciar. cwd={Path.cwd()}")
+    _emit(f"RENDER={os.environ.get('RENDER')} RENDER_EXTERNAL_URL={os.environ.get('RENDER_EXTERNAL_URL')}")
+    _emit(f"PORT publica (Streamlit/Render)={public_port} | API_HOST={api_host} | API_PORT={api_port}")
+    _emit(f"BACKEND_URL={os.environ.get('BACKEND_URL')} CTI_API_URL={os.environ.get('CTI_API_URL')}")
+    _emit("uvicorn deve escutar apenas em API_HOST:API_PORT, nunca na PORT publica")
+
+
+def _log_rotas(application: FastAPI) -> None:
+    rotas = []
+    for route in application.routes:
+        methods = sorted(getattr(route, "methods", None) or [])
+        path = getattr(route, "path", str(route))
+        rotas.append(f"{','.join(methods) or '-'} {path}")
+    _emit(f"{len(rotas)} rotas registadas:")
+    for item in rotas:
+        _emit(f"  rota: {item}")
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    _log_bind_info()
+    _emit("lifespan: init_db()")
     init_db()
+    _emit("lifespan: seed_usuarios()")
     seed_usuarios()
+    _log_rotas(_app)
+    _emit("lifespan: API pronta a aceitar pedidos")
     yield
+    _emit("lifespan: a encerrar a API")
 
 
 app = FastAPI(title="CTI Assistente", lifespan=lifespan)
@@ -80,6 +124,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def _log_pedidos(request: Request, call_next):
+    _emit(f"pedido IN {request.method} {request.url} client={request.client}")
+    try:
+        response = await call_next(request)
+    except Exception as exc:  # noqa: BLE001
+        _emit(f"pedido ERRO {request.method} {request.url} {type(exc).__name__}: {exc}")
+        raise
+    _emit(f"pedido OUT {request.method} {request.url} status={response.status_code}")
+    return response
 
 _engine: CTIRag | None = None
 _sessoes: dict[str, list[dict[str, str]]] = {}
@@ -143,6 +199,7 @@ def json_version() -> dict[str, str]:
 
 @app.get("/api/v1/health")
 def health_v1() -> dict[str, object]:
+    _emit("handler /api/v1/health")
     banco = _status_banco()
     rag = status_rag()
     online = bool(banco.get("ok")) and bool(rag.get("ok"))
