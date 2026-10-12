@@ -107,7 +107,7 @@ def render_ai_layout(ctx: AppContext, corpo: Callable[[AppContext], None]) -> No
     if not _painel_aberto():
         st.markdown(_CSS_FECHADA, unsafe_allow_html=True)
         with st.container(key="ai_edge", border=False):
-            st.button(">>", key="ai_fab", help="Abrir o Assistente CTI", type="tertiary", on_click=_abrir)
+            st.button(">>", key="ai_fab", help="Abrir o Assistente de IA", type="tertiary", on_click=_abrir)
         corpo(ctx)
         return
 

@@ -142,5 +142,11 @@ def gerar_llm(
             ultimo_erro = exc
             continue
     if lang == "en":
-        return f"Could not generate an answer with Gemini: {ultimo_erro}"
-    return f"Não foi possível gerar a resposta com o Gemini: {ultimo_erro}"
+        return (
+            "I can still answer from the dashboard data even without Gemini. "
+            "Ask about EBITDA, NWC, liquidity or another indicator on screen."
+        )
+    return (
+        "Consigo responder com os dados do painel mesmo sem o Gemini. "
+        "Pergunte sobre EBITDA, NCG, liquidez ou outro indicador da tela."
+    )

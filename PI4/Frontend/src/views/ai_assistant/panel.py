@@ -12,6 +12,7 @@ from src.controllers.modals import close_chat, is_chat_open, open_chat
 from src.controllers.resilience import resilient_view
 from src.models.formatting.tables import render_markdown_with_tables
 CHAT_NAV_CARDS_KEY = "cti_chat_nav_cards"
+PENDING_PROMPT_KEY = "cti_chat_pending_prompt"
 NAV_TARGETS = {
     "acionistas_retorno": {
         "label": "Retorno & ROIC",
@@ -130,6 +131,7 @@ def _inicializar_historico() -> None:
 def _resetar_historico() -> None:
     st.session_state.messages = [{"role": "assistant", "content": t("ai.welcome")}]
     st.session_state[CHAT_NAV_CARDS_KEY] = {}
+    st.session_state.pop(PENDING_PROMPT_KEY, None)
     _sync_historico_legado()
 
 
@@ -251,23 +253,29 @@ def gerar_resposta_ia(
     """Chama o RAG/LLM com contexto financeiro da base ativa."""
     from .context import _carregar_engine, _chave_api, _contexto_foco, _fingerprint, contexto_dataset_ativo
 
-    engine = _carregar_engine(ranking, _fingerprint(ranking))
+    try:
+        engine = _carregar_engine(ranking, _fingerprint(ranking))
+    except Exception as exc:  # noqa: BLE001
+        return t("ai.error", exc=f"{type(exc).__name__}: {exc}")
     papel = current_role() or persona
-    contexto = "\n\n".join(
-        [
-            contexto_dataset_ativo(
-                df_ativo,
-                ind,
-                ranking,
-                cena_sel=cena_sel,
-                ano_sel=ano_sel,
-                persona=persona,
-                k=k,
-                user_role=papel,
-            ),
-            _contexto_foco(ranking, n_cenarios, p_ruina, cena_sel, k, ano_enc, ano_sel),
-        ]
-    )
+    try:
+        contexto = "\n\n".join(
+            [
+                contexto_dataset_ativo(
+                    df_ativo,
+                    ind,
+                    ranking,
+                    cena_sel=cena_sel,
+                    ano_sel=ano_sel,
+                    persona=persona,
+                    k=k,
+                    user_role=papel,
+                ),
+                _contexto_foco(ranking, n_cenarios, p_ruina, cena_sel, k, ano_enc, ano_sel),
+            ]
+        )
+    except Exception as exc:  # noqa: BLE001
+        contexto = f"Contexto resumido indisponivel ({type(exc).__name__}). Use os indicadores visiveis na tela."
     resposta, fontes = engine.ask(
         user_prompt,
         lang=get_lang(),
@@ -510,31 +518,37 @@ def render_chat_panel(
         st.subheader(t("ai.title"))
     _render_configuracoes()
     _inicializar_historico()
+    pending = str(st.session_state.get(PENDING_PROMPT_KEY) or "").strip()
+
     with st.container(key="cti_chat_messages", border=False):
         _render_mensagens()
+        if pending:
+            with st.chat_message("assistant"):
+                st.info(t("ai.working"))
+                st.caption(t("ai.thinking_full"))
 
     with st.container(key="cti_chat_input_area", border=False):
-        user_prompt = _render_chat_input_panel()
-    if not user_prompt:
-        return
+        user_prompt = "" if pending else _render_chat_input_panel()
 
-    st.session_state.messages.append({"role": "user", "content": user_prompt})
+    if user_prompt:
+        st.session_state.messages.append({"role": "user", "content": user_prompt})
+        st.session_state[PENDING_PROMPT_KEY] = user_prompt
+        _sync_historico_legado()
+        st.rerun()
+        return
+    if not pending:
+        return
 
     from src.models.rag_engine.rbac import deny_message, nav_target_allowed, question_is_blocked, sanitize_answer
 
     papel = current_role() or persona
-    nav_card = nav_target_allowed(detectar_intencao_navegacao(user_prompt, exigir_gatilho=False), papel)
-    if question_is_blocked(user_prompt, papel):
+    nav_card = nav_target_allowed(detectar_intencao_navegacao(pending, exigir_gatilho=False), papel)
+    if question_is_blocked(pending, papel):
         response_text = deny_message(papel, get_lang())
-        assistant_message_idx = len(st.session_state.messages)
-        st.session_state.messages.append({"role": "assistant", "content": response_text})
-        _sync_historico_legado()
-        st.rerun()
-        return
-    try:
-        with st.spinner(t("ai.thinking_full")):
+    else:
+        try:
             response_text = gerar_resposta_ia(
-                user_prompt,
+                pending,
                 df_ativo=_df_or_empty(df_ativo),
                 ind=_ind_or_ranking(ind, ranking),
                 ranking=ranking,
@@ -546,8 +560,8 @@ def render_chat_panel(
                 ano_sel=ano_sel,
                 persona=persona,
             )
-    except Exception as exc:
-        response_text = t("ai.error", exc=exc)
+        except Exception:
+            response_text = t("ai.error")
     response_text = sanitize_answer(response_text, papel, get_lang())
     if response_text.startswith("Acesso restrito") or response_text.startswith("Restricted access"):
         nav_card = None
@@ -560,6 +574,7 @@ def render_chat_panel(
     if nav_card:
         st.session_state.setdefault(CHAT_NAV_CARDS_KEY, {})[str(assistant_message_idx)] = nav_card
     st.session_state.messages.append(assistant_message)
+    st.session_state.pop(PENDING_PROMPT_KEY, None)
     _sync_historico_legado()
     st.rerun()
 
@@ -579,7 +594,7 @@ def render_chat(
     render_chat_panel(ranking, n_cenarios, p_ruina, cena_sel, k, ano_enc, ano_sel)
 
 
-@resilient_view("aba Assistente de IA CTI")
+@resilient_view("aba Assistente de IA")
 def render(
     ranking: pd.DataFrame,
     n_cenarios: int,
