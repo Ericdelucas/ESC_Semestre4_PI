@@ -27,20 +27,9 @@ _candidatos_cache: list[str] | None = None
 _HOST_FIXES = {
     "db.rvpfnqaiwqzwhrnuspj.supabase.co": "db.rvpfnqaiwqzwhrnruspj.supabase.co",
 }
-_POOLER_REGIONS = (
-    "us-east-1",
-    "us-east-2",
-    "us-west-1",
-    "us-west-2",
-    "sa-east-1",
-    "eu-west-1",
-    "eu-west-2",
-    "eu-central-1",
-    "ap-southeast-1",
-)
-_POOLER_PREFIXES = ("aws-0", "aws-1")
 _ENV_POOLER = ("DATABASE_URL_POOLER", "SUPABASE_POOLER_URL")
 _ENV_DIRECT = ("DATABASE_URL", "SUPABASE_DB_URL")
+_dns_cache: dict[tuple[str, int], list[str]] = {}
 
 
 def _limpar_url(valor: str | None) -> str:
@@ -63,6 +52,16 @@ def database_url_raw() -> str:
 
 def postgres_disponivel() -> bool:
     return is_postgres_url(database_url_raw())
+
+
+def postgres_ipv4_disponivel() -> bool:
+    """True so se alguma URL configurada (pooler ou directa) tiver A/IPv4."""
+    for url in candidate_urls():
+        host = urlparse(url).hostname or ""
+        if ipv4_de(host):
+            return True
+    diag("db", "nenhuma URL configurada tem IPv4 — a saltar Postgres")
+    return False
 
 
 def sql_conectado() -> bool:
@@ -88,10 +87,15 @@ def _project_ref(host: str) -> str:
 
 
 def _listar_ips(host: str, family: int) -> list[str]:
+    chave = (host, family)
+    if chave in _dns_cache:
+        return _dns_cache[chave]
     try:
-        return sorted({item[4][0] for item in socket.getaddrinfo(host, None, family, socket.SOCK_STREAM)})
+        ips = sorted({item[4][0] for item in socket.getaddrinfo(host, None, family, socket.SOCK_STREAM)})
     except socket.gaierror:
-        return []
+        ips = []
+    _dns_cache[chave] = ips
+    return ips
 
 
 def log_dns(host: str) -> None:
@@ -101,22 +105,23 @@ def log_dns(host: str) -> None:
 
 
 def ipv4_de(host: str) -> str | None:
+    if not host:
+        return None
     ips = _listar_ips(host, socket.AF_INET)
     if ips:
         diag("db", f"IPv4 escolhido host={host} ip={ips[0]}")
         return ips[0]
-    diag("db", f"IPv4 ausente host={host}")
+    log_dns(host)
     return None
 
 
 def _host_resolves(host: str) -> bool:
     if not host:
         return False
-    log_dns(host)
     if _listar_ips(host, socket.AF_INET):
         return True
     if _listar_ips(host, socket.AF_INET6):
-        diag("db", f"host={host} so tem IPv6 — a Render costuma falhar (Network is unreachable)")
+        diag("db", f"host={host} so tem IPv6 — a Render nao liga")
         return True
     diag("db", f"DNS falhou host={host}")
     return False
@@ -153,7 +158,6 @@ def _urls_ambiente() -> list[str]:
     for chave in (*_ENV_POOLER, *_ENV_DIRECT):
         valor = _limpar_url(os.environ.get(chave))
         if not is_postgres_url(valor):
-            diag("db", f"env {chave} ausente")
             continue
         variante = normalize_database_url(valor)
         if variante not in vistos:
@@ -169,66 +173,12 @@ def _urls_ambiente() -> list[str]:
 
 
 def candidate_urls() -> list[str]:
-    """Pooler IPv4 primeiro (6543); o host db.* so-IPv6 fica no fim."""
+    """So URLs do ambiente. Nao adivinhar dezenas de poolers (isso causava 429)."""
     global _candidatos_cache
     if _candidatos_cache is not None:
         return _candidatos_cache
-    vistos: set[str] = set()
-    saida: list[str] = []
-
-    def add(url: str, motivo: str = "") -> None:
-        if url and url not in vistos:
-            vistos.add(url)
-            saida.append(url)
-            parsed = urlparse(url)
-            diag("db", f"candidato + {motivo} host={parsed.hostname} port={parsed.port}")
-
-    for bruto in _urls_ambiente():
-        add(normalize_database_url(bruto), "env")
-
-    base = next((u for u in _urls_ambiente()), "")
-    if not base:
-        diag("db", f"total candidatos={len(saida)} (so env)")
-        return saida
-
-    parsed = urlparse(base if "://" in base else f"postgresql://{base}")
-    host = _corrigir_host(parsed.hostname or "")
-    ref = _project_ref(host)
-    if not ref and "pooler.supabase" in host:
-        user = parsed.username or ""
-        if "." in user:
-            ref = user.split(".", 1)[1]
-    user = parsed.username or "postgres"
-    regioes: list[str] = []
-    extra = _limpar_url(os.environ.get("SUPABASE_REGION"))
-    if extra:
-        regioes.append(extra)
-        diag("db", f"SUPABASE_REGION={extra}")
-    regioes.extend([r for r in _POOLER_REGIONS if r not in regioes])
-
-    if ref:
-        pooler_user = user if "." in user else f"{user.split('.')[0]}.{ref}"
-        for prefixo in _POOLER_PREFIXES:
-            for regio in regioes:
-                for porta in (6543, 5432):
-                    add(
-                        normalize_database_url(
-                            base,
-                            host=f"{prefixo}-{regio}.pooler.supabase.co",
-                            port=porta,
-                            user=pooler_user,
-                        ),
-                        f"pooler {prefixo} {regio} :{porta}",
-                    )
-        add(
-            normalize_database_url(base, host=f"db.{ref}.supabase.co", port=6543, user=pooler_user),
-            "db host porta pooler 6543",
-        )
-        add(
-            normalize_database_url(base, host=f"db.{ref}.supabase.co", port=5432, user=user.split(".")[0]),
-            "db host directo 5432",
-        )
-    diag("db", f"total candidatos={len(saida)}")
+    saida = _urls_ambiente()
+    diag("db", f"total candidatos={len(saida)} (apenas env, sem varredura DNS)")
     _candidatos_cache = saida
     return saida
 
@@ -284,6 +234,7 @@ def _falha_sem_retry(exc: BaseException) -> bool:
             "name or service not known",
             "network is unreachable",
             "resolvivel",
+            "ipv4",
         )
     )
 

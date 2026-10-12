@@ -79,10 +79,10 @@ def carregar_recorte(cena_sel: str, ano_sel: str | int) -> pd.DataFrame:
 
 def carregar_estado() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame] | None:
     """PostgreSQL via DATABASE_URL; se o DNS falhar, usa cache sem derrubar a UI."""
-    from Backend.data_loader.db import postgres_disponivel, sql_aviso, sql_conectado
+    from Backend.data_loader.db import postgres_ipv4_disponivel, postgres_disponivel, sql_aviso, sql_conectado
 
-    usa_sql = postgres_disponivel()
-    diag("boot", f"cwd={Path.cwd()} postgres={usa_sql}")
+    usa_sql = postgres_disponivel() and postgres_ipv4_disponivel()
+    diag("boot", f"cwd={Path.cwd()} postgres={postgres_disponivel()} ipv4={usa_sql}")
     raw_path, ind_path, rank_path = cache_paths()
     diag("boot", f"CACHE_DIR={CACHE_DIR.resolve()} disponivel={cache_disponivel()}")
     for path in (raw_path, ind_path, rank_path, CSV_PATH):
