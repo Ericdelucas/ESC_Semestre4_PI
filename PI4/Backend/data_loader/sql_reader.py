@@ -82,7 +82,7 @@ def contar_linhas() -> int:
         return _COUNT_CACHE
     valor = _escalar(f"SELECT COUNT(*) FROM {TABLE}")
     _COUNT_CACHE = int(valor or 0)
-        diag("sql", f"COUNT(*) cti_dados={_COUNT_CACHE:,}")
+    diag("sql", f"COUNT(*) cti_dados={_COUNT_CACHE:,}")
     return _COUNT_CACHE
 
 
