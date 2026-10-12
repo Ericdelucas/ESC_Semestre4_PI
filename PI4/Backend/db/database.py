@@ -9,7 +9,10 @@ from pathlib import Path
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
-from Backend.data_loader.db import is_postgres_url, preferred_database_url
+from urllib.parse import urlparse
+
+from Backend.data_loader.db import ipv4_de, is_postgres_url, preferred_database_url
+from Backend.diag import diag, mascarar_url
 
 _BACKEND = Path(__file__).resolve().parents[1]
 _DEFAULT_SQLITE = _BACKEND / "cache" / "cti_auth.db"
@@ -30,6 +33,14 @@ def _sqlite_url() -> str:
 def _bind_engine(url: str, *, postgres: bool) -> None:
     global _engine, _SessionLocal
     if postgres:
+        host = urlparse(url).hostname or ""
+        ipv4 = ipv4_de(host)
+        args: dict[str, object] = {"sslmode": "require", "connect_timeout": 12}
+        if ipv4:
+            args["hostaddr"] = ipv4
+            diag("auth", f"Postgres IPv4 host={host} hostaddr={ipv4}")
+        else:
+            diag("auth", f"Postgres sem IPv4 host={host} — a Render pode falhar em IPv6")
         _engine = create_engine(
             url,
             future=True,
@@ -38,7 +49,7 @@ def _bind_engine(url: str, *, postgres: bool) -> None:
             pool_size=3,
             max_overflow=2,
             pool_timeout=30,
-            connect_args={"sslmode": "require", "connect_timeout": 12},
+            connect_args=args,
         )
     else:
         _engine = create_engine(
@@ -57,7 +68,7 @@ def _bind_engine(url: str, *, postgres: bool) -> None:
 
 def _usar_sqlite(motivo: str) -> None:
     global _engine, _SessionLocal
-    print(f"[auth] aviso: a usar SQLite ({motivo})", flush=True)
+    diag("auth", f"aviso: a usar SQLite ({motivo})")
     if _engine is not None:
         try:
             _engine.dispose()
@@ -77,12 +88,12 @@ def get_engine():
         if is_postgres_url(url):
             resolvida = preferred_database_url()
             if resolvida:
-                host = resolvida.split("@")[-1].split("/")[0]
-                print(f"[auth] PostgreSQL host={host}", flush=True)
+                diag("auth", f"PostgreSQL {mascarar_url(resolvida)}")
                 _bind_engine(resolvida, postgres=True)
             else:
                 _usar_sqlite("DATABASE_URL sem DNS resolvivel")
         else:
+            diag("auth", "DATABASE_URL nao e Postgres — SQLite")
             _bind_engine(_sqlite_url(), postgres=False)
     return _engine
 
@@ -104,14 +115,14 @@ def init_db() -> None:
         engine = get_engine()
         Base.metadata.create_all(bind=engine)
         _ensure_sqlite_columns(engine)
-        print(f"[auth] init_db OK dialect={engine.dialect.name}", flush=True)
+        diag("auth", f"init_db OK dialect={engine.dialect.name}")
     except Exception as exc:  # noqa: BLE001
-        print(f"[auth] aviso: Postgres falhou no init ({type(exc).__name__}: {exc})", flush=True)
+        diag("auth", f"aviso: Postgres falhou no init ({type(exc).__name__}: {exc})")
         _usar_sqlite(str(exc))
         engine = get_engine()
         Base.metadata.create_all(bind=engine)
         _ensure_sqlite_columns(engine)
-        print("[auth] init_db OK dialect=sqlite (fallback)", flush=True)
+        diag("auth", "init_db OK dialect=sqlite (fallback)")
 
 
 def get_db() -> Session:

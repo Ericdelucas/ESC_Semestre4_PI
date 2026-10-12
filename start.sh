@@ -17,8 +17,12 @@ export API_HOST API_PORT
 export BACKEND_URL="http://127.0.0.1:${API_PORT}"
 export CTI_API_URL="${BACKEND_URL}"
 
+echo "[start] cwd=$(pwd) RENDER=${RENDER:-}"
 echo "[start] PORT publica Streamlit=${PORT}"
 echo "[start] FastAPI interna ${BACKEND_URL} (bind ${API_BIND}:${API_PORT})"
+echo "[start] DATABASE_URL definida=$([ -n "${DATABASE_URL:-}" ] && echo sim || echo nao)"
+echo "[start] DATABASE_URL_POOLER definida=$([ -n "${DATABASE_URL_POOLER:-}" ] && echo sim || echo nao)"
+echo "[start] SUPABASE_REGION=${SUPABASE_REGION:-<vazia>}"
 
 uvicorn Backend.main:app --host "${API_BIND}" --port "${API_PORT}" --log-level info &
 API_PID=$!

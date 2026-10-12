@@ -25,6 +25,7 @@ PI4_ROOT = Path(__file__).resolve().parents[1]
 if str(PI4_ROOT) not in sys.path:
     sys.path.insert(0, str(PI4_ROOT))
 
+from Backend.diag import diag, log_ambiente
 from Backend.metrics import montar_indicadores
 from src.controllers.auth import (
     AUTH_KEY,
@@ -68,14 +69,16 @@ def _bypass_login_temporario() -> None:
     st.session_state[FUNCAO_KEY] = "CEO"
     st.session_state[EMAIL_ALERTA_FLAG] = True
     st.session_state.setdefault("persona_id", "ceo")
-    print("[app] BYPASS LOGIN ativo — sessao CEO forcada", flush=True)
+    diag("app", "BYPASS LOGIN ativo — sessao CEO forcada")
     logging.info("[app] BYPASS LOGIN ativo — sessao CEO forcada")
 
 
 def main() -> None:
     configure_page()
+    diag("app", "Streamlit main() a arrancar")
+    log_ambiente("app")
     _bypass_login_temporario()
-    print("[app] arranque direto do painel CTI", flush=True)
+    diag("app", "arranque direto do painel CTI")
     logging.info("[app] arranque direto do painel CTI")
     ensure_modal_state()
     render_language_selector()
@@ -86,8 +89,10 @@ def main() -> None:
     render_logout_button()
     estado = carregar_estado()
     if estado is None:
+        diag("app", "carregar_estado devolveu None — st.stop")
         st.stop()
     df, ind, ranking = estado
+    diag("app", f"estado df={len(df):,} ind={len(ind):,} ranking={len(ranking):,} sql={fonte_sql_ativa()}")
     df = render_data_input(df)
     if has_custom_data():
         if df is None or df.empty or "CENA" not in df.columns:
@@ -110,14 +115,17 @@ def main() -> None:
 
     n_cenarios = int(ranking["CENA"].nunique()) if "CENA" in getattr(ranking, "columns", []) else 0
     ano_sel, cena_sel, anos, cenas = render_sidebar(df, ind, n_cenarios)
+    diag("app", f"filtros ano={ano_sel} cena={cena_sel} n_cenarios={n_cenarios} sql={fonte_sql_ativa()}")
     if not has_custom_data() and fonte_sql_ativa():
         try:
             recorte = carregar_recorte(str(cena_sel), ano_sel)
             if recorte is not None and not recorte.empty:
                 df = recorte
+                diag("app", f"recorte SQL aplicado linhas={len(df):,}")
         except Exception as exc:  # noqa: BLE001
-            print(f"[app] recorte SQL falhou {type(exc).__name__}: {exc}", flush=True)
+            diag("app", f"recorte SQL falhou {type(exc).__name__}: {exc}")
     persona = render_persona()
+    diag("app", f"persona={persona} a montar contexto e pagina")
     ctx = montar_contexto(
         df, ind, ranking, ano_sel=ano_sel, cena_sel=cena_sel, anos=anos, cenas=cenas, persona=persona
     )
