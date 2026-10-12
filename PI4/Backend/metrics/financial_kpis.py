@@ -165,13 +165,17 @@ def _esqueleto_indicadores(df: pd.DataFrame) -> pd.DataFrame:
     return eixos.reset_index(drop=True)
 
 
+def _indicadores_vazios() -> tuple[pd.DataFrame, pd.DataFrame]:
+    vazio = pd.DataFrame(columns=["ANO", "ano_num", "CENA"])
+    ranking_vazio = pd.DataFrame(columns=["CENA", "selo", "caixa_ano12", "ano_encerramento"])
+    return compactar_indicadores(vazio), compactar_indicadores(ranking_vazio)
+
+
 def montar_indicadores(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Calcula NCG, prazos, liquidez, risco e ranking de cenarios."""
     mapa = mapa_contas()
     if df is None or df.empty or "CENA" not in getattr(df, "columns", []):
-        vazio = pd.DataFrame(columns=["ANO", "ano_num", "CENA"])
-        ranking_vazio = pd.DataFrame(columns=["CENA", "selo", "caixa_ano12", "ano_encerramento"])
-        return compactar_indicadores(vazio), compactar_indicadores(ranking_vazio)
+        return _indicadores_vazios()
 
     trabalho = df.copy()
     if "CONTA" in trabalho.columns:
@@ -207,6 +211,31 @@ def montar_indicadores(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
         if col not in wide.columns:
             wide[col] = 0.0
 
+    return _indicadores_de_wide(wide)
+
+
+def montar_indicadores_from_wide(wide: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Indicadores a partir de um frame ja pivotado no SQL (ANO, ano_num, CENA, campos)."""
+    mapa = mapa_contas()
+    if wide is None or wide.empty or "CENA" not in getattr(wide, "columns", []):
+        return _indicadores_vazios()
+    base = wide.copy()
+    if "ANO" not in base.columns:
+        base["ANO"] = "Ano 1"
+    if "ano_num" not in base.columns:
+        base["ano_num"] = pd.to_numeric(
+            base["ANO"].astype(str).str.extract(r"(\d+)", expand=False), errors="coerce"
+        ).fillna(1)
+    metric_cols = [col for col in base.columns if col not in {"ANO", "ano_num", "CENA"}]
+    if metric_cols:
+        base[metric_cols] = base[metric_cols].fillna(0)
+    for col in set(mapa.values()):
+        if col not in base.columns:
+            base[col] = 0.0
+    return _indicadores_de_wide(base)
+
+
+def _indicadores_de_wide(wide: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     base = wide
     base["ACO"] = magnitude(base["contas_receber"]) + magnitude(base["estoques"]) + magnitude(base["creditos_tributarios"])
     base["PCO"] = magnitude(base["fornecedores"] + base["encargos_sociais"] + base["tributos_a_pagar"])

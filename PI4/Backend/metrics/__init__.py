@@ -7,6 +7,7 @@ from .financial_kpis import (
     build_financial_statement,
     calcular_kpis_recorte,
     montar_indicadores,
+    montar_indicadores_from_wide,
     probabilidade_caixa_negativo,
 )
 
@@ -18,6 +19,7 @@ __all__ = [
     "calculate_ltv_cac",
     "summarize_ltv_cac",
     "montar_indicadores",
+    "montar_indicadores_from_wide",
     "probabilidade_caixa_negativo",
 ]
 

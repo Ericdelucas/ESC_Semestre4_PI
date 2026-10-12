@@ -9,7 +9,7 @@ services:
     name: cti
     runtime: python
     plan: free
-    buildCommand: pip install --upgrade pip && pip install -r requirements.txt && chmod +x start.sh && python PI4/Backend/scripts/precompute_cache.py
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt && chmod +x start.sh
     startCommand: ./start.sh
     healthCheckPath: /_stcore/health
     envVars:
@@ -25,6 +25,8 @@ services:
         value: "http://127.0.0.1:8081"
       - key: CTI_API_URL
         value: "http://127.0.0.1:8081"
+      - key: DATABASE_URL
+        sync: false
       - key: GOOGLE_API_KEY
         sync: false
       - key: GEMINI_API_KEY
