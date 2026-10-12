@@ -104,7 +104,10 @@ def _conta_total(df: pd.DataFrame, conta: str, cena_sel: str, ano_sel: str | int
 def _peca_resumo(df: pd.DataFrame, prefixo: str, cena_sel: str, ano_sel: str | int, limite: int = 8) -> str:
     if df.empty or not {"CENA", "CONTA", "VALOR"}.issubset(df.columns):
         return "- Sem linhas disponiveis."
-    base = df.loc[df["CONTA"].astype(str).str.startswith(prefixo, na=False)].copy()
+    contas = [conta for conta in df["CONTA"].dropna().unique() if str(conta).startswith(prefixo)]
+    if not contas:
+        return "- Sem linhas para o recorte atual."
+    base = df.loc[df["CONTA"].isin(contas)]
     if not is_all_scenarios(cena_sel):
         base = base.loc[base["CENA"] == cena_sel]
     if ano_sel != "Todos" and "ano_num" in base.columns:
@@ -244,8 +247,14 @@ def contexto_dataset_ativo(
 
     papel = normalize_role(user_role or persona)
     nome_base = st.session_state.get("cti_active_dataset_name", "Base Padrão (Original)")
-    anos = sorted(pd.to_numeric(df.get("ano_num", pd.Series(dtype=float)), errors="coerce").dropna().astype(int).unique())
-    cenas = sorted(df["CENA"].dropna().astype(str).unique()) if "CENA" in df.columns else []
+    anos_src = ind if isinstance(ind, pd.DataFrame) and "ano_num" in ind.columns else df
+    anos = sorted(pd.to_numeric(anos_src.get("ano_num", pd.Series(dtype=float)), errors="coerce").dropna().astype(int).unique())
+    if "CENA" in ranking.columns:
+        n_cenas = int(ranking["CENA"].nunique())
+    elif isinstance(ind, pd.DataFrame) and "CENA" in ind.columns:
+        n_cenas = int(ind["CENA"].nunique())
+    else:
+        n_cenas = int(df["CENA"].nunique()) if "CENA" in df.columns else 0
     if "CENA" not in ind.columns:
         foco = pd.DataFrame()
     elif is_all_scenarios(cena_sel):
@@ -262,16 +271,31 @@ def contexto_dataset_ativo(
 
     linhas = [
         "Motor analitico nativo do Dashboard CTI - responda estritamente com estes dados locais recalculados da base ativa.",
-        f"Base ativa: {nome_base}. Linhas: {len(df):,}. Cenarios: {len(cenas):,}. Anos: {anos[0] if anos else 'n/d'} a {anos[-1] if anos else 'n/d'}.",
+        f"Base ativa: {nome_base}. Linhas: {len(df):,}. Cenarios: {n_cenas:,}. Anos: {anos[0] if anos else 'n/d'} a {anos[-1] if anos else 'n/d'}.",
         f"Recorte atual da tela: cenario {cena_rotulo(cena_sel)} ({cena_sel}); ano selecionado: {ano_sel}.",
         f"Persona/visao ativa do painel: {persona}.",
         f"Perfil autenticado (RBAC): {papel}.",
         "Ao diagnosticar metricas, cite diretamente os valores abaixo quando estiverem disponiveis.",
         "",
-        _contexto_cartoes_visuais(persona, k if isinstance(k, pd.Series) else pd.Series(dtype=float), ranking, df, cena_sel, ano_sel),
     ]
+    try:
+        linhas.append(
+            _contexto_cartoes_visuais(
+                persona,
+                k if isinstance(k, pd.Series) else pd.Series(dtype=float),
+                ranking,
+                df,
+                cena_sel,
+                ano_sel,
+            )
+        )
+    except Exception as exc:  # noqa: BLE001
+        linhas.append(f"Cartoes visuais indisponiveis ({type(exc).__name__}).")
     if papel in {"ceo", "cfo", "acionistas"}:
-        linhas.extend(["", _contexto_acionistas(df, cena_sel, ano_sel)])
+        try:
+            linhas.extend(["", _contexto_acionistas(df, cena_sel, ano_sel)])
+        except Exception as exc:  # noqa: BLE001
+            linhas.append(f"Retorno de acionistas indisponivel ({type(exc).__name__}).")
     if papel in {"ceo", "cfo", "concedente"}:
         linhas.extend(["", _contexto_concedente(df, cena_sel, ano_sel)])
     if papel in {"ceo", "cfo"}:
