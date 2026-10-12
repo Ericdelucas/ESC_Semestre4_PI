@@ -40,32 +40,43 @@ def banner_auditoria_filtro(cena_sel: str, ano_sel: str | int) -> None:
 
 
 def expander_auditoria_base(df: pd.DataFrame, cena_sel: str, ano_sel: str | int) -> None:
+    """Nao materializa o recorte completo em todo rerun — isso derrubava o websocket."""
     if df is None or df.empty:
         with st.expander(t("audit.title")):
             st.warning(t("audit.empty"))
         return
-    bruto = df if is_all_scenarios(cena_sel) else df.loc[df["CENA"] == cena_sel]
-    if ano_sel != "Todos" and "ano_num" in bruto.columns:
-        bruto = bruto.loc[pd.to_numeric(bruto["ano_num"], errors="coerce") == int(ano_sel)]
-    n = len(bruto)
+    recorte_completo = is_all_scenarios(cena_sel) and ano_sel == "Todos"
+    n = int(st.session_state.get("cti_row_count") or 0) if recorte_completo else None
     with st.expander(t("audit.title")):
+        if recorte_completo:
+            st.caption(
+                t(
+                    "audit.found",
+                    n=f"{n:,}",
+                    cena=cena_rotulo(cena_sel),
+                    recorte=recorte_label(ano_sel),
+                )
+            )
+            return
+        bruto = df.loc[df["CENA"] == cena_sel] if "CENA" in df.columns else df
+        if ano_sel != "Todos" and "ano_num" in bruto.columns:
+            bruto = bruto.loc[pd.to_numeric(bruto["ano_num"], errors="coerce") == int(ano_sel)]
+        n_recorte = len(bruto)
         st.caption(
             t(
                 "audit.found",
-                n=f"{n:,}",
+                n=f"{n_recorte:,}",
                 cena=cena_rotulo(cena_sel),
                 recorte=recorte_label(ano_sel),
             )
         )
-        if n == 0:
+        if n_recorte == 0:
             st.warning(t("audit.empty"))
             return
         colunas = [c for c in ("ANO", "CENA", "CONTA", "VALOR") if c in bruto.columns]
-        if is_all_scenarios(cena_sel) and n > 300:
-            st.caption(t("audit.sample", n=300, total=f"{n:,}"))
-            visao = bruto[colunas].head(300)
-        else:
-            visao = bruto[colunas].head(2000)
+        visao = bruto[colunas].head(80)
+        if n_recorte > 80:
+            st.caption(t("audit.sample", n=80, total=f"{n_recorte:,}"))
         render_table(visao)
 
 

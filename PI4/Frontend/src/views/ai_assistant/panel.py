@@ -9,6 +9,7 @@ from Backend.diag import log_ia
 from src.config.i18n import get_lang, t
 from src.controllers.auth import can_access_persona, current_role
 from src.controllers.modals import close_chat, is_chat_open, open_chat
+from src.controllers.stability import troca_leve_ativa
 from src.controllers.resilience import resilient_view
 from src.models.formatting.tables import render_markdown_with_tables
 CHAT_NAV_CARDS_KEY = "cti_chat_nav_cards"
@@ -18,37 +19,66 @@ NAV_TARGETS = {
         "label": "Retorno & ROIC",
         "persona": "acionistas",
         "description": "Visão de Acionistas com ROIC, ROE e WACC para avaliar retorno sobre o capital investido.",
-        "terms": ("roic", "retorno sobre o capital", "capital investido", "roe", "wacc", "retorno do acionista", "retorno acionista"),
+        "terms": (
+            "retorno sobre o capital investido",
+            "retorno sobre o capital",
+            "retorno do acionista",
+            "retorno acionista",
+            "capital investido",
+            "roic",
+            "roe",
+            "wacc",
+        ),
     },
     "acionistas_eva": {
         "label": "Geração de EVA",
         "persona": "acionistas",
         "description": "Visão de Acionistas com criação de valor econômico acima do custo de capital.",
-        "terms": ("eva", "valor economico", "valor econômico", "criacao de valor", "criação de valor", "lucro economico", "lucro econômico"),
+        "terms": (
+            "criacao de valor economico",
+            "criacao de valor",
+            "valor economico",
+            "lucro economico",
+            "eva",
+        ),
     },
     "acionistas_dividendos": {
         "label": "Lucro Líquido & Dividendos",
         "persona": "acionistas",
         "description": "Visão de Acionistas com lucro líquido, dividendos e reinvestimento.",
-        "terms": ("dividendos", "dividendo", "payout", "lucro liquido", "lucro líquido", "reinvestimento"),
+        "terms": ("dividendos", "dividendo", "payout", "reinvestimento"),
     },
     "concedente_capex": {
         "label": "Plano de CAPEX",
         "persona": "concedente",
         "description": "Visão de Poder Concedente com CAPEX anual e acumulado dos investimentos da concessão.",
-        "terms": ("capex", "capital expenditure", "investimento", "investimentos", "infraestrutura", "plano de capex"),
+        "terms": ("capex investido", "plano de capex", "capital expenditure", "infraestrutura", "capex"),
     },
     "concedente_solvencia": {
         "label": "Solvência & Liquidez Geral",
         "persona": "concedente",
         "description": "Visão de Poder Concedente com liquidez geral, endividamento e cobertura de juros.",
-        "terms": ("liquidez geral", "solvencia", "solvência", "obrigacoes contratuais", "obrigações contratuais"),
+        "terms": (
+            "liquidez geral",
+            "solvencia de longo prazo",
+            "obrigacoes contratuais",
+            "solvencia",
+        ),
     },
     "concedente_ativos": {
         "label": "Ativos Reversíveis",
         "persona": "concedente",
         "description": "Visão de Poder Concedente com base líquida de ativos reversíveis.",
-        "terms": ("ativos reversiveis", "ativos reversíveis", "base de ativos", "patrimonio", "patrimônio", "outorga", "imobilizado", "intangivel", "intangível"),
+        "terms": (
+            "base de ativos reversiveis",
+            "ativos reversiveis",
+            "ativo reversivel",
+            "ativo total",
+            "base de ativos",
+            "outorga",
+            "imobilizado",
+            "intangivel",
+        ),
     },
     "ceo_geral": {
         "label": "Visão Geral & DRE",
@@ -60,7 +90,17 @@ NAV_TARGETS = {
         "label": "DRE Operacional",
         "persona": "ceo",
         "description": "Aba com Receita Líquida, EBITDA, EBIT, Lucro Líquido e margens operacionais por ano.",
-        "terms": ("dre", "dre operacional", "ebitda", "margem ebitda", "margem bruta", "margem ebit", "lucro liquido", "lucro líquido"),
+        "terms": (
+            "ebitda operacional",
+            "dre operacional",
+            "margem liquida",
+            "lucro liquido",
+            "margem ebitda",
+            "margem bruta",
+            "margem ebit",
+            "ebitda",
+            "dre",
+        ),
     },
     "ceo_break_even": {
         "label": "Break-Even & Margens",
@@ -72,19 +112,38 @@ NAV_TARGETS = {
         "label": "Eficiência LTV/CAC",
         "persona": "ceo",
         "description": "Aba com os indicadores LTV, CAC e razão LTV/CAC por ano.",
-        "terms": ("ltv", "cac", "ltv/cac", "eficiencia", "eficiência"),
+        "terms": ("eficiencia comercial", "ltv / cac", "ltv/cac", "ltv", "cac"),
     },
     "capital_giro": {
         "label": "Capital de Giro",
         "persona": "cfo",
         "description": "Aba do CFO com NCG, Saldo de Tesouraria e dinâmica de capital de giro.",
-        "terms": ("ncg", "capital de giro", "saldo de tesouraria", "tesouraria"),
+        "terms": (
+            "necessidade de capital de giro",
+            "saldo de tesouraria",
+            "capital de giro",
+            "tesouraria",
+            "ncg",
+        ),
+    },
+    "prazos": {
+        "label": "Prazos e ciclo",
+        "persona": "cfo",
+        "description": "Aba do CFO com PMR, PME, PMP e o ciclo financeiro em dias.",
+        "terms": (
+            "ciclo financeiro",
+            "prazos e ciclo",
+            "prazos",
+            "pmr",
+            "pme",
+            "pmp",
+        ),
     },
     "faixa": {
         "label": "Faixa de Risco",
         "persona": "cfo",
         "description": "Aba com leitura de risco, liquidez corrente e enquadramento dos indicadores por cenário.",
-        "terms": ("liquidez", "liquidez corrente", "risco", "faixa de risco", "solvencia", "solvência"),
+        "terms": ("liquidez corrente", "faixa de risco", "risco"),
     },
     "como_ler": {
         "label": "Como Ler",
@@ -184,6 +243,18 @@ def _normalizar_texto(texto: str) -> str:
     return texto.lower().translate(mapa)
 
 
+def _card_por_nav_key(nav_key: str) -> dict[str, str] | None:
+    cfg = NAV_TARGETS.get(nav_key)
+    if not cfg:
+        return None
+    return {
+        "nav_key": nav_key,
+        "target_tab_name": t(f"nav.{nav_key}"),
+        "persona": str(cfg["persona"]),
+        "description": t(f"ai.navdesc.{nav_key}"),
+    }
+
+
 def detectar_intencao_navegacao(user_prompt: str, *, exigir_gatilho: bool = True) -> dict[str, str] | None:
     texto = _normalizar_texto(user_prompt)
     gatilhos = (
@@ -195,22 +266,22 @@ def detectar_intencao_navegacao(user_prompt: str, *, exigir_gatilho: bool = True
         "mostre",
         "mostrar",
         "grafico",
-        "gráfico",
         "aba",
         "secao",
-        "seção",
     )
     if exigir_gatilho and not any(_normalizar_texto(gatilho) in texto for gatilho in gatilhos):
         return None
+    melhor: dict[str, str] | None = None
+    melhor_len = -1
     for nav_key, cfg in NAV_TARGETS.items():
-        if any(_normalizar_texto(term) in texto for term in cfg["terms"]):
-            return {
-                "nav_key": nav_key,
-                "target_tab_name": t(f"nav.{nav_key}"),
-                "persona": cfg["persona"],
-                "description": t(f"ai.navdesc.{nav_key}"),
-            }
-    return None
+        for term in cfg["terms"]:
+            nt = _normalizar_texto(term)
+            if nt and nt in texto and len(nt) > melhor_len:
+                card = _card_por_nav_key(nav_key)
+                if card:
+                    melhor = card
+                    melhor_len = len(nt)
+    return melhor
 
 
 def _rerun_app() -> None:
@@ -229,7 +300,11 @@ def render_navigation_card(nav_card: dict[str, str], message_idx: int) -> None:
     destino_persona = str(nav_card.get("persona") or "")
 
     with col1:
-        if st.button(t("ai.open_tab", tab=target_tab_name), key=f"nav_open_{message_idx}_{nav_card['nav_key']}"):
+        if st.button(
+            t("ai.open_tab", tab=target_tab_name),
+            key=f"nav_open_{message_idx}_{nav_card['nav_key']}",
+            type="primary",
+        ):
             if destino_persona and not can_access_persona(destino_persona):
                 st.toast(t("login.error"))
                 _rerun_chat()
@@ -522,16 +597,9 @@ div[data-testid="stPopoverBody"], .floating-chat-container {
 def render_floating_chat() -> None:
     """Painel do assistente. Nao recebe o df de 1M linhas — isso gerava 429 no fragmento."""
     leve = st.session_state.get("cti_chat_ctx") or {}
-    log_ia(
-        f"FRAGMENTO assistente a correr aberto={is_chat_open()} "
-        f"persona={leve.get('persona')} cena={leve.get('cena_sel')} "
-        f"pending={bool(st.session_state.get(PENDING_PROMPT_KEY))} "
-        f"ranking={len(leve.get('ranking') if isinstance(leve.get('ranking'), pd.DataFrame) else [])}"
-    )
     st.markdown(_FLOATING_CHAT_CSS, unsafe_allow_html=True)
 
-    if not is_chat_open():
-        log_ia("FRAGMENTO: botao flutuante visivel (chat fechado)")
+    if not is_chat_open() or troca_leve_ativa():
         with st.container(key="cti_chat_fab"):
             st.button("🤖", key="cti_chat_open_btn", help=t("ai.toggle"), on_click=open_chat)
         return
@@ -582,6 +650,9 @@ def render_chat_panel(
     _render_configuracoes()
     _inicializar_historico()
     pending = str(st.session_state.get(PENDING_PROMPT_KEY) or "").strip()
+    if troca_leve_ativa() and pending:
+        st.session_state.pop(PENDING_PROMPT_KEY, None)
+        pending = ""
     log_ia(f"chat_panel: pending={bool(pending)} mensagens={len(st.session_state.get('messages') or [])}")
 
     with st.container(key="cti_chat_messages", border=False):
@@ -616,8 +687,16 @@ def render_chat_panel(
             from src.models.formatting.tables import limpar_markdown_chat
             from src.models.rag_engine.engine import _escolher_guia, _normalizar_texto, _resposta_sem_llm
 
-            if _escolher_guia(_normalizar_texto(pending)):
-                log_ia("chat_panel: resposta RAPIDA por guia (sem indexar, sem Gemini)")
+            guia = _escolher_guia(_normalizar_texto(pending))
+            if guia and guia.get("nav_key"):
+                nav_do_guia = nav_target_allowed(_card_por_nav_key(str(guia["nav_key"])), papel)
+                if nav_do_guia:
+                    nav_card = nav_do_guia
+            if guia:
+                log_ia(
+                    f"chat_panel: resposta RAPIDA por guia={guia.get('id')} "
+                    f"nav={nav_card['nav_key'] if nav_card else '-'}"
+                )
                 response_text = _resposta_sem_llm(pending, "", get_lang())
             elif nav_card:
                 log_ia("chat_panel: resposta RAPIDA de navegacao (sem indexar, sem Gemini)")
