@@ -21,6 +21,7 @@ if str(_FRONTEND) not in sys.path:
     sys.path.insert(0, str(_FRONTEND))
 
 from Backend.data_loader import load_cti_csv
+from Backend.diag import log_ia
 from Backend.metrics import montar_indicadores
 from src.models.rag_engine import RagEngine, resolve_api_key
 
@@ -29,8 +30,11 @@ class CTIRag:
     """Indexa a base CTI e devolve a resposta textual do consultor."""
 
     def __init__(self) -> None:
+        log_ia("API CTIRag: a carregar ranking e motor")
         ranking = _carregar_ranking()
+        log_ia(f"API CTIRag: ranking={len(ranking)}")
         self._engine = RagEngine.from_ranking(ranking)
+        log_ia("API CTIRag: motor pronto")
 
     def responder(
         self,
@@ -38,6 +42,7 @@ class CTIRag:
         history: list[dict[str, str]] | None = None,
         user_role: str | None = None,
     ) -> tuple[str, list[str]]:
+        log_ia(f"API CTIRag.responder: pergunta={message[:120]!r} role={user_role}")
         resposta, fontes = self._engine.ask(
             message,
             lang="pt",
@@ -47,6 +52,7 @@ class CTIRag:
             cena_sel=None,
             user_role=user_role,
         )
+        log_ia(f"API CTIRag.responder: OK chars={len(resposta)} fontes={fontes[:6]}")
         return resposta, fontes
 
 

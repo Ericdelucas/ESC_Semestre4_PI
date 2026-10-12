@@ -9,6 +9,7 @@ from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pypdf import PdfReader
 
+from Backend.diag import log_ia
 from src.config import DOCS_DIR, ROOT
 from src.config.glossary import GLOSSARIO
 
@@ -120,13 +121,16 @@ def iter_arquivos_doc() -> list[Path]:
 def docs_manuais() -> list[Document]:
     splitter = RecursiveCharacterTextSplitter(chunk_size=1400, chunk_overlap=200)
     docs: list[Document] = []
-    for path in iter_arquivos_doc():
+    arquivos = iter_arquivos_doc()
+    log_ia(f"docs_manuais: a ler {len(arquivos)} ficheiros")
+    for path in arquivos:
         try:
             if path.suffix.lower() in PDF_SUFFIXES:
                 texto = ler_pdf(path)
             else:
                 texto = path.read_text(encoding="utf-8", errors="ignore")
-        except Exception:
+        except Exception as exc:  # noqa: BLE001
+            log_ia(f"docs_manuais: falhou {path.name} {type(exc).__name__}: {exc}")
             continue
         if not texto.strip() or parece_transcricao(path, texto):
             continue
@@ -174,10 +178,12 @@ def docs_glossario() -> list[Document]:
     ]
 
 
-def docs_cenarios(ranking: pd.DataFrame) -> list[Document]:
+def docs_cenarios(ranking: pd.DataFrame, *, detalhe_por_cena: bool = True) -> list[Document]:
     docs: list[Document] = []
     if ranking.empty:
+        log_ia("docs_cenarios: ranking vazio")
         return docs
+    log_ia(f"docs_cenarios: ranking={len(ranking)} detalhe_por_cena={detalhe_por_cena}")
     n = int(ranking.shape[0])
     caixa = ranking["caixa_ano12"] if "caixa_ano12" in ranking.columns else pd.Series(dtype=float)
     p_ruina = float((caixa < 0).mean() * 100) if not caixa.empty else 0.0
@@ -225,6 +231,10 @@ def docs_cenarios(ranking: pd.DataFrame) -> list[Document]:
                 )
             )
 
+    if not detalhe_por_cena:
+        log_ia(f"docs_cenarios: a saltar {len(ranking)} docs por cenario (evita 429)")
+        log_ia(f"docs_cenarios: total={len(docs)}")
+        return docs
     for _, row in ranking.iterrows():
         cena = str(row["CENA"])
         texto = (
@@ -245,4 +255,5 @@ def docs_cenarios(ranking: pd.DataFrame) -> list[Document]:
                 metadata={"source": f"cenario/{cena}", "tipo": "cenario", "visibility": ["ceo", "cfo"], "user_roles": ["ceo", "cfo"]},
             )
         )
+    log_ia(f"docs_cenarios: total={len(docs)}")
     return docs

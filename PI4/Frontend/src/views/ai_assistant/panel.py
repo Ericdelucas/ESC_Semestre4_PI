@@ -5,6 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+from Backend.diag import log_ia
 from src.config.i18n import get_lang, t
 from src.controllers.auth import can_access_persona, current_role
 from src.controllers.bootstrap import AppContext
@@ -226,14 +227,22 @@ def render_navigation_card(nav_card: dict[str, str], message_idx: int) -> None:
                 st.session_state["pending_persona_id"] = destino_persona
                 st.session_state["active_tab"] = target_tab_name
                 close_chat()
-            st.rerun()
+            _rerun_chat()
 
     with col2:
         if st.button(t("ai.cancel_nav"), key=f"nav_cancel_{message_idx}_{nav_card['nav_key']}"):
             st.session_state[CHAT_NAV_CARDS_KEY][str(message_idx)]["dismissed"] = True
             _sync_historico_legado()
             st.toast(t("ai.nav_cancelled"))
-            st.rerun()
+            _rerun_chat()
+
+
+def _rerun_chat() -> None:
+    log_ia("rerun so do fragmento do assistente (nao recarrega o dashboard)")
+    try:
+        st.rerun(scope="fragment")
+    except TypeError:
+        st.rerun()
 
 
 def gerar_resposta_ia(
@@ -251,11 +260,20 @@ def gerar_resposta_ia(
     persona: str = "cfo",
 ) -> str:
     """Chama o RAG/LLM com contexto financeiro da base ativa."""
+    import time
+
     from .context import _carregar_engine, _chave_api, _contexto_foco, _fingerprint, contexto_dataset_ativo
 
+    t0 = time.time()
+    log_ia(
+        f"gerar_resposta: inicio pergunta={user_prompt[:120]!r} df={len(df_ativo)} "
+        f"ind={len(ind)} ranking={len(ranking)} persona={persona}"
+    )
     try:
         engine = _carregar_engine(ranking, _fingerprint(ranking))
+        log_ia(f"gerar_resposta: motor pronto em {time.time() - t0:.2f}s")
     except Exception as exc:  # noqa: BLE001
+        log_ia(f"gerar_resposta: motor FALHOU {type(exc).__name__}: {exc}")
         return t("ai.error", exc=f"{type(exc).__name__}: {exc}")
     papel = current_role() or persona
     try:
@@ -275,7 +293,9 @@ def gerar_resposta_ia(
             ]
         )
     except Exception as exc:  # noqa: BLE001
+        log_ia(f"gerar_resposta: contexto FALHOU {type(exc).__name__}: {exc}")
         contexto = f"Contexto resumido indisponivel ({type(exc).__name__}). Use os indicadores visiveis na tela."
+    log_ia(f"gerar_resposta: contexto chars={len(contexto)} a chamar ask()")
     resposta, fontes = engine.ask(
         user_prompt,
         lang=get_lang(),
@@ -285,6 +305,7 @@ def gerar_resposta_ia(
         cena_sel=cena_sel,
         user_role=papel,
     )
+    log_ia(f"gerar_resposta: OK chars={len(resposta)} fontes={fontes[:6]} em {time.time() - t0:.2f}s")
     _ = fontes
     return resposta
 
@@ -294,7 +315,7 @@ def _render_configuracoes() -> None:
         st.text_input(t("ai.api_key"), type="password", key="gemini_api_key_input", help=t("ai.api_key_help"))
         if st.button(t("ai.clear")):
             _resetar_historico()
-            st.rerun()
+            _rerun_chat()
 
 
 def _df_or_empty(df: pd.DataFrame | None) -> pd.DataFrame:
@@ -469,8 +490,10 @@ div[data-testid="stPopoverBody"], .floating-chat-container {
 """
 
 
+@st.fragment
 def render_floating_chat(ctx: AppContext) -> None:
     """Renderiza o assistente em um painel flutuante acionado por botao."""
+    log_ia(f"painel: aberto={is_chat_open()} persona={ctx.persona} cena={ctx.cena_sel}")
     st.markdown(_FLOATING_CHAT_CSS, unsafe_allow_html=True)
 
     if not is_chat_open():
@@ -519,6 +542,7 @@ def render_chat_panel(
     _render_configuracoes()
     _inicializar_historico()
     pending = str(st.session_state.get(PENDING_PROMPT_KEY) or "").strip()
+    log_ia(f"chat_panel: pending={bool(pending)} mensagens={len(st.session_state.get('messages') or [])}")
 
     with st.container(key="cti_chat_messages", border=False):
         _render_mensagens()
@@ -533,8 +557,9 @@ def render_chat_panel(
     if user_prompt:
         st.session_state.messages.append({"role": "user", "content": user_prompt})
         st.session_state[PENDING_PROMPT_KEY] = user_prompt
+        log_ia(f"chat_panel: pergunta na fila {user_prompt[:120]!r}")
         _sync_historico_legado()
-        st.rerun()
+        _rerun_chat()
         return
     if not pending:
         return
@@ -546,6 +571,7 @@ def render_chat_panel(
     if question_is_blocked(pending, papel):
         response_text = deny_message(papel, get_lang())
     else:
+        log_ia("chat_panel: a processar pergunta pendente")
         try:
             response_text = gerar_resposta_ia(
                 pending,
@@ -560,7 +586,8 @@ def render_chat_panel(
                 ano_sel=ano_sel,
                 persona=persona,
             )
-        except Exception:
+        except Exception as exc:  # noqa: BLE001
+            log_ia(f"chat_panel: gerar_resposta EXCECAO {type(exc).__name__}: {exc}")
             response_text = t("ai.error")
     response_text = sanitize_answer(response_text, papel, get_lang())
     if response_text.startswith("Acesso restrito") or response_text.startswith("Restricted access"):
@@ -575,8 +602,9 @@ def render_chat_panel(
         st.session_state.setdefault(CHAT_NAV_CARDS_KEY, {})[str(assistant_message_idx)] = nav_card
     st.session_state.messages.append(assistant_message)
     st.session_state.pop(PENDING_PROMPT_KEY, None)
+    log_ia(f"chat_panel: resposta gravada chars={len(response_text)}")
     _sync_historico_legado()
-    st.rerun()
+    _rerun_chat()
 
 
 def render_chat(

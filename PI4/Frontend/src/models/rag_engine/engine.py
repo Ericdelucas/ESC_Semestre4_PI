@@ -19,6 +19,8 @@ except ImportError:
 from .answers import gerar_llm, resolve_api_key
 from .documents import docs_cenarios, docs_glossario, docs_manuais, status_documentos
 from .embeddings import TfidfEmbeddings
+from Backend.diag import log_ia
+
 from .rbac import (
     deny_message,
     document_allowed,
@@ -482,14 +484,27 @@ class RagEngine:
 
     @classmethod
     def from_ranking(cls, ranking: pd.DataFrame) -> "RagEngine":
+        import time
+
+        t0 = time.time()
+        log_ia(f"from_ranking: inicio ranking={len(ranking)}")
         manuais = docs_manuais()
+        log_ia(f"from_ranking: manuais indexados={len(manuais)}")
         doc_status = status_documentos()
+        log_ia(f"from_ranking: ficheiros documentais={doc_status.get('count')}")
         manual_sources = sorted({str(doc.metadata.get("source", "documento")) for doc in manuais})
-        docs = docs_cenarios(ranking) + docs_glossario() + manuais
+        detalhe = len(ranking) <= 80
+        log_ia(
+            f"from_ranking: docs_cenarios detalhe_por_cena={detalhe} "
+            f"(False evita 1200 docs e o 429 no websocket)"
+        )
+        docs = docs_cenarios(ranking, detalhe_por_cena=detalhe) + docs_glossario() + manuais
+        log_ia(f"from_ranking: total documentos={len(docs)}")
         if not docs:
             docs = [Document(page_content="Base CTI sem documentos.", metadata={"source": "vazio"})]
         texts = [d.page_content for d in docs]
         emb = TfidfEmbeddings()
+        log_ia("from_ranking: a ajustar TF-IDF")
         emb.fit(texts)
         vectors = np.asarray(emb.embed_documents(texts), dtype=np.float32)
         backend = "numpy"
@@ -497,8 +512,11 @@ class RagEngine:
         try:
             index = faiss_index(vectors)
             backend = "faiss"
-        except Exception:
+            log_ia("from_ranking: indice FAISS OK")
+        except Exception as exc:  # noqa: BLE001
             index = None
+            log_ia(f"from_ranking: FAISS indisponivel ({type(exc).__name__}: {exc}) — a usar numpy")
+        log_ia(f"from_ranking: pronto backend={backend} docs={len(docs)} em {time.time() - t0:.2f}s")
         return cls(
             documents=docs,
             embeddings=emb,
@@ -560,9 +578,15 @@ class RagEngine:
         cena_sel: str | None = None,
         user_role: str | None = None,
     ) -> tuple[str, list[str]]:
+        log_ia(
+            f"ask: pergunta={question[:120]!r} lang={lang} role={user_role} "
+            f"cena={cena_sel} hist={len(history)} contexto_extra={len(extra_context)}"
+        )
         if question_is_blocked(question, user_role):
+            log_ia("ask: pergunta bloqueada pelo RBAC")
             return deny_message(user_role, lang), []
         hits = self.retrieve(question, cena_sel=cena_sel, user_role=user_role)
+        log_ia(f"ask: retrieve hits={len(hits)}")
         fontes = []
         for doc in hits:
             src = str(doc.metadata.get("source", "contexto"))
@@ -594,6 +618,7 @@ class RagEngine:
                 )
         chave = resolve_api_key(api_key)
         if not chave:
+            log_ia("ask: sem GOOGLE_API_KEY — resposta local sem Gemini")
             resposta_sem_llm = sanitize_answer(_resposta_sem_llm(question, contexto, lang), user_role, lang)
             if not self.manual_sources:
                 if lang == "en":
@@ -609,5 +634,7 @@ class RagEngine:
                         + resposta_sem_llm
                     )
             return resposta_sem_llm, fontes
+        log_ia(f"ask: a chamar Gemini chave_len={len(chave)} contexto_chars={len(contexto)}")
         resposta = sanitize_answer(gerar_llm(question, contexto, lang, history, chave, user_role=user_role), user_role, lang)
+        log_ia(f"ask: resposta pronta chars={len(resposta)} fontes={fontes[:6]}")
         return resposta, fontes

@@ -11,6 +11,11 @@ def diag(tag: str, mensagem: str) -> None:
     print(f"[{tag}] {time.strftime('%H:%M:%S')} {mensagem}", flush=True)
 
 
+def log_ia(mensagem: str) -> None:
+    """Log exclusivo do Assistente de IA — visivel no Live Tail da Render."""
+    print(f"[assistente-ia] {time.strftime('%H:%M:%S')} {mensagem}", flush=True)
+
+
 def mascarar_url(url: str) -> str:
     if not url:
         return "<vazia>"

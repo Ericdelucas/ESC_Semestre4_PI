@@ -9,6 +9,8 @@ from google import genai
 from google.genai import types
 from langchain_core.documents import Document
 
+from Backend.diag import log_ia
+
 from .config import GEMINI_MODELS, MARCA_FALA, SYSTEM_PROMPT_EN, SYSTEM_PROMPT_PT, TERMOS_FIN
 from .rbac import normalize_role, rbac_system_prompt
 
@@ -128,8 +130,10 @@ def gerar_llm(
         f"Pergunta: {question}"
     )
     ultimo_erro: Exception | None = None
+    log_ia(f"gemini: a gerar pergunta={question[:80]!r} modelos={GEMINI_MODELS}")
     for modelo in GEMINI_MODELS:
         try:
+            log_ia(f"gemini: tentativa modelo={modelo}")
             resp = client.models.generate_content(
                 model=modelo,
                 contents=prompt,
@@ -137,10 +141,14 @@ def gerar_llm(
             )
             texto = (resp.text or "").strip()
             if texto:
+                log_ia(f"gemini: OK modelo={modelo} chars={len(texto)}")
                 return texto
+            log_ia(f"gemini: modelo={modelo} devolveu texto vazio")
         except Exception as exc:  # noqa: BLE001 - tenta o proximo modelo
             ultimo_erro = exc
+            log_ia(f"gemini: FALHOU modelo={modelo} {type(exc).__name__}: {exc}")
             continue
+    log_ia(f"gemini: todos os modelos falharam ultimo={ultimo_erro}")
     if lang == "en":
         return (
             "I can still answer from the dashboard data even without Gemini. "
