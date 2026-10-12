@@ -47,9 +47,20 @@ class AppContext:
     k: pd.Series
 
 
+def fonte_sql_ativa() -> bool:
+    if "cti_fonte_sql" in st.session_state:
+        return bool(st.session_state["cti_fonte_sql"])
+    try:
+        from Backend.data_loader.db import postgres_disponivel
+
+        return postgres_disponivel()
+    except Exception:  # noqa: BLE001
+        return False
+
+
 @st.cache_data(show_spinner=False)
 def carregar_pipeline() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Cacheia o resultado. A primeira carga tenta parquet e cai no CSV se falhar."""
+    """Cacheia o resultado. PostgreSQL primeiro; parquet/CSV so sem DATABASE_URL."""
     df, ind, ranking = prepare_dashboard_data(CSV_PATH)
     ranking = ranking.copy()
     if "CENA" in ranking.columns:
@@ -57,16 +68,41 @@ def carregar_pipeline() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     return df, ind, ranking
 
 
+@st.cache_data(show_spinner=False, ttl=180)
+def carregar_recorte(cena_sel: str, ano_sel: str | int) -> pd.DataFrame:
+    """Fatia filtrada no PostgreSQL — nao carrega o milhao de linhas."""
+    from Backend.data_loader.sql_reader import fetch_recorte
+
+    return fetch_recorte(cena_sel, ano_sel)
+
+
 def carregar_estado() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame] | None:
-    """Nunca fica preso no spinner: parquet ou fallback CSV, com erro limpo."""
-    raw_path, ind_path, rank_path = cache_paths()
-    print(f"[boot] cwd={Path.cwd()}", flush=True)
-    print(f"[boot] CACHE_DIR={CACHE_DIR.resolve()} disponivel={cache_disponivel()}", flush=True)
-    for path in (raw_path, ind_path, rank_path, CSV_PATH):
-        print(f"[boot] {path.resolve()} existe={path.exists()}", flush=True)
+    """PostgreSQL via DATABASE_URL; localmente ainda aceita parquet/CSV."""
+    from Backend.data_loader.db import postgres_disponivel
+    from Backend.data_loader.sql_reader import contar_linhas, fonte_label
+
+    usa_sql = postgres_disponivel()
+    print(f"[boot] cwd={Path.cwd()} postgres={usa_sql}", flush=True)
+    if not usa_sql:
+        raw_path, ind_path, rank_path = cache_paths()
+        print(f"[boot] CACHE_DIR={CACHE_DIR.resolve()} disponivel={cache_disponivel()}", flush=True)
+        for path in (raw_path, ind_path, rank_path, CSV_PATH):
+            print(f"[boot] {path.resolve()} existe={path.exists()}", flush=True)
+    spinner = (
+        "A consultar cti_dados no PostgreSQL..."
+        if usa_sql
+        else "A carregar base (cache ou CSV)..."
+    )
     try:
-        with st.spinner("A carregar base (cache ou CSV)..."):
-            return carregar_pipeline()
+        with st.spinner(spinner):
+            dados = carregar_pipeline()
+        if usa_sql:
+            st.session_state["cti_fonte_sql"] = True
+            st.session_state.setdefault("cti_active_dataset_name", fonte_label())
+            st.session_state.setdefault("cti_row_count", contar_linhas())
+        else:
+            st.session_state["cti_fonte_sql"] = False
+        return dados
     except MemoryError:
         print("[boot] MemoryError no carregamento", flush=True)
         st.error(t("boot.memory"))

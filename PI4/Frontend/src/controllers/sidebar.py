@@ -121,9 +121,12 @@ def render_sidebar(df: pd.DataFrame, ind: pd.DataFrame, n_cenarios: int) -> tupl
         st.markdown("---")
         active_base = st.session_state.get("cti_active_dataset_name", Path(CSV_PATH).name)
         n_anos = int(ind["ano_num"].nunique()) if isinstance(ind, pd.DataFrame) and "ano_num" in ind.columns else 0
+        n_linhas = st.session_state.get("cti_row_count")
+        if n_linhas is None:
+            n_linhas = len(df) if isinstance(df, pd.DataFrame) else 0
         st.markdown(
             f"**{t('sidebar.base')}:** `{active_base}`  \n"
-            f"**{t('sidebar.rows')}:** {len(df) if isinstance(df, pd.DataFrame) else 0:,}  \n"
+            f"**{t('sidebar.rows')}:** {int(n_linhas):,}  \n"
             f"**{t('sidebar.scenarios')}:** {n_cenarios:,}  \n"
             f"**{t('sidebar.years')}:** {n_anos}"
         )

@@ -9,6 +9,8 @@ from pathlib import Path
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
+from Backend.data_loader.db import is_postgres_url, normalize_database_url
+
 _BACKEND = Path(__file__).resolve().parents[1]
 _DEFAULT_SQLITE = _BACKEND / "cache" / "cti_auth.db"
 
@@ -26,8 +28,21 @@ def get_engine():
     if _engine is None:
         _DEFAULT_SQLITE.parent.mkdir(parents=True, exist_ok=True)
         url = database_url()
-        connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
-        _engine = create_engine(url, future=True, connect_args=connect_args)
+        if is_postgres_url(url):
+            url = normalize_database_url(url)
+            _engine = create_engine(
+                url,
+                future=True,
+                pool_pre_ping=True,
+                pool_recycle=300,
+                pool_size=3,
+                max_overflow=2,
+                pool_timeout=30,
+                connect_args={"sslmode": "require", "connect_timeout": 20},
+            )
+        else:
+            connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
+            _engine = create_engine(url, future=True, connect_args=connect_args)
         _SessionLocal = sessionmaker(
             bind=_engine,
             autoflush=False,

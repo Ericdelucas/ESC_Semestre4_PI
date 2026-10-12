@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -75,7 +76,18 @@ def _carregar_csv(csv: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
 
 
 def prepare_dashboard_data(csv_path: str | Path = CSV_PATH) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Tenta parquet; se faltar ou falhar, calcula uma vez a partir do CSV."""
+    """PostgreSQL (DATABASE_URL) tem prioridade; senao parquet/CSV local."""
+    try:
+        from Backend.data_loader.sql_reader import load_dashboard_from_sql, postgres_disponivel
+
+        if postgres_disponivel():
+            print("[cache] fonte=PostgreSQL tabela=cti_dados", flush=True)
+            return load_dashboard_from_sql()
+    except Exception as exc:  # noqa: BLE001
+        print(f"[cache] PostgreSQL falhou {type(exc).__name__}: {exc}", flush=True)
+        if os.environ.get("RENDER"):
+            raise
+
     csv = Path(csv_path)
     _log_ficheiros_cache(csv)
     if cache_disponivel():
