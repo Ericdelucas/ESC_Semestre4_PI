@@ -42,12 +42,7 @@ def _log_volume(tag: str, df: pd.DataFrame, nome: str) -> None:
     contas = int(df["CONTA"].nunique()) if "CONTA" in df.columns else 0
     cenas = int(df["CENA"].nunique()) if "CENA" in df.columns else 0
     anos = int(df["ano_num"].nunique()) if "ano_num" in df.columns else 0
-    mem = 0
-    try:
-        mem = int(df.memory_usage(deep=True).sum())
-    except Exception:
-        pass
-    diag(tag, f"{nome} linhas={len(df):,} shape={df.shape} contas={contas} cenas={cenas} anos={anos} ram={mem:,}B")
+    diag(tag, f"{nome} linhas={len(df):,} shape={df.shape} contas={contas} cenas={cenas} anos={anos}")
 
 
 def df_longo_de_indicadores(ind: pd.DataFrame) -> pd.DataFrame:
@@ -86,7 +81,9 @@ def load_cached_dashboard() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     diag("cache", f"a ler indicadores={ind_path} bytes={ind_path.stat().st_size}")
     diag("cache", f"a ler ranking={rank_path} bytes={rank_path.stat().st_size}")
     if raw_path.exists():
-        df = otimizar_base_cti(pd.read_parquet(raw_path))
+        df = pd.read_parquet(raw_path)
+        if "CONTA" in df.columns and not isinstance(df["CONTA"].dtype, pd.CategoricalDtype):
+            df = otimizar_base_cti(df)
         _log_volume("cache", df, "cti_limpo")
     else:
         diag("cache", "MISS cti_limpo.parquet — DRE/break-even ficam incompletos")

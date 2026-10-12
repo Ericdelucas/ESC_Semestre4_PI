@@ -9,11 +9,11 @@ from .financial_kpis import build_break_even, is_all_scenarios
 
 
 def _scenario_rows(df: pd.DataFrame, cena: str) -> pd.DataFrame:
-    if df.empty or "CENA" not in df.columns:
-        return df.iloc[0:0]
+    if df is None or df.empty or "CENA" not in df.columns:
+        return df.iloc[0:0] if isinstance(df, pd.DataFrame) else pd.DataFrame()
     if is_all_scenarios(cena):
-        return df.copy()
-    return df.loc[df["CENA"].astype(str) == str(cena)].copy()
+        return df
+    return df.loc[df["CENA"] == cena]
 
 
 def _assumption_series(df: pd.DataFrame, cena: str, aliases: list[str], fallback: float) -> pd.Series | float:
@@ -22,7 +22,8 @@ def _assumption_series(df: pd.DataFrame, cena: str, aliases: list[str], fallback
     if rows.empty or "CONTA" not in rows.columns:
         return fallback
     normalized_aliases = {normalize_label(alias) for alias in aliases}
-    mask = rows["CONTA"].astype(str).map(lambda value: normalize_label(value) in normalized_aliases)
+    mapa = {valor: normalize_label(valor) in normalized_aliases for valor in rows["CONTA"].dropna().unique()}
+    mask = rows["CONTA"].map(mapa).fillna(False)
     found = rows.loc[mask, ["ano_num", "VALOR"]].copy()
     if found.empty:
         return fallback

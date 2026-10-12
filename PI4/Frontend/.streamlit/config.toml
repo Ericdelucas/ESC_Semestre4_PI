@@ -8,3 +8,5 @@ enableCORS = false
 enableXsrfProtection = false
 fileWatcherType = "none"
 runOnSave = false
+enableWebsocketCompression = false
+maxMessageSize = 50
