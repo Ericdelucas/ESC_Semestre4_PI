@@ -18,7 +18,7 @@ from Backend.diag import diag  # noqa: E402
 from Backend.services import build_context_metrics, prepare_dashboard_data  # noqa: E402
 from Backend.services.dashboard_pipeline import CACHE_DIR, cache_disponivel, cache_paths  # noqa: E402
 from src.config import CSV_PATH  # noqa: E402
-from src.config.i18n import t  # noqa: E402
+from src.config.i18n import get_lang, t  # noqa: E402
 from src.controllers.modals import open_relatorio  # noqa: E402
 from src.controllers.headers import banner_auditoria_filtro  # noqa: E402
 from src.controllers.ops_menu import garantir_varredura_silenciosa, render_ops_menu  # noqa: E402
@@ -121,9 +121,10 @@ def _metricas_padrao(cena_sel: str, ano_sel: str) -> tuple[int, float, pd.DataFr
 
 
 @st.cache_data(show_spinner=False)
-def kpis_padrao(persona: str, cena_sel: str, ano_sel: str):
+def kpis_padrao(persona: str, cena_sel: str, ano_sel: str, lang: str):
     from src.controllers.kpis import kpis_por_persona
 
+    _ = lang
     df, _ind, ranking = carregar_pipeline()
     _ano_enc, _p_ruina, _foco, _foco_ano, k = _metricas_padrao(cena_sel, ano_sel)
     ano: str | int = "Todos" if ano_sel == "Todos" else int(ano_sel) if str(ano_sel).isdigit() else ano_sel
@@ -207,7 +208,7 @@ def render_cabecalho(ctx: AppContext) -> None:
     if has_custom_data():
         itens = kpis_por_persona(ctx.persona, ctx.k, ctx.ranking, ctx.df, ctx.cena_sel, ctx.ano_sel)
     else:
-        itens = kpis_padrao(ctx.persona, str(ctx.cena_sel), str(ctx.ano_sel))
+        itens = kpis_padrao(ctx.persona, str(ctx.cena_sel), str(ctx.ano_sel), get_lang())
     render_kpi_row(itens)
     st.info(t(f"persona.blurb.{ctx.persona}"))
     if ctx.persona == "cfo":

@@ -6,6 +6,7 @@ from collections.abc import Callable
 
 import streamlit as st
 
+from src.config.i18n import t
 from src.controllers.bootstrap import AppContext
 from src.controllers.resilience import safe_render
 from src.views.ai_assistant import render_chat_panel
@@ -108,7 +109,7 @@ def render_ai_layout(ctx: AppContext, corpo: Callable[[AppContext], None]) -> No
     if not _painel_aberto():
         st.markdown(_CSS_FECHADA, unsafe_allow_html=True)
         with st.container(key="ai_edge", border=False):
-            st.button(">>", key="ai_fab", help="Abrir o Assistente de IA", type="tertiary", on_click=_abrir)
+            st.button(">>", key="ai_fab", help=t("ai.toggle"), type="tertiary", on_click=_abrir)
         corpo(ctx)
         return
 
@@ -119,7 +120,7 @@ def render_ai_layout(ctx: AppContext, corpo: Callable[[AppContext], None]) -> No
         st.markdown(_CSS_ABERTA, unsafe_allow_html=True)
         with st.container(key="cti_ai_side_panel", border=False):
             safe_render(
-                "assistente IA",
+                t("ai.title"),
                 render_chat_panel,
                 ctx.ranking,
                 ctx.n_cenarios,

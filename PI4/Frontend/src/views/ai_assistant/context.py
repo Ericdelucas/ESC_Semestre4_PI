@@ -17,7 +17,7 @@ from src.controllers.kpis.constants import (
 )
 from src.controllers.kpis.helpers import _safe_div, _valor_conta_raw
 from Backend.diag import log_ia
-from src.config.i18n import get_lang, t
+from src.config.i18n import get_lang, t, translate_dataset_name
 from src.models.formatting import cena_rotulo, fmt_pct, fmt_rs, is_all_scenarios
 from src.models.rag_engine import RagEngine, build_focus_context, resolve_api_key
 from src.models.rag_engine.formatters import dias, pct, rs
@@ -76,12 +76,20 @@ def _contexto_foco(
     ano_enc: int,
     ano_sel: str | int,
 ) -> str:
+    lang = get_lang()
     rent = fmt_pct(k["rentabilidade"]) if "rentabilidade" in k.index else "—"
-    intro = (
-        f"Contexto da tela: cenário em foco {cena_rotulo(cena_sel)}; "
-        f"{n_cenarios:,} cenários na base; prob. caixa negativo Ano {ano_enc}: {p_ruina:.1f}%; "
-        f"rentabilidade do recorte {rent}."
-    )
+    if lang == "en":
+        intro = (
+            f"Screen context: focus scenario {cena_rotulo(cena_sel)}; "
+            f"{n_cenarios:,} scenarios in the dataset; probability of negative cash in Year {ano_enc}: {p_ruina:.1f}%; "
+            f"slice profitability {rent}."
+        )
+    else:
+        intro = (
+            f"Contexto da tela: cenário em foco {cena_rotulo(cena_sel)}; "
+            f"{n_cenarios:,} cenários na base; prob. caixa negativo Ano {ano_enc}: {p_ruina:.1f}%; "
+            f"rentabilidade do recorte {rent}."
+        )
     detalhe = build_focus_context(
         ranking,
         cena_sel=cena_sel,
@@ -90,7 +98,7 @@ def _contexto_foco(
         ano_enc=ano_enc,
         k=k,
         ano_sel=ano_sel,
-        lang=get_lang(),
+        lang=lang,
     )
     return f"{intro}\n{detalhe}"
 
@@ -270,7 +278,9 @@ def contexto_dataset_ativo(
     modo_leve = len(df) > 20_000
     if modo_leve:
         log_ia(f"contexto: MODO LEVE — df tem {len(df):,} linhas; sem varrer a base longa (evita 429)")
-    nome_base = st.session_state.get("cti_active_dataset_name", "Base Padrão (Original)")
+    lang = get_lang()
+    en = lang == "en"
+    nome_base = translate_dataset_name(st.session_state.get("cti_active_dataset_name", "Base Padrão (Original)"), lang)
     anos_src = ind if isinstance(ind, pd.DataFrame) and "ano_num" in ind.columns else df
     anos = sorted(pd.to_numeric(anos_src.get("ano_num", pd.Series(dtype=float)), errors="coerce").dropna().astype(int).unique())
     if "CENA" in ranking.columns:
@@ -293,19 +303,32 @@ def contexto_dataset_ativo(
         match = ranking.loc[ranking["CENA"] == cena_sel]
         rank_foco = match.iloc[0] if not match.empty else pd.Series(dtype=object)
 
-    linhas = [
-        "Motor analitico nativo do Dashboard CTI - responda estritamente com estes dados locais recalculados da base ativa.",
-        f"Base ativa: {nome_base}. Linhas: {len(df):,}. Cenarios: {n_cenas:,}. Anos: {anos[0] if anos else 'n/d'} a {anos[-1] if anos else 'n/d'}.",
-        f"Recorte atual da tela: cenario {cena_rotulo(cena_sel)} ({cena_sel}); ano selecionado: {ano_sel}.",
-        f"Persona/visao ativa do painel: {persona}.",
-        f"Perfil autenticado (RBAC): {papel}.",
-        "Ao diagnosticar metricas, cite diretamente os valores abaixo quando estiverem disponiveis.",
-        "",
-    ]
+    year_label = f"Year {ano_sel}" if en and ano_sel != "Todos" else (t("filter.all") if str(ano_sel) in {"Todos", "All", "__all__"} else f"Ano {ano_sel}")
+    linhas = (
+        [
+            "Native analytical engine for the CTI Dashboard - answer strictly from these locally recalculated active-dataset values.",
+            f"Active dataset: {nome_base}. Rows: {len(df):,}. Scenarios: {n_cenas:,}. Years: {anos[0] if anos else 'n/a'} to {anos[-1] if anos else 'n/a'}.",
+            f"Current screen slice: scenario {cena_rotulo(cena_sel)} ({cena_sel}); selected year: {year_label}.",
+            f"Active dashboard persona/view: {persona}.",
+            f"Authenticated profile (RBAC): {papel}.",
+            "When diagnosing metrics, cite the values below directly when available.",
+            "",
+        ]
+        if en
+        else [
+            "Motor analitico nativo do Dashboard CTI - responda estritamente com estes dados locais recalculados da base ativa.",
+            f"Base ativa: {nome_base}. Linhas: {len(df):,}. Cenarios: {n_cenas:,}. Anos: {anos[0] if anos else 'n/d'} a {anos[-1] if anos else 'n/d'}.",
+            f"Recorte atual da tela: cenario {cena_rotulo(cena_sel)} ({cena_sel}); ano selecionado: {year_label}.",
+            f"Persona/visao ativa do painel: {persona}.",
+            f"Perfil autenticado (RBAC): {papel}.",
+            "Ao diagnosticar metricas, cite diretamente os valores abaixo quando estiverem disponiveis.",
+            "",
+        ]
+    )
     try:
         if modo_leve:
             k_vis = k if isinstance(k, pd.Series) else pd.Series(dtype=float)
-            linhas.append("Cartoes visuais (modo leve, sem recalcular na base longa):")
+            linhas.append("Visual cards (light mode, without rescanning the long dataset):" if en else "Cartoes visuais (modo leve, sem recalcular na base longa):")
             for nome, valor in k_vis.items():
                 linhas.append(f"- {nome}: {valor}")
         else:
@@ -321,7 +344,7 @@ def contexto_dataset_ativo(
             )
     except Exception as exc:  # noqa: BLE001
         log_ia(f"contexto: cartoes FALHOU {type(exc).__name__}: {exc}")
-        linhas.append(f"Cartoes visuais indisponiveis ({type(exc).__name__}).")
+        linhas.append(f"Visual cards unavailable ({type(exc).__name__})." if en else f"Cartoes visuais indisponiveis ({type(exc).__name__}).")
     if papel in {"ceo", "cfo", "acionistas"} and not modo_leve:
         try:
             linhas.extend(["", _contexto_acionistas(df, cena_sel, ano_sel)])
@@ -334,29 +357,41 @@ def contexto_dataset_ativo(
         extra_dre = [] if modo_leve else ["", _contexto_dre(df, cena_sel, ano_sel)]
         linhas.extend(
             extra_dre
-            + [
-                "",
-                "Capital de giro, liquidez e risco do recorte:",
-                f"- NCG media: {rs(_safe_mean(foco, 'NCG'))}",
-                f"- Saldo de Tesouraria medio: {rs(_safe_mean(foco, 'Saldo_Tesouraria'))}",
-                f"- Ciclo Financeiro medio: {dias(_safe_mean(foco, 'Ciclo_Financeiro'))}",
-                f"- Liquidez corrente media: {_safe_mean(foco, 'liquidez'):.2f}x",
-                f"- Risco medio Passivo/Ativo: {pct(_safe_mean(foco, 'risco'))}",
-            ]
+            + (
+                [
+                    "",
+                    "Working capital, liquidity and risk for the slice:",
+                    f"- Average NWC: {rs(_safe_mean(foco, 'NCG'))}",
+                    f"- Average Treasury Balance: {rs(_safe_mean(foco, 'Saldo_Tesouraria'))}",
+                    f"- Average Cash Conversion Cycle: {dias(_safe_mean(foco, 'Ciclo_Financeiro'))}",
+                    f"- Average current liquidity: {_safe_mean(foco, 'liquidez'):.2f}x",
+                    f"- Average liability/asset risk: {pct(_safe_mean(foco, 'risco'))}",
+                ]
+                if en
+                else [
+                    "",
+                    "Capital de giro, liquidez e risco do recorte:",
+                    f"- NCG media: {rs(_safe_mean(foco, 'NCG'))}",
+                    f"- Saldo de Tesouraria medio: {rs(_safe_mean(foco, 'Saldo_Tesouraria'))}",
+                    f"- Ciclo Financeiro medio: {dias(_safe_mean(foco, 'Ciclo_Financeiro'))}",
+                    f"- Liquidez corrente media: {_safe_mean(foco, 'liquidez'):.2f}x",
+                    f"- Risco medio Passivo/Ativo: {pct(_safe_mean(foco, 'risco'))}",
+                ]
+            )
         )
     else:
         linhas.extend(
             [
                 "",
-                "Leitura regulatória/solvência do recorte:",
-                f"- Liquidez corrente media: {_safe_mean(foco, 'liquidez'):.2f}x",
-                f"- Investimentos medios: {rs(_safe_mean(foco, 'investimentos'))}",
+                "Regulatory/solvency reading for the slice:" if en else "Leitura regulatória/solvência do recorte:",
+                f"- Average current liquidity: {_safe_mean(foco, 'liquidez'):.2f}x" if en else f"- Liquidez corrente media: {_safe_mean(foco, 'liquidez'):.2f}x",
+                f"- Average investments: {rs(_safe_mean(foco, 'investimentos'))}" if en else f"- Investimentos medios: {rs(_safe_mean(foco, 'investimentos'))}",
             ]
         )
     linhas.extend(
         [
-            f"- Selo do cenario: {rank_foco.get('selo', 'n/d')}",
-            f"- Caixa no ano de encerramento: {rs(float(rank_foco.get('caixa_ano12', float('nan')))) if len(rank_foco) else 'n/d'}",
+            f"- Scenario badge: {rank_foco.get('selo', 'n/a')}" if en else f"- Selo do cenario: {rank_foco.get('selo', 'n/d')}",
+            f"- Cash in the closing year: {rs(float(rank_foco.get('caixa_ano12', float('nan')))) if len(rank_foco) else 'n/a'}" if en else f"- Caixa no ano de encerramento: {rs(float(rank_foco.get('caixa_ano12', float('nan')))) if len(rank_foco) else 'n/d'}",
         ]
     )
     if papel in {"ceo", "cfo"}:
@@ -372,23 +407,43 @@ def contexto_dataset_ativo(
             _peca_resumo(df, "DRE -", cena_sel, ano_sel),
         ]
         linhas.extend(
-            [
-                "",
-                "DFC e caixa:",
-                f"- Geracao de Caixa media: {rs(_safe_mean(foco, 'geracao_caixa'))}",
-                f"- Investimentos medios: {rs(_safe_mean(foco, 'investimentos'))}",
-                *pecas,
-                "",
-                "Formulas de negocio CTI:",
-                "- NCG = ACO - PCO.",
-                "- Saldo de Tesouraria = Disponivel - Emprestimos CP.",
-                "- Ciclo Financeiro = PMR + PME - PMP.",
-                "- Margem EBITDA = EBITDA / Receita Liquida.",
-                "- ROIC = NOPAT / Capital Investido.",
-                "- EVA = NOPAT - (Capital Investido x WACC).",
-                "- CAPEX = FLU - Investimentos.",
-                "- Break-Even = Custos Fixos / Margem de Contribuicao.",
-            ]
+            (
+                [
+                    "",
+                    "Cash flow and cash:",
+                    f"- Average cash generation: {rs(_safe_mean(foco, 'geracao_caixa'))}",
+                    f"- Average investments: {rs(_safe_mean(foco, 'investimentos'))}",
+                    *pecas,
+                    "",
+                    "CTI business formulas:",
+                    "- NWC = Operating Assets - Operating Liabilities.",
+                    "- Treasury Balance = Cash Available - Short-Term Loans.",
+                    "- Cash Conversion Cycle = DSO + DIO - DPO.",
+                    "- EBITDA Margin = EBITDA / Net Revenue.",
+                    "- ROIC = NOPAT / Invested Capital.",
+                    "- EVA = NOPAT - (Invested Capital x WACC).",
+                    "- CAPEX = CF - Investments.",
+                    "- Break-Even = Fixed Costs / Contribution Margin.",
+                ]
+                if en
+                else [
+                    "",
+                    "DFC e caixa:",
+                    f"- Geracao de Caixa media: {rs(_safe_mean(foco, 'geracao_caixa'))}",
+                    f"- Investimentos medios: {rs(_safe_mean(foco, 'investimentos'))}",
+                    *pecas,
+                    "",
+                    "Formulas de negocio CTI:",
+                    "- NCG = ACO - PCO.",
+                    "- Saldo de Tesouraria = Disponivel - Emprestimos CP.",
+                    "- Ciclo Financeiro = PMR + PME - PMP.",
+                    "- Margem EBITDA = EBITDA / Receita Liquida.",
+                    "- ROIC = NOPAT / Capital Investido.",
+                    "- EVA = NOPAT - (Capital Investido x WACC).",
+                    "- CAPEX = FLU - Investimentos.",
+                    "- Break-Even = Custos Fixos / Margem de Contribuicao.",
+                ]
+            )
         )
     elif papel == "concedente":
         pecas_reg = [] if modo_leve else [
@@ -396,26 +451,49 @@ def contexto_dataset_ativo(
             _peca_resumo(df, "BAL -", cena_sel, ano_sel),
         ]
         linhas.extend(
-            [
-                "",
-                "Contas regulatórias do recorte:",
-                *pecas_reg,
-                "",
-                "Formulas permitidas:",
-                "- CAPEX = FLU - Investimentos.",
-                "- Liquidez Geral = Ativo total / (Passivo circulante + exigível LP).",
-                "- BAR = base líquida de ativos reversíveis da concessão.",
-            ]
+            (
+                [
+                    "",
+                    "Regulatory accounts for the slice:",
+                    *pecas_reg,
+                    "",
+                    "Allowed formulas:",
+                    "- CAPEX = CF - Investments.",
+                    "- General Liquidity = Total Assets / (Current Liabilities + Long-Term Liabilities).",
+                    "- RAB = net reversible asset base of the concession.",
+                ]
+                if en
+                else [
+                    "",
+                    "Contas regulatórias do recorte:",
+                    *pecas_reg,
+                    "",
+                    "Formulas permitidas:",
+                    "- CAPEX = FLU - Investimentos.",
+                    "- Liquidez Geral = Ativo total / (Passivo circulante + exigível LP).",
+                    "- BAR = base líquida de ativos reversíveis da concessão.",
+                ]
+            )
         )
     elif papel == "acionistas":
         linhas.extend(
-            [
-                "",
-                "Formulas permitidas:",
-                "- ROIC = NOPAT / Capital Investido.",
-                "- EVA = NOPAT - (Capital Investido x WACC).",
-                "- DY = Dividendos / Capital Investido.",
-            ]
+            (
+                [
+                    "",
+                    "Allowed formulas:",
+                    "- ROIC = NOPAT / Invested Capital.",
+                    "- EVA = NOPAT - (Invested Capital x WACC).",
+                    "- DY = Dividends / Invested Capital.",
+                ]
+                if en
+                else [
+                    "",
+                    "Formulas permitidas:",
+                    "- ROIC = NOPAT / Capital Investido.",
+                    "- EVA = NOPAT - (Capital Investido x WACC).",
+                    "- DY = Dividendos / Capital Investido.",
+                ]
+            )
         )
     texto = "\n".join(linhas)
     log_ia(f"contexto: pronto chars={len(texto)} modo_leve={modo_leve} em {time.time() - t0:.2f}s")

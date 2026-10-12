@@ -24,6 +24,12 @@ SELO_KEYS: dict[str, str] = {
     "Encerramento com Caixa Insuficiente": "selo.caixa_insuf",
 }
 
+DATASET_NAME_KEYS: dict[str, str] = {
+    "Base Padrão (Original)": "data.default_name",
+    "Base Padrao (Original)": "data.default_name",
+    "Default Dataset (Original)": "data.default_name",
+}
+
 TEXTS: dict[str, dict[str, str]] = {
     "pt": {
         "lang.label": "Idioma / Language",
@@ -1342,3 +1348,9 @@ def get_text(key: str, lang: str | None = None, **kwargs: Any) -> str:
 def translate_selo(nome_pt: str, lang: str | None = None) -> str:
     key = SELO_KEYS.get(nome_pt)
     return t(key, lang) if key else nome_pt
+
+
+def translate_dataset_name(name: object, lang: str | None = None) -> str:
+    text = str(name or "")
+    key = DATASET_NAME_KEYS.get(text)
+    return t(key, lang) if key else text
