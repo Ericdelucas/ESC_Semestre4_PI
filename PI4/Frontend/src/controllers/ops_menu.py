@@ -60,6 +60,20 @@ def _texto_diagnostico(payload: dict[str, object], status: int, fallback: str) -
     return "\n\n".join(partes)
 
 
+def _api_smtp_indisponivel(payload: dict[str, object], status: int) -> bool:
+    if status in {503, 404, 0}:
+        return True
+    codigo = str(payload.get("code") or payload.get("message") or "")
+    detalhe = str(payload.get("detail") or payload.get("email_error") or "")
+    return codigo in {"SMTP_NOT_CONFIGURED", "smtp_not_configured"} or "SMTP_NOT_CONFIGURED" in detalhe or "nao estao definidos" in detalhe
+
+
+def _enviar_local(destinatario: str, assunto: str, html: str) -> dict[str, object]:
+    from Backend.services.email_service import enviar_alerta_email
+
+    return enviar_alerta_email(destinatario, assunto, html)
+
+
 def _toast_resposta_email(payload: dict[str, object], status: int, sucesso: str, falha: str) -> None:
     if _eh_smtp_ausente(payload):
         toast_smtp()
@@ -107,6 +121,16 @@ def render_ops_menu() -> None:
                         {"email": _email_logado()},
                         timeout=35,
                     )
+                    if _api_smtp_indisponivel(payload, status):
+                        from Backend.services.email_service import html_teste_smtp
+
+                        local = _enviar_local(
+                            destino.strip(),
+                            "Grupo ESC - Teste de Conectividade SMTP",
+                            html_teste_smtp(),
+                        )
+                        status = 200 if local.get("success") else 500
+                        payload = {**local, "ok": bool(local.get("success")), "success": bool(local.get("success"))}
                     _toast_resposta_email(payload, status, t("ops.email.ok"), t("ops.email.fail"))
                 if st.button(t("ops.risk.scan"), key="ops_risk_scan", use_container_width=True):
                     payload, status = post_json(
@@ -115,11 +139,22 @@ def render_ops_menu() -> None:
                         {"email": _email_logado()},
                         timeout=45,
                     )
+                    if _api_smtp_indisponivel(payload, status) or payload.get("email_error"):
+                        from Backend.services.risk_alerts import disparar_alerta_risco
+
+                        local = disparar_alerta_risco(_email_logado(), forcar=False, simular=False, origem="manual")
+                        payload = {
+                            **local,
+                            "ok": True,
+                            "success": bool(local.get("sent")),
+                            "detail": local.get("email_error") or local.get("summary"),
+                        }
+                        status = 200
                     if status == 200 and payload.get("ok"):
                         guardar_varredura(payload)
                     if status == 200 and payload.get("skipped"):
                         st.toast("Alerta consolidado ja enviado. Novo disparo bloqueado pelo debounce.", icon="⚠️")
-                    elif status == 200 and payload.get("ok") and not payload.get("critical"):
+                    elif status == 200 and payload.get("ok") is not False and not payload.get("critical"):
                         st.toast(t("ops.risk.clear"), icon="✅")
                     else:
                         _toast_resposta_email(payload, status, t("ops.risk.sent"), t("ops.risk.fail"))
@@ -130,6 +165,17 @@ def render_ops_menu() -> None:
                         {"email": _email_logado()},
                         timeout=45,
                     )
+                    if _api_smtp_indisponivel(payload, status) or payload.get("email_error"):
+                        from Backend.services.risk_alerts import disparar_alerta_risco
+
+                        local = disparar_alerta_risco(_email_logado(), forcar=False, simular=True, origem="manual")
+                        payload = {
+                            **local,
+                            "ok": True,
+                            "success": bool(local.get("sent")),
+                            "detail": local.get("email_error") or local.get("summary"),
+                        }
+                        status = 200
                     if status == 200 and payload.get("ok"):
                         guardar_varredura(payload)
                     _toast_resposta_email(payload, status, t("ops.risk.simulated"), t("ops.risk.fail"))

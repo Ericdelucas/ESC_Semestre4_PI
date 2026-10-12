@@ -21,6 +21,27 @@ def diag(tag: str, mensagem: str) -> None:
     print(f"[{tag}] {time.strftime('%H:%M:%S')} {mensagem}", flush=True)
 
 
+_log_relatorio = logging.getLogger("relatorio")
+if not _log_relatorio.handlers:
+    _handler_rel = logging.StreamHandler(sys.stdout)
+    _handler_rel.setFormatter(logging.Formatter("%(asctime)s [relatorio] %(levelname)s %(message)s"))
+    _log_relatorio.addHandler(_handler_rel)
+    _log_relatorio.setLevel(logging.INFO)
+    _log_relatorio.propagate = False
+
+
+def log_relatorio(mensagem: str) -> None:
+    """Log do gerador de PDF — stdout + stderr + logger (Render)."""
+    linha = f"[relatorio] {time.strftime('%H:%M:%S')} {mensagem}"
+    print(linha, flush=True)
+    try:
+        sys.stderr.write(linha + "\n")
+        sys.stderr.flush()
+    except Exception:
+        pass
+    _log_relatorio.info(mensagem)
+
+
 def log_ia(mensagem: str) -> None:
     """Log exclusivo do Assistente de IA — stdout + stderr + logger (Render)."""
     linha = f"[assistente-ia] {time.strftime('%H:%M:%S')} {mensagem}"

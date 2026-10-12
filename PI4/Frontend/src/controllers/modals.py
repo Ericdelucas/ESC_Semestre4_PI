@@ -40,14 +40,21 @@ def _set_chat(open_: bool) -> None:
 
 
 def open_relatorio() -> None:
+    from Backend.diag import log_relatorio
+
     ensure_modal_state()
     _set_chat(False)
     _set_relatorio(True)
+    log_relatorio("modal ABRIR — chat fechado, dashboard pesado deve ser saltado neste rerun")
 
 
 def close_relatorio() -> None:
+    from Backend.diag import log_relatorio
+
     ensure_modal_state()
     _set_relatorio(False)
+    st.session_state.pop("_cti_report_pending", None)
+    log_relatorio("modal FECHAR")
 
 
 def open_chat() -> None:

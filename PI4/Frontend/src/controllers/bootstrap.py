@@ -14,12 +14,12 @@ PI4_ROOT = Path(__file__).resolve().parents[3]
 if str(PI4_ROOT) not in sys.path:
     sys.path.insert(0, str(PI4_ROOT))
 
-from Backend.diag import diag  # noqa: E402
+from Backend.diag import diag, log_relatorio  # noqa: E402
 from Backend.services import build_context_metrics, prepare_dashboard_data  # noqa: E402
 from Backend.services.dashboard_pipeline import CACHE_DIR, cache_disponivel, cache_paths  # noqa: E402
 from src.config import CSV_PATH  # noqa: E402
 from src.config.i18n import get_lang, t  # noqa: E402
-from src.controllers.modals import open_relatorio  # noqa: E402
+from src.controllers.modals import is_relatorio_open, open_relatorio  # noqa: E402
 from src.controllers.headers import banner_auditoria_filtro  # noqa: E402
 from src.controllers.ops_menu import garantir_varredura_silenciosa, render_ops_menu  # noqa: E402
 from src.controllers.kpis import kpis_por_persona, render_kpi_row  # noqa: E402
@@ -191,12 +191,17 @@ def render_cabecalho(ctx: AppContext) -> None:
             st.subheader(t("header.focus", cena=cena_rotulo(ctx.cena_sel)))
         with report_col:
             if ctx.persona != "teste" and st.button(t("header.report"), key="header_create_report", use_container_width=True):
+                log_relatorio(
+                    f"CLIQUE Criar Relatorio persona={ctx.persona} cena={ctx.cena_sel} ano={ctx.ano_sel}"
+                )
                 open_relatorio()
-                st.rerun()
         with menu_col:
             if ctx.persona != "teste":
                 render_ops_menu()
     if ctx.persona == "teste":
+        return
+    if is_relatorio_open():
+        log_relatorio("cabecalho leve — KPIs e graficos saltados enquanto o modal esta aberto")
         return
     garantir_varredura_silenciosa()
     safe_render("banner de auditoria", banner_auditoria_filtro, ctx.cena_sel, ctx.ano_sel)

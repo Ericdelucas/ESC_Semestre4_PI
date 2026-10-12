@@ -5,12 +5,13 @@ from __future__ import annotations
 from datetime import datetime
 from io import BytesIO
 from typing import Any
+import time
 
 import pandas as pd
 import plotly.graph_objects as go
 
 from Backend.metrics import calculate_ltv_cac, summarize_ltv_cac
-from Backend.metrics.financial_kpis import build_break_even, build_dre
+from Backend.metrics.financial_kpis import build_break_even, build_dre, is_all_scenarios
 from Backend.services.report_generator import (
     CHART_GOLD,
     CHART_ICE,
@@ -29,7 +30,7 @@ from Backend.services.report_generator import (
     executive_canvas_factory,
     section_block,
 )
-from Backend.services.report_insights import build_block_insights, merge_notes_with_insights
+from Backend.services.report_insights import insights_from_tables, merge_notes_with_insights
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import cm
 from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
@@ -83,11 +84,78 @@ def _normalize_selected_blocks(selected_blocks: list[str]) -> list[str]:
     return normalized
 
 
-def _kpi_callouts(df: pd.DataFrame, scenario: str) -> Table:
+def _log(msg: str) -> None:
+    from Backend.diag import log_relatorio
+
+    log_relatorio(msg)
+
+
+def _memo_frames(
+    df: pd.DataFrame,
+    scenario: str,
+    dre: pd.DataFrame | None = None,
+    be: pd.DataFrame | None = None,
+    ltv: pd.DataFrame | None = None,
+    extra_frames: dict[str, dict[str, pd.DataFrame]] | None = None,
+):
+    store: dict[tuple[str, str], pd.DataFrame] = {}
+    if dre is not None:
+        store[("dre", str(scenario))] = dre
+    if be is not None:
+        store[("be", str(scenario))] = be
+    if ltv is not None:
+        store[("ltv", str(scenario))] = ltv
+    for extra_cena, frames in (extra_frames or {}).items():
+        if frames.get("dre") is not None:
+            store[("dre", str(extra_cena))] = frames["dre"]
+        if frames.get("be") is not None:
+            store[("be", str(extra_cena))] = frames["be"]
+        if frames.get("ltv") is not None:
+            store[("ltv", str(extra_cena))] = frames["ltv"]
+
+    def dre_of(scena: str) -> pd.DataFrame:
+        key = ("dre", str(scena))
+        if key not in store:
+            t0 = time.time()
+            _log(f"build_dre cenario={scena} linhas={len(df)}")
+            store[key] = build_dre(df, scena)
+            _log(f"build_dre OK linhas={len(store[key])} em {time.time() - t0:.2f}s")
+        return store[key]
+
+    def be_of(scena: str) -> pd.DataFrame:
+        key = ("be", str(scena))
+        if key not in store:
+            t0 = time.time()
+            _log(f"build_break_even cenario={scena}")
+            store[key] = build_break_even(df, scena)
+            _log(f"build_break_even OK em {time.time() - t0:.2f}s")
+        return store[key]
+
+    def ltv_of(scena: str) -> pd.DataFrame:
+        key = ("ltv", str(scena))
+        if key not in store:
+            t0 = time.time()
+            _log(f"calculate_ltv_cac cenario={scena}")
+            store[key] = calculate_ltv_cac(df, scena)
+            _log(f"calculate_ltv_cac OK em {time.time() - t0:.2f}s")
+        return store[key]
+
+    return dre_of, be_of, ltv_of
+
+
+def _kpi_callouts(df: pd.DataFrame, scenario: str, dre_of=None, be_of=None, ltv_of=None) -> Table:
     """Monta callouts executivos da primeira pagina de conteudo."""
-    dre = build_dre(df, scenario)
-    be_df = build_break_even(df, scenario)
-    ltv_summary = summarize_ltv_cac(df, scenario)
+    dre = dre_of(scenario) if dre_of else build_dre(df, scenario)
+    be_df = be_of(scenario) if be_of else build_break_even(df, scenario)
+    if ltv_of:
+        ltv_df = ltv_of(scenario)
+        if ltv_df.empty or "LTV/CAC" not in ltv_df.columns:
+            ltv_summary = {"ratio": 0.0}
+        else:
+            ratio = float(pd.to_numeric(ltv_df["LTV/CAC"], errors="coerce").mean())
+            ltv_summary = {"ratio": 0.0 if pd.isna(ratio) else ratio}
+    else:
+        ltv_summary = summarize_ltv_cac(df, scenario)
     receita = _metric_mean(dre, "Receita Líquida", "Receita Liquida")
     ebitda = _metric_mean(dre, "EBITDA")
     margem = ebitda / receita if receita else 0.0
@@ -129,21 +197,23 @@ def _kpi_callouts(df: pd.DataFrame, scenario: str) -> Table:
     return table
 
 
-def default_block_notes(df: pd.DataFrame, scenario: str) -> dict[str, str]:
-    """Parecer inicial por bloco gerado pelo Assistente CTI a partir dos KPIs reais."""
+def default_block_notes(df: pd.DataFrame | None = None, scenario: str = "Todos") -> dict[str, str]:
+    """Parecer inicial por bloco. Nao varre a base de 1M ao abrir o modal."""
+    if df is None or getattr(df, "empty", True) or len(df) > 80_000:
+        return {key: "" for key in BLOCKS}
     return build_block_insights(df, scenario, use_llm=False)
 
 
-def _cover_block(story: list[Any], df: pd.DataFrame, scenario: str, text: str) -> None:
+def _cover_block(story: list[Any], df: pd.DataFrame, scenario: str, text: str, dre_of=None, be_of=None, ltv_of=None) -> None:
     styles = _styles()
-    kpis = _kpi_callouts(df, scenario)
+    kpis = _kpi_callouts(df, scenario, dre_of=dre_of, be_of=be_of, ltv_of=ltv_of)
     story.extend(section_block("Resumo Executivo", text, kpis))
     story.append(Paragraph(_clean_text("Os indicadores acima sao medias do horizonte do cenario selecionado."), styles["muted"]))
 
 
-def _financial_block(story: list[Any], df: pd.DataFrame, scenario: str, text: str) -> None:
+def _financial_block(story: list[Any], df: pd.DataFrame, scenario: str, text: str, dre_of=None) -> None:
     styles = _styles()
-    dre = build_dre(df, scenario)
+    dre = dre_of(scenario) if dre_of else build_dre(df, scenario)
     if dre.empty:
         story.extend(section_block("Análise de EBITDA & DRE", text, Paragraph("Sem dados de DRE para o cenario selecionado.", styles["body"])))
         return
@@ -160,9 +230,9 @@ def _financial_block(story: list[Any], df: pd.DataFrame, scenario: str, text: st
     story.extend(section_block("Análise de EBITDA & DRE", text, table, *chart))
 
 
-def _break_even_block(story: list[Any], df: pd.DataFrame, scenario: str, text: str) -> None:
+def _break_even_block(story: list[Any], df: pd.DataFrame, scenario: str, text: str, be_of=None) -> None:
     styles = _styles()
-    be_df = build_break_even(df, scenario)
+    be_df = be_of(scenario) if be_of else build_break_even(df, scenario)
     if be_df.empty:
         story.extend(section_block("Ponto de Equilíbrio & Risco", text, Paragraph("Sem dados suficientes para Break-Even.", styles["body"])))
         return
@@ -178,9 +248,9 @@ def _break_even_block(story: list[Any], df: pd.DataFrame, scenario: str, text: s
     story.extend(section_block("Ponto de Equilíbrio & Risco", text, table, *chart))
 
 
-def _commercial_block(story: list[Any], df: pd.DataFrame, scenario: str, text: str) -> None:
+def _commercial_block(story: list[Any], df: pd.DataFrame, scenario: str, text: str, ltv_of=None) -> None:
     styles = _styles()
-    ltv = calculate_ltv_cac(df, scenario)
+    ltv = ltv_of(scenario) if ltv_of else calculate_ltv_cac(df, scenario)
     if ltv.empty:
         story.extend(section_block("Eficiência Comercial", text, Paragraph("Sem dados suficientes para LTV/CAC.", styles["body"])))
         return
@@ -195,6 +265,19 @@ def _commercial_block(story: list[Any], df: pd.DataFrame, scenario: str, text: s
 
 def _operational_block(story: list[Any], df: pd.DataFrame, scenario: str, text: str) -> None:
     styles = _styles()
+    if df is None or df.empty:
+        story.extend(section_block("Visão Operacional & Tech", text, Paragraph("Sem dados operacionais para o cenario selecionado.", styles["body"])))
+        return
+    if is_all_scenarios(scenario) and len(df) > 80_000:
+        _log("bloco operacional saltado — Todos sobre base longa")
+        story.extend(
+            section_block(
+                "Visão Operacional & Tech",
+                text,
+                Paragraph("No recorte Todos a tabela operacional e omitida para nao varrer a base completa.", styles["body"]),
+            )
+        )
+        return
     rows_df = df.loc[df["CENA"].astype(str) == str(scenario)].copy() if "CENA" in df.columns else df.iloc[0:0]
     if rows_df.empty:
         story.extend(section_block("Visão Operacional & Tech", text, Paragraph("Sem dados operacionais para o cenario selecionado.", styles["body"])))
@@ -214,15 +297,23 @@ def _operational_block(story: list[Any], df: pd.DataFrame, scenario: str, text: 
     story.extend(section_block("Visão Operacional & Tech", text, _table(rows, [11.4 * cm, 5 * cm])))
 
 
-def _comparison_block(story: list[Any], df: pd.DataFrame, scenario: str, comparison_scenarios: list[str], text: str) -> None:
+def _comparison_block(
+    story: list[Any],
+    df: pd.DataFrame,
+    scenario: str,
+    comparison_scenarios: list[str],
+    text: str,
+    dre_of=None,
+    be_of=None,
+) -> None:
     styles = _styles()
     scenarios = [scenario, *[item for item in comparison_scenarios if item != scenario]][:4]
     rows = [["Cenário", "Receita Média", "EBITDA Médio", "Break-Even Médio"]]
     fig = go.Figure()
     scaled_series: list[pd.Series] = []
     for item in scenarios:
-        dre = build_dre(df, item)
-        be_df = build_break_even(df, item)
+        dre = dre_of(item) if dre_of else build_dre(df, item)
+        be_df = be_of(item) if be_of else build_break_even(df, item)
         receita = _metric_mean(dre, "Receita Líquida", "Receita Liquida")
         ebitda = _metric_mean(dre, "EBITDA")
         be = _metric_mean(be_df, "Break-Even")
@@ -234,7 +325,7 @@ def _comparison_block(story: list[Any], df: pd.DataFrame, scenario: str, compari
     unidade = "EBITDA em R$ Bilhões" if divisor == 1_000_000_000 else "EBITDA em R$ Milhões" if divisor == 1_000_000 else "EBITDA em R$"
     palette = [CHART_ICE, CHART_GOLD, "#93C5FD", "#FBBF24"]
     for idx, item in enumerate(scenarios):
-        dre = build_dre(df, item)
+        dre = dre_of(item) if dre_of else build_dre(df, item)
         if dre.empty:
             continue
         fig.add_trace(
@@ -266,10 +357,33 @@ def generate_custom_report_pdf(
     profile: str,
     company_name: str = "Grupo ESC",
     comparison_scenarios: list[str] | None = None,
+    dre: pd.DataFrame | None = None,
+    be: pd.DataFrame | None = None,
+    ltv: pd.DataFrame | None = None,
+    skip_charts: bool = True,
+    use_llm: bool = False,
+    extra_frames: dict[str, dict[str, pd.DataFrame]] | None = None,
 ) -> bytes:
     """Gera PDF personalizado no padrao executivo C-Level."""
+    import Backend.services.report_generator as report_generator
+
+    t0 = time.time()
     selected_blocks = _normalize_selected_blocks(selected_blocks)
-    insights = build_block_insights(df, scenario)
+    _log(
+        f"generate_custom_report_pdf cenario={scenario} blocos={selected_blocks} "
+        f"linhas={0 if df is None else len(df)} skip_charts={skip_charts} use_llm={use_llm}"
+    )
+    report_generator._SKIP_CHARTS = bool(skip_charts)
+    dre_of, be_of, ltv_of = _memo_frames(
+        df, scenario, dre=dre, be=be, ltv=ltv, extra_frames=extra_frames
+    )
+    _ = use_llm
+    try:
+        insights = insights_from_tables(scenario, dre_of(scenario), be_of(scenario), ltv_of(scenario))
+        _log("insights montados a partir das tabelas cacheadas")
+    except Exception as exc:  # noqa: BLE001
+        _log(f"insights saltados ({type(exc).__name__}: {exc}) — a usar notas do formulario")
+        insights = {key: "" for key in BLOCKS}
     notes = merge_notes_with_insights(notes, insights)
     buffer = BytesIO()
     issued = datetime.now().strftime("%d/%m/%Y %H:%M")
@@ -294,10 +408,18 @@ def generate_custom_report_pdf(
     story: list[Any] = [CoverPage(meta), PageBreak()]
 
     block_renderers = {
-        "cover": lambda: _cover_block(story, df, scenario, notes.get("cover", "")),
-        "financial_dre": lambda: _financial_block(story, df, scenario, notes.get("financial_dre", "")),
-        "break_even": lambda: _break_even_block(story, df, scenario, notes.get("break_even", "")),
-        "commercial": lambda: _commercial_block(story, df, scenario, notes.get("commercial", "")),
+        "cover": lambda: _cover_block(
+            story, df, scenario, notes.get("cover", ""), dre_of=dre_of, be_of=be_of, ltv_of=ltv_of
+        ),
+        "financial_dre": lambda: _financial_block(
+            story, df, scenario, notes.get("financial_dre", ""), dre_of=dre_of
+        ),
+        "break_even": lambda: _break_even_block(
+            story, df, scenario, notes.get("break_even", ""), be_of=be_of
+        ),
+        "commercial": lambda: _commercial_block(
+            story, df, scenario, notes.get("commercial", ""), ltv_of=ltv_of
+        ),
         "operational_tech": lambda: _operational_block(story, df, scenario, notes.get("operational_tech", "")),
         "scenario_comparison": lambda: _comparison_block(
             story,
@@ -305,6 +427,8 @@ def generate_custom_report_pdf(
             scenario,
             comparison_scenarios or [],
             notes.get("scenario_comparison", ""),
+            dre_of=dre_of,
+            be_of=be_of,
         ),
     }
     rendered_count = 0
@@ -314,13 +438,24 @@ def generate_custom_report_pdf(
             continue
         if rendered_count > 0:
             story.append(PageBreak())
+        bloco_t0 = time.time()
+        _log(f"bloco INICIO {block}")
         renderer()
+        _log(f"bloco FIM {block} em {time.time() - bloco_t0:.2f}s")
         rendered_count += 1
 
     if rendered_count == 0:
         styles = _styles()
-        story.extend(section_block("Resumo Executivo", notes.get("cover", ""), _kpi_callouts(df, scenario)))
+        story.extend(
+            section_block(
+                "Resumo Executivo",
+                notes.get("cover", ""),
+                _kpi_callouts(df, scenario, dre_of=dre_of, be_of=be_of, ltv_of=ltv_of),
+            )
+        )
         story.append(Paragraph("Nenhum bloco adicional foi selecionado.", styles["body"]))
 
+    _log(f"doc.build a gravar PDF blocos={rendered_count}")
     doc.build(story, canvasmaker=executive_canvas_factory(meta))
+    _log(f"PDF pronto bytes={buffer.tell()} em {time.time() - t0:.2f}s")
     return buffer.getvalue()

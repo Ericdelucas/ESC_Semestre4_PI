@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-import base64
+import os
+import time
+import traceback
 from datetime import datetime
 
 import pandas as pd
@@ -19,12 +21,14 @@ DEFAULT_BLOCKS_BY_PROFILE: dict[str, list[str]] = {
     "CTO": ["cover", "operational_tech", "break_even", "scenario_comparison"],
 }
 
+PENDING_KEY = "_cti_report_pending"
 
-def _available_scenarios(df: pd.DataFrame, current: str) -> list[str]:
-    if "CENA" not in df.columns:
-        return [current]
-    scenarios = sorted(str(item) for item in df["CENA"].dropna().unique())
-    return scenarios or [current]
+
+def _available_scenarios(cenas: list[str] | None, current: str) -> list[str]:
+    items = [str(item) for item in (cenas or []) if str(item).strip()]
+    if current and str(current) not in items:
+        items = [str(current), *items]
+    return items or [str(current)]
 
 
 def _load_report_backend():
@@ -55,18 +59,106 @@ def _build_notes(selected_blocks: list[str]) -> dict[str, str]:
     return {block_id: st.session_state.get(f"text_parecer_{block_id}", "") for block_id in selected_blocks}
 
 
-def display_pdf_preview(pdf_bytes: bytes) -> None:
-    """Exibe o PDF em iframe embutido no modal."""
-    base64_pdf = base64.b64encode(pdf_bytes).decode("utf-8")
-    pdf_display = (
-        f'<iframe src="data:application/pdf;base64,{base64_pdf}" '
-        'width="100%" height="500" type="application/pdf"></iframe>'
+def _log(msg: str) -> None:
+    from Backend.diag import log_relatorio
+
+    log_relatorio(msg)
+
+
+def _df_relatorio() -> pd.DataFrame:
+    from src.controllers.bootstrap import carregar_pipeline
+    from src.controllers.data_input import DF_OVERRIDE_KEY, has_custom_data
+
+    if has_custom_data():
+        override = st.session_state.get(DF_OVERRIDE_KEY)
+        if isinstance(override, pd.DataFrame) and not override.empty:
+            return override
+    df, _, _ = carregar_pipeline()
+    return df
+
+
+def _frames_relatorio(df: pd.DataFrame, scenario: str) -> dict[str, pd.DataFrame]:
+    from src.views.persona_tabs.common import _break_even_df, _dre, _ltv_df
+
+    t0 = time.time()
+    frames = {
+        "dre": _dre(df, scenario),
+        "be": _break_even_df(df, scenario),
+        "ltv": _ltv_df(df, scenario),
+    }
+    _log(
+        f"frames cacheados cenario={scenario} dre={len(frames['dre'])} be={len(frames['be'])} "
+        f"ltv={len(frames['ltv'])} em {time.time() - t0:.2f}s"
     )
-    st.markdown(pdf_display, unsafe_allow_html=True)
+    return frames
 
 
-def render_dialog(df: pd.DataFrame, cena_sel: str, ano_sel: str | int) -> None:
+def _gerar_pdf(payload: dict) -> bytes:
+    from Backend.services.custom_report_service import generate_custom_report_pdf
+    from src.models.formatting import is_all_scenarios
+
+    scenario = payload["scenario"]
+    t0 = time.time()
+    _log(f"inicio geracao PDF cenario={scenario} blocos={payload['selected_blocks']} RENDER={bool(os.environ.get('RENDER'))}")
+    df = _df_relatorio()
+    _log(f"df fonte linhas={len(df)} cols={list(df.columns)[:8]}")
+    comparacoes = list(payload.get("comparison_scenarios") or [])
+    extra_frames: dict[str, dict[str, pd.DataFrame]] = {}
+    if comparacoes:
+        from src.views.persona_tabs.common import _break_even_df, _dre
+
+        for extra in comparacoes[:3]:
+            extra_frames[str(extra)] = {"dre": _dre(df, extra), "be": _break_even_df(df, extra)}
+            _log(f"frame extra cenario={extra} dre={len(extra_frames[str(extra)]['dre'])}")
+    elif not is_all_scenarios(scenario) and "CENA" in df.columns:
+        recorte = df.loc[df["CENA"].astype(str) == str(scenario)]
+        _log(f"filtro CENA={scenario} {len(df)} -> {len(recorte)}")
+        df = recorte
+    frames = _frames_relatorio(df, scenario)
+    pdf_bytes = generate_custom_report_pdf(
+        df,
+        scenario=scenario,
+        selected_blocks=payload["selected_blocks"],
+        notes=payload["notes"],
+        author=payload["author"],
+        profile=payload["profile"],
+        company_name=payload["company_name"],
+        comparison_scenarios=comparacoes,
+        dre=frames["dre"],
+        be=frames["be"],
+        ltv=frames["ltv"],
+        extra_frames=extra_frames,
+        skip_charts=True,
+        use_llm=False,
+    )
+    _log(f"PDF OK bytes={len(pdf_bytes)} em {time.time() - t0:.2f}s")
+    return pdf_bytes
+
+
+def flush_pending_pdf() -> None:
+    """Gera o PDF fora do st.dialog para o websocket nao cair no meio do modal."""
+    pending = st.session_state.get(PENDING_KEY)
+    if not pending:
+        return
+    _log("flush_pending_pdf — geracao fora do dialog")
+    try:
+        with st.spinner(t("report.spinner")):
+            pdf_bytes = _gerar_pdf(pending)
+    except Exception as exc:  # noqa: BLE001
+        st.session_state.pop(PENDING_KEY, None)
+        _log(f"geracao FALHOU {type(exc).__name__}: {exc}\n{traceback.format_exc()}")
+        st.session_state["_cti_report_error"] = f"{type(exc).__name__}: {exc}"
+        return
+    st.session_state.pop(PENDING_KEY, None)
+    st.session_state.pop("_cti_report_error", None)
+    st.session_state["custom_report_pdf"] = pdf_bytes
+    st.session_state["custom_report_filename"] = pending["filename"]
+    _log(f"flush_pending_pdf OK bytes={len(pdf_bytes)}")
+
+
+def render_dialog(cena_sel: str, ano_sel: str | int, cenas: list[str] | None = None, df: pd.DataFrame | None = None) -> None:
     """Renderiza o report builder em modal estavel com formulario."""
+    _ = df
     titulo = t("report.title")
     try:
         decorator = st.dialog(titulo, **dialog_kwargs(width="large", on_dismiss=close_relatorio))
@@ -75,20 +167,22 @@ def render_dialog(df: pd.DataFrame, cena_sel: str, ano_sel: str | int) -> None:
 
     @decorator
     def _dialog() -> None:
-        _render_report_body(df, cena_sel, ano_sel)
+        _render_report_body(cena_sel, ano_sel, cenas)
 
+    _log(f"dialog a abrir cena={cena_sel} ano={ano_sel} opcoes_cena={len(cenas or [])}")
     _dialog()
 
 
-def _render_report_body(df: pd.DataFrame, cena_sel: str, ano_sel: str | int) -> None:
+def _render_report_body(cena_sel: str, ano_sel: str | int, cenas: list[str] | None) -> None:
     _ = ano_sel
     st.caption(t("report.caption"))
 
     try:
-        block_options, default_block_notes, generate_custom_report_pdf = _load_report_backend()
+        block_options, default_block_notes, _generate = _load_report_backend()
         blocks = block_options()
-        suggested_notes = default_block_notes(df, cena_sel)
+        suggested_notes = default_block_notes(None, cena_sel)
     except Exception as exc:  # noqa: BLE001
+        _log(f"init FALHOU {type(exc).__name__}: {exc}\n{traceback.format_exc()}")
         st.error(t("report.init_error", err=f"{type(exc).__name__}: {exc}"))
         if st.button(t("report.close"), key="report_init_close"):
             close_relatorio()
@@ -97,6 +191,12 @@ def _render_report_body(df: pd.DataFrame, cena_sel: str, ano_sel: str | int) -> 
 
     st.session_state.setdefault("report_c_level", "CEO")
     _ensure_report_defaults(st.session_state["report_c_level"], blocks, suggested_notes)
+
+    erro = st.session_state.pop("_cti_report_error", None)
+    if erro:
+        st.error(t("report.pdf_error", err=erro))
+    elif st.session_state.get("custom_report_pdf"):
+        st.success(t("report.preview_ok"))
 
     with st.form("form_report_builder", clear_on_submit=False):
         profile_col, author_col, company_col = st.columns([0.22, 0.38, 0.4])
@@ -119,7 +219,7 @@ def _render_report_body(df: pd.DataFrame, cena_sel: str, ano_sel: str | int) -> 
 
         comparison_scenarios: list[str] = []
         if "scenario_comparison" in selected_blocks:
-            scenarios = _available_scenarios(df, cena_sel)
+            scenarios = _available_scenarios(cenas, cena_sel)
             comparison_options = [item for item in scenarios if item != cena_sel]
             st.session_state["report_scenarios"] = [
                 item for item in st.session_state.get("report_scenarios", []) if item in comparison_options
@@ -158,40 +258,33 @@ def _render_report_body(df: pd.DataFrame, cena_sel: str, ano_sel: str | int) -> 
     notes = _build_notes(selected_blocks)
     filename_scenario = str(cena_sel).lower().replace(" ", "_").replace("/", "_")
     filename = f"relatorio_personalizado_esc_{profile.lower()}_{filename_scenario}_{datetime.now():%Y%m%d}.pdf"
-    signature = repr((cena_sel, selected_blocks, notes, author, profile, company_name, comparison_scenarios))
 
     if confirmed or generate_pdf:
         if not selected_blocks:
             st.error(t("report.need_block_pdf"))
             return
-        try:
-            with st.spinner(t("report.spinner")):
-                pdf_bytes = generate_custom_report_pdf(
-                    df,
-                    scenario=cena_sel,
-                    selected_blocks=selected_blocks,
-                    notes=notes,
-                    author=author,
-                    profile=profile,
-                    company_name=company_name,
-                    comparison_scenarios=comparison_scenarios,
-                )
-        except Exception as exc:  # noqa: BLE001
-            st.error(t("report.pdf_error", err=f"{type(exc).__name__}: {exc}"))
-            return
-        st.session_state["custom_report_pdf"] = pdf_bytes
-        st.session_state["custom_report_filename"] = filename
-        st.session_state["custom_report_signature"] = signature
-        if confirmed and not generate_pdf:
-            st.success(t("report.preview_ok"))
+        _log(
+            f"pedido PDF na fila confirm={confirmed} generate={generate_pdf} "
+            f"blocos={selected_blocks} cenario={cena_sel}"
+        )
+        st.session_state[PENDING_KEY] = {
+            "scenario": cena_sel,
+            "selected_blocks": list(selected_blocks),
+            "notes": notes,
+            "author": author,
+            "profile": profile,
+            "company_name": company_name,
+            "comparison_scenarios": list(comparison_scenarios),
+            "filename": filename,
+        }
+        st.rerun()
 
-    # Exibicao fora do formulario: permanece visivel apos o submit do form.
     preview_pdf = st.session_state.get("custom_report_pdf")
     if isinstance(preview_pdf, dict):
         preview_pdf = preview_pdf.get("bytes")
     if preview_pdf:
         st.subheader(t("report.preview"))
-        display_pdf_preview(preview_pdf)
+        st.caption(t("report.download"))
         st.download_button(
             t("report.download"),
             data=preview_pdf,

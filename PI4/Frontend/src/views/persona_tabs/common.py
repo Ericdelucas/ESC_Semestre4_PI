@@ -42,6 +42,15 @@ def _be_padrao(cena: str) -> pd.DataFrame:
     return build_break_even(df, cena)
 
 
+@st.cache_data(show_spinner=False)
+def _ltv_padrao(cena: str) -> pd.DataFrame:
+    from Backend.metrics import calculate_ltv_cac
+    from src.controllers.bootstrap import carregar_pipeline
+
+    df, _, _ = carregar_pipeline()
+    return calculate_ltv_cac(df, cena)
+
+
 def _dre(df: pd.DataFrame, cena: str) -> pd.DataFrame:
     from src.controllers.data_input import has_custom_data
 
@@ -57,6 +66,15 @@ def _break_even_df(df: pd.DataFrame, cena: str) -> pd.DataFrame:
         return _be_padrao(str(cena))
     return build_break_even(df, cena)
 
+
+def _ltv_df(df: pd.DataFrame, cena: str) -> pd.DataFrame:
+    from Backend.metrics import calculate_ltv_cac
+    from src.controllers.data_input import has_custom_data
+
+    if not has_custom_data():
+        return _ltv_padrao(str(cena))
+    return calculate_ltv_cac(df, cena)
+
 __all__ = [
     "ALIQUOTA_IR_FALLBACK",
     "PAYOUT",
@@ -66,5 +84,6 @@ __all__ = [
     "_conta",
     "_dre",
     "_financeiro",
+    "_ltv_df",
     "_safe_div",
 ]

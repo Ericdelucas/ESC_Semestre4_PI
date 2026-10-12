@@ -124,6 +124,10 @@ def main() -> None:
             render_floating_chat()
         st.rerun()
     diag("app", f"persona={persona} a montar contexto e pagina")
+    if is_relatorio_open():
+        from Backend.diag import log_relatorio
+
+        log_relatorio(f"main(): modal relatorio aberto — persona={persona} cena={cena_sel} ano={ano_sel}")
     try:
         ctx = montar_contexto(
             df, ind, ranking, ano_sel=ano_sel, cena_sel=cena_sel, anos=anos, cenas=cenas, persona=persona
