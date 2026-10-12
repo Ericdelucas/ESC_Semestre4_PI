@@ -40,14 +40,17 @@ def _executar(sql: str, params: dict | None = None, tentativas: int = 3) -> pd.D
             engine = get_cti_engine()
             with engine.connect() as conn:
                 return _normalizar_colunas(pd.read_sql(text(sql), conn, params=params or {}))
-        except (OperationalError, DBAPIError) as exc:
+        except (OperationalError, DBAPIError, RuntimeError) as exc:
             ultimo = exc
             print(
                 f"[db] consulta falhou tentativa={tentativa}/{tentativas} "
                 f"{type(exc).__name__}: {exc}",
                 flush=True,
             )
+            texto = str(exc).lower()
             dispose_engine()
+            if "translate host" in texto or "name or service not known" in texto or "resolvivel" in texto:
+                break
             time.sleep(0.45 * tentativa)
     assert ultimo is not None
     raise ultimo
@@ -60,10 +63,13 @@ def _escalar(sql: str, params: dict | None = None) -> object:
             engine = get_cti_engine()
             with engine.connect() as conn:
                 return conn.execute(text(sql), params or {}).scalar()
-        except (OperationalError, DBAPIError) as exc:
+        except (OperationalError, DBAPIError, RuntimeError) as exc:
             ultimo = exc
             print(f"[db] escalar falhou tentativa={tentativa} {type(exc).__name__}: {exc}", flush=True)
+            texto = str(exc).lower()
             dispose_engine()
+            if "translate host" in texto or "name or service not known" in texto or "resolvivel" in texto:
+                break
             time.sleep(0.45 * tentativa)
     assert ultimo is not None
     raise ultimo

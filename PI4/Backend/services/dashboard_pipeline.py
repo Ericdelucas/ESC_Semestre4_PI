@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pandas as pd
@@ -59,7 +58,7 @@ def _log_ficheiros_cache(csv: Path) -> None:
 
 def _carregar_csv(csv: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     print(f"[cache] FALLBACK CSV a ler {csv.resolve()}", flush=True)
-    df = load_cti_csv(csv)
+    df = load_cti_csv(csv, forcar_ficheiro=True)
     print(f"[cache] CSV carregado linhas={len(df):,}; a calcular indicadores", flush=True)
     ind, ranking = montar_indicadores(df)
     CACHE_DIR.mkdir(exist_ok=True)
@@ -84,9 +83,8 @@ def prepare_dashboard_data(csv_path: str | Path = CSV_PATH) -> tuple[pd.DataFram
             print("[cache] fonte=PostgreSQL tabela=cti_dados", flush=True)
             return load_dashboard_from_sql()
     except Exception as exc:  # noqa: BLE001
-        print(f"[cache] PostgreSQL falhou {type(exc).__name__}: {exc}", flush=True)
-        if os.environ.get("RENDER"):
-            raise
+        print(f"[cache] aviso: PostgreSQL falhou {type(exc).__name__}: {exc}", flush=True)
+        print("[cache] a usar parquet/CSV para a interface nao falhar", flush=True)
 
     csv = Path(csv_path)
     _log_ficheiros_cache(csv)

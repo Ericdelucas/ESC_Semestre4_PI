@@ -9,7 +9,7 @@ from pathlib import Path
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
-from Backend.data_loader.db import is_postgres_url, normalize_database_url
+from Backend.data_loader.db import is_postgres_url, preferred_database_url
 
 _BACKEND = Path(__file__).resolve().parents[1]
 _DEFAULT_SQLITE = _BACKEND / "cache" / "cti_auth.db"
@@ -20,7 +20,7 @@ _SessionLocal = None
 
 
 def database_url() -> str:
-    return os.environ.get("DATABASE_URL", f"sqlite:///{_DEFAULT_SQLITE.as_posix()}")
+    return (os.environ.get("DATABASE_URL") or f"sqlite:///{_DEFAULT_SQLITE.as_posix()}").strip().strip("\"'")
 
 
 def get_engine():
@@ -29,7 +29,7 @@ def get_engine():
         _DEFAULT_SQLITE.parent.mkdir(parents=True, exist_ok=True)
         url = database_url()
         if is_postgres_url(url):
-            url = normalize_database_url(url)
+            url = preferred_database_url() or url
             _engine = create_engine(
                 url,
                 future=True,
