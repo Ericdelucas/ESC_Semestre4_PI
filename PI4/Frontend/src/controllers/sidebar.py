@@ -9,7 +9,7 @@ import streamlit as st
 
 from src.config import CSV_PATH, PERSONAS
 from src.config.glossary import help_text
-from src.config.i18n import LANG_OPTIONS, get_lang, set_lang, t
+from src.config.i18n import LANG_OPTIONS, get_lang, set_lang, t, translate_dataset_name
 from src.controllers.auth import allowed_personas, can_access_persona
 from src.models.formatting import cena_rotulo, cena_sort_key
 
@@ -119,7 +119,7 @@ def render_sidebar(df: pd.DataFrame, ind: pd.DataFrame, n_cenarios: int) -> tupl
             cena_sel = "Todos" if _eh_filtro_todos(cena_choice) else str(cena_choice)
 
         st.markdown("---")
-        active_base = st.session_state.get("cti_active_dataset_name", Path(CSV_PATH).name)
+        active_base = translate_dataset_name(st.session_state.get("cti_active_dataset_name", Path(CSV_PATH).name), lang)
         n_anos = int(ind["ano_num"].nunique()) if isinstance(ind, pd.DataFrame) and "ano_num" in ind.columns else 0
         n_linhas = st.session_state.get("cti_row_count")
         if n_linhas is None:
