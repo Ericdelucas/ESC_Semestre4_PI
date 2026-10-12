@@ -23,33 +23,67 @@ def database_url() -> str:
     return (os.environ.get("DATABASE_URL") or f"sqlite:///{_DEFAULT_SQLITE.as_posix()}").strip().strip("\"'")
 
 
+def _sqlite_url() -> str:
+    return f"sqlite:///{_DEFAULT_SQLITE.as_posix()}"
+
+
+def _bind_engine(url: str, *, postgres: bool) -> None:
+    global _engine, _SessionLocal
+    if postgres:
+        _engine = create_engine(
+            url,
+            future=True,
+            pool_pre_ping=True,
+            pool_recycle=300,
+            pool_size=3,
+            max_overflow=2,
+            pool_timeout=30,
+            connect_args={"sslmode": "require", "connect_timeout": 12},
+        )
+    else:
+        _engine = create_engine(
+            url,
+            future=True,
+            connect_args={"check_same_thread": False},
+        )
+    _SessionLocal = sessionmaker(
+        bind=_engine,
+        autoflush=False,
+        autocommit=False,
+        expire_on_commit=False,
+        future=True,
+    )
+
+
+def _usar_sqlite(motivo: str) -> None:
+    global _engine, _SessionLocal
+    print(f"[auth] aviso: a usar SQLite ({motivo})", flush=True)
+    if _engine is not None:
+        try:
+            _engine.dispose()
+        except Exception as exc:  # noqa: BLE001
+            print(f"[auth] aviso dispose ({type(exc).__name__}: {exc})", flush=True)
+    _engine = None
+    _SessionLocal = None
+    _DEFAULT_SQLITE.parent.mkdir(parents=True, exist_ok=True)
+    _bind_engine(_sqlite_url(), postgres=False)
+
+
 def get_engine():
     global _engine, _SessionLocal
     if _engine is None:
         _DEFAULT_SQLITE.parent.mkdir(parents=True, exist_ok=True)
         url = database_url()
         if is_postgres_url(url):
-            url = preferred_database_url() or url
-            _engine = create_engine(
-                url,
-                future=True,
-                pool_pre_ping=True,
-                pool_recycle=300,
-                pool_size=3,
-                max_overflow=2,
-                pool_timeout=30,
-                connect_args={"sslmode": "require", "connect_timeout": 20},
-            )
+            resolvida = preferred_database_url()
+            if resolvida:
+                host = resolvida.split("@")[-1].split("/")[0]
+                print(f"[auth] PostgreSQL host={host}", flush=True)
+                _bind_engine(resolvida, postgres=True)
+            else:
+                _usar_sqlite("DATABASE_URL sem DNS resolvivel")
         else:
-            connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
-            _engine = create_engine(url, future=True, connect_args=connect_args)
-        _SessionLocal = sessionmaker(
-            bind=_engine,
-            autoflush=False,
-            autocommit=False,
-            expire_on_commit=False,
-            future=True,
-        )
+            _bind_engine(_sqlite_url(), postgres=False)
     return _engine
 
 
@@ -63,11 +97,21 @@ def _ensure_sqlite_columns(engine) -> None:
 
 
 def init_db() -> None:
+    """Cria tabelas. Se o Postgres falhar (DNS), cai para SQLite e a API sobe."""
     from . import models as _models  # noqa: F401
 
-    engine = get_engine()
-    Base.metadata.create_all(bind=engine)
-    _ensure_sqlite_columns(engine)
+    try:
+        engine = get_engine()
+        Base.metadata.create_all(bind=engine)
+        _ensure_sqlite_columns(engine)
+        print(f"[auth] init_db OK dialect={engine.dialect.name}", flush=True)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[auth] aviso: Postgres falhou no init ({type(exc).__name__}: {exc})", flush=True)
+        _usar_sqlite(str(exc))
+        engine = get_engine()
+        Base.metadata.create_all(bind=engine)
+        _ensure_sqlite_columns(engine)
+        print("[auth] init_db OK dialect=sqlite (fallback)", flush=True)
 
 
 def get_db() -> Session:

@@ -155,13 +155,13 @@ def candidate_urls() -> list[str]:
 
 
 def preferred_database_url() -> str:
-    """Primeira URL cujo host resolve em DNS — para auth e para o CTI."""
+    """Primeira URL cujo host resolve em DNS. Vazio se nenhum resolver."""
     for url in candidate_urls():
         host = urlparse(url).hostname or ""
         if _host_resolves(host):
             return url
-    urls = candidate_urls()
-    return urls[0] if urls else ""
+    print("[db] aviso: nenhum host PostgreSQL resolveu DNS", flush=True)
+    return ""
 
 
 def dispose_engine() -> None:
