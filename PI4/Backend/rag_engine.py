@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -52,8 +53,10 @@ class CTIRag:
 def _carregar_ranking() -> pd.DataFrame:
     CACHE_DIR.mkdir(exist_ok=True)
     cache = CACHE_DIR / "ranking.parquet"
-    if cache.exists() and CSV_PATH.exists() and cache.stat().st_mtime >= CSV_PATH.stat().st_mtime:
+    if cache.exists():
         return pd.read_parquet(cache)
+    if os.environ.get("RENDER"):
+        return pd.DataFrame(columns=["CENA", "selo", "caixa_ano12"])
     df = load_cti_csv(CSV_PATH)
     _ind, ranking = montar_indicadores(df)
     return ranking

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -72,9 +73,16 @@ def load_cti_csv(path: Path | str | None = None, *, forcar_ficheiro: bool = Fals
         except Exception as exc:  # noqa: BLE001
             print(f"[csv] aviso: SQL indisponivel ({type(exc).__name__}: {exc}); a tentar ficheiro", flush=True)
 
+    if os.environ.get("RENDER") and not forcar_ficheiro:
+        print("[csv] RENDER runtime: Cti.csv bloqueado — nao carregar 1M linhas", flush=True)
+        return pd.DataFrame(columns=["ANO", "CENA", "CONTA", "VALOR", "ano_num"])
+
     csv_path = Path(path) if path is not None else CSV_PATH
     CACHE_DIR.mkdir(exist_ok=True)
     parquet_path = CACHE_DIR / "cti_limpo.parquet"
+
+    if os.environ.get("RENDER") and forcar_ficheiro:
+        print("[csv] RENDER build: a ler Cti.csv so no precompute", flush=True)
 
     if (
         parquet_path.exists()
