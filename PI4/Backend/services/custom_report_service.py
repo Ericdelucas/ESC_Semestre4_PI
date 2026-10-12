@@ -33,7 +33,7 @@ from Backend.services.report_generator import (
 from Backend.services.report_insights import insights_from_tables, merge_notes_with_insights
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import cm
-from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Table, TableStyle
 
 
 BLOCKS: dict[str, str] = {
@@ -189,8 +189,8 @@ def _kpi_callouts(df: pd.DataFrame, scenario: str, dre_of=None, be_of=None, ltv_
                 ("LINEBELOW", (0, 0), (-1, 0), 1.2, GOLD),
                 ("BOX", (0, 0), (-1, -1), 0.3, colors.HexColor("#CBD5E1")),
                 ("INNERGRID", (0, 0), (-1, -1), 0.2, colors.HexColor("#E2E8F0")),
-                ("TOPPADDING", (0, 0), (-1, -1), 9),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 9),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
             ]
         )
     )
@@ -399,13 +399,13 @@ def generate_custom_report_pdf(
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        leftMargin=1.7 * cm,
-        rightMargin=1.7 * cm,
-        topMargin=1.7 * cm,
-        bottomMargin=1.6 * cm,
+        leftMargin=1.5 * cm,
+        rightMargin=1.5 * cm,
+        topMargin=1.45 * cm,
+        bottomMargin=1.35 * cm,
         title="Relatório Executivo Personalizado ESC",
     )
-    story: list[Any] = [CoverPage(meta), PageBreak()]
+    story: list[Any] = [CoverPage(meta)]
 
     block_renderers = {
         "cover": lambda: _cover_block(
@@ -436,8 +436,6 @@ def generate_custom_report_pdf(
         renderer = block_renderers.get(block)
         if renderer is None:
             continue
-        if rendered_count > 0:
-            story.append(PageBreak())
         bloco_t0 = time.time()
         _log(f"bloco INICIO {block}")
         renderer()
