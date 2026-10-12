@@ -84,8 +84,9 @@ div[class*="st-key-cti_ai_side_panel"] [data-testid="stChatMessage"] {
 div[class*="st-key-cti_ai_side_panel"] p,
 div[class*="st-key-cti_ai_side_panel"] li,
 div[class*="st-key-cti_ai_side_panel"] span {
-  overflow-wrap: anywhere !important;
-  word-break: normal !important;
+  overflow-wrap: break-word !important;
+  word-break: break-word !important;
+  white-space: pre-wrap !important;
 }
 </style>
 """

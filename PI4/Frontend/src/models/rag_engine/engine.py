@@ -90,6 +90,11 @@ def _trechos_rag(contexto: str, termos: tuple[str, ...]) -> list[str]:
             continue
         if linha.strip().startswith("- "):
             continue
+        if linha.strip().startswith("#"):
+            titulo = linha.strip().lstrip("#").strip()
+            if titulo:
+                atual.append(titulo)
+            continue
         if linha.strip():
             atual.append(linha.strip())
     if atual:
@@ -454,19 +459,9 @@ def _resposta_sem_llm(question: str, extra_context: str, lang: str) -> str:
 
     if valores:
         if idioma == "en":
-            partes.append(f"In the current CTI slice, the available reading is {valores}.")
+            partes.append(f"In the current slice, the available reading is {valores}.")
         else:
-            partes.append(f"No recorte atual do Dashboard CTI, a leitura disponível é {valores}.")
-    elif guia:
-        if idioma == "en":
-            partes.append("I do not have a numeric value for this indicator in the supplied local context.")
-        else:
-            partes.append("Não há um valor numérico deste indicador no contexto local fornecido.")
-
-    if guia and trechos:
-        extra = trechos[0]
-        if extra not in " ".join(partes):
-            partes.insert(1, extra)
+            partes.append(f"No recorte atual, a leitura disponível é {valores}.")
 
     partes.append(guia[idioma][-1] if guia else fechamento)
     return "\n\n".join(partes)
@@ -582,6 +577,9 @@ class RagEngine:
             f"ask: pergunta={question[:120]!r} lang={lang} role={user_role} "
             f"cena={cena_sel} hist={len(history)} contexto_extra={len(extra_context)}"
         )
+        if _escolher_guia(_normalizar_texto(question)):
+            log_ia("ask: atalho guia local — sem RAG e sem Gemini")
+            return _resposta_sem_llm(question, extra_context, lang), ["guia-local"]
         if question_is_blocked(question, user_role):
             log_ia("ask: pergunta bloqueada pelo RBAC")
             return deny_message(user_role, lang), []

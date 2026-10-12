@@ -45,6 +45,8 @@ from src.controllers.page_setup import configure_page
 from src.controllers.sidebar import render_language_selector, render_persona, render_sidebar
 from src.views.ai_assistant.panel import render_floating_chat
 
+log_ia("app.py carregado — Streamlit e assistente de IA activos")
+
 
 def montar_indicadores_customizados(df):
     """Evita recalcular indicadores de bases customizadas em todo rerun."""

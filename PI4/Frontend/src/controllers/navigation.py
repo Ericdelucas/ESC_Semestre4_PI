@@ -97,8 +97,11 @@ def render_analises(ctx: AppContext) -> None:
     renderers = {**VIEW_RENDERERS, "comparar": PERSONA_VIEW_RENDERERS["comparar"]} if ctx.persona == "cfo" else PERSONA_VIEW_RENDERERS
     pending_nav_key = st.session_state.pop("pending_nav_key", None)
     if pending_nav_key in nav_keys:
+        from Backend.diag import log_ia
+
         st.session_state["nav_key"] = pending_nav_key
         st.session_state["current_tab"] = pending_nav_key
+        log_ia(f"aba aplicada pelo atalho do assistente: {pending_nav_key}")
     elif st.session_state.get("current_tab") in nav_keys:
         st.session_state["nav_key"] = st.session_state["current_tab"]
     if st.session_state.get("nav_key") not in nav_keys:
@@ -118,7 +121,7 @@ def render_analises(ctx: AppContext) -> None:
         default_label = t(f"nav.{default_key}") if default_key in NAV_KEYS else t(PERSONA_NAV_LABELS[default_key])
     nav_widget_key = f"nav_secao_{ctx.persona}_{lang}_{len(analyses)}"
     if pending_nav_key in nav_keys:
-        st.session_state.pop(nav_widget_key, None)
+        st.session_state[nav_widget_key] = default_label
     with st.container(key=f"cti_subnav_scroll_{ctx.persona}", border=False):
         col_nav, col_add = st.columns([0.94, 0.06])
         with col_nav:

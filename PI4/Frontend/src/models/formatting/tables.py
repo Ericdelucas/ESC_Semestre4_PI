@@ -125,10 +125,37 @@ def parse_markdown_table(bloco: str) -> pd.DataFrame | None:
 
 
 _TABLE_BLOCK = re.compile(r"(?:^[ \t]*\|.+\|[ \t]*$\n?){2,}", re.MULTILINE)
+_HEADING_LINE = re.compile(r"^\s{0,3}#{1,6}\s+(.*)$")
+
+
+def limpar_markdown_chat(texto: str) -> str:
+    """Evita titulos markdown gigantes no chat e mantem paragrafos com espaco."""
+    if not texto:
+        return ""
+    linhas: list[str] = []
+    for raw in str(texto).replace("\r\n", "\n").split("\n"):
+        titulo = _HEADING_LINE.match(raw)
+        if titulo:
+            nome = titulo.group(1).strip()
+            if nome:
+                linhas.append(f"**{nome}**")
+            continue
+        linhas.append(raw.rstrip())
+    limpo = re.sub(r"\n{3,}", "\n\n", "\n".join(linhas)).strip()
+    return limpo
+
+
+def _render_paragrafos(texto: str) -> None:
+    blocos = [bloco.strip() for bloco in texto.split("\n\n") if bloco.strip()]
+    if not blocos:
+        return
+    for bloco in blocos:
+        st.markdown(bloco)
 
 
 def render_markdown_with_tables(texto: str) -> None:
     """Renderiza markdown e converte tabelas GFM em st.dataframe sem quebrar o layout."""
+    texto = limpar_markdown_chat(texto)
     if not texto:
         return
     cursor = 0
@@ -136,15 +163,15 @@ def render_markdown_with_tables(texto: str) -> None:
     for match in _TABLE_BLOCK.finditer(texto):
         prefixo = texto[cursor:match.start()]
         if prefixo.strip():
-            st.markdown(prefixo)
+            _render_paragrafos(prefixo)
         tabela = parse_markdown_table(match.group(0))
         if tabela is not None and not tabela.empty:
             render_table(tabela)
             encontrou = True
         else:
-            st.markdown(match.group(0))
+            _render_paragrafos(match.group(0))
         cursor = match.end()
     resto = texto[cursor:]
     if resto.strip() or not encontrou:
         if resto.strip() or cursor == 0:
-            st.markdown(texto if cursor == 0 else resto)
+            _render_paragrafos(texto if cursor == 0 else resto)
