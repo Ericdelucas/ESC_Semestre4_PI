@@ -213,6 +213,15 @@ def detectar_intencao_navegacao(user_prompt: str, *, exigir_gatilho: bool = True
     return None
 
 
+def _rerun_app() -> None:
+    """Sai do fragmento do chat para o dashboard aplicar persona + aba."""
+    log_ia("rerun COMPLETO do dashboard (navegacao / persona / aba)")
+    try:
+        st.rerun(scope="app")
+    except TypeError:
+        st.rerun()
+
+
 def render_navigation_card(nav_card: dict[str, str], message_idx: int) -> None:
     target_tab_name = nav_card["target_tab_name"]
     st.info(t("ai.nav_shortcut", desc=nav_card["description"]))
@@ -223,12 +232,16 @@ def render_navigation_card(nav_card: dict[str, str], message_idx: int) -> None:
         if st.button(t("ai.open_tab", tab=target_tab_name), key=f"nav_open_{message_idx}_{nav_card['nav_key']}"):
             if destino_persona and not can_access_persona(destino_persona):
                 st.toast(t("login.error"))
+                _rerun_chat()
             else:
                 st.session_state["pending_nav_key"] = nav_card["nav_key"]
                 st.session_state["pending_persona_id"] = destino_persona
                 st.session_state["active_tab"] = target_tab_name
                 close_chat()
-            _rerun_chat()
+                log_ia(
+                    f"NAVIGAR para nav_key={nav_card['nav_key']} persona={destino_persona}"
+                )
+                _rerun_app()
 
     with col2:
         if st.button(t("ai.cancel_nav"), key=f"nav_cancel_{message_idx}_{nav_card['nav_key']}"):
@@ -355,15 +368,29 @@ div[data-testid="stChatMessage"] {
   color: #F0F6FC !important;
   opacity: 1 !important;
   max-width: 100% !important;
-  overflow-wrap: anywhere !important;
-  word-break: normal !important;
+  overflow-wrap: break-word !important;
+  word-break: break-word !important;
 }
 div[data-testid="stChatMessage"] p,
 div[data-testid="stChatMessage"] li,
 div[data-testid="stChatMessage"] span {
   color: #F0F6FC !important;
-  overflow-wrap: anywhere !important;
-  word-break: normal !important;
+  overflow-wrap: break-word !important;
+  word-break: break-word !important;
+  white-space: pre-wrap !important;
+  word-spacing: normal !important;
+  letter-spacing: normal !important;
+  line-height: 1.5 !important;
+  font-size: 0.95rem !important;
+}
+div[data-testid="stChatMessage"] h1,
+div[data-testid="stChatMessage"] h2,
+div[data-testid="stChatMessage"] h3,
+div[data-testid="stChatMessage"] h4 {
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  line-height: 1.35 !important;
+  margin: 0.35rem 0 !important;
 }
 div[class*="st-key-cti_chat_input_area"] {
   border-top: 1px solid #30363D !important;
@@ -586,27 +613,36 @@ def render_chat_panel(
     else:
         log_ia("chat_panel: a processar pergunta pendente")
         try:
-            response_text = gerar_resposta_ia(
-                pending,
-                df_ativo=_df_or_empty(df_ativo),
-                ind=_ind_or_ranking(ind, ranking),
-                ranking=ranking,
-                n_cenarios=n_cenarios,
-                p_ruina=p_ruina,
-                cena_sel=cena_sel,
-                k=k,
-                ano_enc=ano_enc,
-                ano_sel=ano_sel,
-                persona=persona,
-            )
+            from src.models.formatting.tables import limpar_markdown_chat
+            from src.models.rag_engine.engine import _escolher_guia, _normalizar_texto, _resposta_sem_llm
+
+            if _escolher_guia(_normalizar_texto(pending)):
+                log_ia("chat_panel: resposta RAPIDA por guia (sem indexar, sem Gemini)")
+                response_text = _resposta_sem_llm(pending, "", get_lang())
+            elif nav_card:
+                log_ia("chat_panel: resposta RAPIDA de navegacao (sem indexar, sem Gemini)")
+                response_text = t("ai.related", tab=nav_card["target_tab_name"])
+            else:
+                response_text = gerar_resposta_ia(
+                    pending,
+                    df_ativo=_df_or_empty(df_ativo),
+                    ind=_ind_or_ranking(ind, ranking),
+                    ranking=ranking,
+                    n_cenarios=n_cenarios,
+                    p_ruina=p_ruina,
+                    cena_sel=cena_sel,
+                    k=k,
+                    ano_enc=ano_enc,
+                    ano_sel=ano_sel,
+                    persona=persona,
+                )
+            response_text = limpar_markdown_chat(response_text)
         except Exception as exc:  # noqa: BLE001
             log_ia(f"chat_panel: gerar_resposta EXCECAO {type(exc).__name__}: {exc}")
             response_text = t("ai.error")
     response_text = sanitize_answer(response_text, papel, get_lang())
     if response_text.startswith("Acesso restrito") or response_text.startswith("Restricted access"):
         nav_card = None
-    if nav_card:
-        response_text = f"{response_text}\n\n{t('ai.related', tab=nav_card['target_tab_name'])}"
     response_text = _garantir_fechamento_conversacional(response_text)
 
     assistant_message_idx = len(st.session_state.messages)

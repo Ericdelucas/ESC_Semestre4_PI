@@ -141,7 +141,10 @@ def render_persona() -> str:
     legado = {"geral": "ceo", "docente": "concedente"}
     pending_persona = st.session_state.pop("pending_persona_id", None)
     if pending_persona in visoes and can_access_persona(pending_persona):
+        from Backend.diag import log_ia
+
         st.session_state["persona_id"] = pending_persona
+        log_ia(f"persona aplicada pelo atalho do assistente: {pending_persona}")
     atual = st.session_state.get("persona_id", visoes[0])
     if atual not in visoes:
         st.session_state["persona_id"] = legado.get(str(atual), visoes[0])
@@ -150,7 +153,7 @@ def render_persona() -> str:
     default_label = t(f"persona.{st.session_state['persona_id']}")
     persona_widget_key = f"persona_visao_v3_{lang}_{'_'.join(visoes)}"
     if pending_persona in visoes:
-        st.session_state.pop(persona_widget_key, None)
+        st.session_state[persona_widget_key] = default_label
     with st.container(key="cti_persona_header"):
         escolha = st.segmented_control(
             t("persona.label"),
