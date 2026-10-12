@@ -15,7 +15,6 @@ from Backend.metrics.financial_kpis import build_break_even, build_dre, is_all_s
 from Backend.services.report_generator import (
     CHART_GOLD,
     CHART_ICE,
-    CoverPage,
     _add_chart,
     _apply_chart_theme,
     _break_even_figure,
@@ -28,7 +27,9 @@ from Backend.services.report_generator import (
     _styles,
     _table,
     executive_canvas_factory,
+    masthead,
     section_block,
+    side_by_side,
 )
 from Backend.services.report_insights import insights_from_tables, merge_notes_with_insights
 from reportlab.lib.pagesizes import A4
@@ -224,7 +225,7 @@ def _financial_block(story: list[Any], df: pd.DataFrame, scenario: str, text: st
         ["EBIT", _money(_metric_mean(dre, "EBIT"))],
         ["Lucro Líquido", _money(_net_income_mean(dre))],
     ]
-    table = _table(rows, [8.2 * cm, 8.2 * cm], highlight_labels={"Receita Líquida", "EBITDA"})
+    table = _table(rows, [4.05 * cm, 4.05 * cm], highlight_labels={"Receita Líquida", "EBITDA"})
     chart = []
     _add_chart(chart, _dre_figure(dre), styles, "Grafico DRE indisponivel: renderizacao Plotly/Kaleido excedeu o timeout.")
     story.extend(section_block("Análise de EBITDA & DRE", text, table, *chart))
@@ -242,7 +243,7 @@ def _break_even_block(story: list[Any], df: pd.DataFrame, scenario: str, text: s
         ["Margem de Contribuição", _pct(_metric_mean(be_df, "Margem de Contribuição (%)", "Margem de Contribuicao (%)"))],
         ["Margem de Segurança", _pct(_metric_mean(be_df, "Margem de Segurança (%)", "Margem de Seguranca (%)"))],
     ]
-    table = _table(rows, [8.2 * cm, 8.2 * cm], highlight_labels={"Break-Even"})
+    table = _table(rows, [4.05 * cm, 4.05 * cm], highlight_labels={"Break-Even"})
     chart = []
     _add_chart(chart, _break_even_figure(be_df), styles, "Grafico Break-Even indisponivel: renderizacao Plotly/Kaleido excedeu o timeout.")
     story.extend(section_block("Ponto de Equilíbrio & Risco", text, table, *chart))
@@ -255,9 +256,9 @@ def _commercial_block(story: list[Any], df: pd.DataFrame, scenario: str, text: s
         story.extend(section_block("Eficiência Comercial", text, Paragraph("Sem dados suficientes para LTV/CAC.", styles["body"])))
         return
     rows = [["Ano", "LTV", "CAC", "LTV/CAC"]]
-    for _, row in ltv.head(12).iterrows():
+    for _, row in ltv.head(6).iterrows():
         rows.append([int(row["ano_num"]), _money(row["LTV"]), _money(row["CAC"]), f"{float(row['LTV/CAC']):.1f}x"])
-    table = _table(rows, [2.4 * cm, 4.6 * cm, 4.6 * cm, 4.8 * cm])
+    table = _table(rows, [2.2 * cm, 4.8 * cm, 4.8 * cm, 4.8 * cm])
     chart = []
     _add_chart(chart, _ltv_cac_figure(ltv), styles, "Grafico LTV/CAC indisponivel: renderizacao Plotly/Kaleido excedeu o timeout.")
     story.extend(section_block("Eficiência Comercial", text, table, *chart))
@@ -404,24 +405,43 @@ def generate_custom_report_pdf(
         topMargin=1.45 * cm,
         bottomMargin=1.35 * cm,
         title="Relatório Executivo Personalizado ESC",
+        allowSplitting=1,
     )
-    story: list[Any] = [CoverPage(meta)]
+    doc.pageBreakQuick = 0
+    story: list[Any] = [masthead(meta)]
+    selecionados = set(selected_blocks)
+    rendered_count = 0
 
-    block_renderers = {
-        "cover": lambda: _cover_block(
-            story, df, scenario, notes.get("cover", ""), dre_of=dre_of, be_of=be_of, ltv_of=ltv_of
-        ),
-        "financial_dre": lambda: _financial_block(
-            story, df, scenario, notes.get("financial_dre", ""), dre_of=dre_of
-        ),
-        "break_even": lambda: _break_even_block(
-            story, df, scenario, notes.get("break_even", ""), be_of=be_of
-        ),
-        "commercial": lambda: _commercial_block(
-            story, df, scenario, notes.get("commercial", ""), ltv_of=ltv_of
-        ),
-        "operational_tech": lambda: _operational_block(story, df, scenario, notes.get("operational_tech", "")),
-        "scenario_comparison": lambda: _comparison_block(
+    if "cover" in selecionados:
+        _log("bloco INICIO cover")
+        _cover_block(story, df, scenario, notes.get("cover", ""), dre_of=dre_of, be_of=be_of, ltv_of=ltv_of)
+        rendered_count += 1
+        _log("bloco FIM cover")
+
+    fin_story: list[Any] = []
+    be_story: list[Any] = []
+    if "financial_dre" in selecionados:
+        _financial_block(fin_story, df, scenario, notes.get("financial_dre", ""), dre_of=dre_of)
+        rendered_count += 1
+    if "break_even" in selecionados:
+        _break_even_block(be_story, df, scenario, notes.get("break_even", ""), be_of=be_of)
+        rendered_count += 1
+    if fin_story and be_story:
+        story.append(side_by_side(fin_story, be_story))
+    else:
+        story.extend(fin_story)
+        story.extend(be_story)
+
+    if "commercial" in selecionados:
+        _log("bloco INICIO commercial")
+        _commercial_block(story, df, scenario, notes.get("commercial", ""), ltv_of=ltv_of)
+        rendered_count += 1
+        _log("bloco FIM commercial")
+    if "operational_tech" in selecionados:
+        _operational_block(story, df, scenario, notes.get("operational_tech", ""))
+        rendered_count += 1
+    if "scenario_comparison" in selecionados:
+        _comparison_block(
             story,
             df,
             scenario,
@@ -429,17 +449,7 @@ def generate_custom_report_pdf(
             notes.get("scenario_comparison", ""),
             dre_of=dre_of,
             be_of=be_of,
-        ),
-    }
-    rendered_count = 0
-    for block in selected_blocks:
-        renderer = block_renderers.get(block)
-        if renderer is None:
-            continue
-        bloco_t0 = time.time()
-        _log(f"bloco INICIO {block}")
-        renderer()
-        _log(f"bloco FIM {block} em {time.time() - bloco_t0:.2f}s")
+        )
         rendered_count += 1
 
     if rendered_count == 0:

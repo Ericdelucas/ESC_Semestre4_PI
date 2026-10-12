@@ -26,9 +26,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen.canvas import Canvas
 from reportlab.platypus import (
-    Flowable,
     Image,
-    KeepTogether,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -169,9 +167,9 @@ def _styles() -> dict[str, ParagraphStyle]:
             fontSize=11,
             leading=13,
             textColor=NAVY,
-            spaceBefore=2,
-            spaceAfter=3,
-            keepWithNext=True,
+            spaceBefore=4,
+            spaceAfter=2,
+            keepWithNext=0,
         ),
         "h3": ParagraphStyle(
             "ESCReportH3",
@@ -181,8 +179,8 @@ def _styles() -> dict[str, ParagraphStyle]:
             leading=10,
             textColor=GOLD,
             spaceBefore=0,
-            spaceAfter=2,
-            keepWithNext=True,
+            spaceAfter=1,
+            keepWithNext=0,
         ),
         "body": ParagraphStyle(
             "ESCReportBody",
@@ -329,74 +327,139 @@ def executive_canvas_factory(meta: dict[str, str]):
     return BoundCanvas
 
 
-class CoverPage(Flowable):
-    """Masthead compacto — nao ocupa uma pagina inteira em branco."""
+def clip_insight(text: str, limit: int = 280) -> str:
+    compacto = " ".join(str(text or "").split())
+    if len(compacto) <= limit:
+        return compacto
+    return compacto[:limit].rsplit(" ", 1)[0] + "…"
 
-    def __init__(self, meta: dict[str, str]):
-        super().__init__()
-        self.meta = meta
 
-    def wrap(self, availWidth, availHeight):
-        self.width = availWidth
-        self.height = min(6.35 * cm, availHeight)
-        return self.width, self.height
-
-    def draw(self) -> None:
-        _register_fonts()
-        c = self.canv
-        w, h = self.width, self.height
-        issued = self.meta.get("issued_at") or datetime.now().strftime("%d/%m/%Y %H:%M")
-        c.setFillColor(NAVY)
-        c.roundRect(0, h - 1.15 * cm, 1.15 * cm, 1.15 * cm, 2, fill=1, stroke=0)
-        c.setFillColor(WHITE)
-        c.setFont(FONT_SANS_BOLD, 10)
-        c.drawCentredString(0.575 * cm, h - 0.7 * cm, "ESC")
-        c.setFillColor(GOLD)
-        c.setFont(FONT_SANS_BOLD, 8.5)
-        c.drawString(1.45 * cm, h - 0.45 * cm, self.meta.get("company_name") or "Grupo ESC")
-        c.setFillColor(SLATE)
-        c.setFont(FONT_SANS, 7.5)
-        c.drawString(1.45 * cm, h - 0.9 * cm, "Corporate Intelligence  ·  Dashboard CTI")
-        c.setStrokeColor(GOLD)
-        c.setLineWidth(1.3)
-        c.line(0, h - 1.4 * cm, w * 0.48, h - 1.4 * cm)
-        c.setFillColor(GOLD)
-        c.setFont(FONT_SANS, 7.5)
-        c.drawString(0, h - 1.95 * cm, "RELATÓRIO EXECUTIVO")
-        c.setFillColor(NAVY)
-        c.setFont(FONT_SERIF, 15)
-        c.drawString(0, h - 2.65 * cm, "Desempenho Financeiro e Leitura de Cenário")
-        c.setFillColor(GOLD)
-        c.setFont(FONT_SANS_BOLD, 9.5)
-        c.drawString(0, h - 3.25 * cm, str(self.meta.get("scenario") or ""))
-        c.setFillColor(SLATE)
-        c.setFont(FONT_SANS, 8)
-        titulo = self.meta.get("title") or "Relatório personalizado para apresentação C-Level"
-        c.drawString(0, h - 3.75 * cm, str(titulo)[:92])
-        rows = (
-            ("Perfil", self.meta.get("profile") or "—"),
-            ("Autor", self.meta.get("author") or "—"),
-            ("Emissão", issued),
-            ("Classificação", self.meta.get("confidential") or "Confidencial — Uso Interno"),
+def masthead(meta: dict[str, str]) -> Table:
+    """Cabecalho em tabela (altura real). Nao e Flowable de pagina inteira."""
+    styles = _styles()
+    company = meta.get("company_name") or "Grupo ESC"
+    issued = meta.get("issued_at") or datetime.now().strftime("%d/%m/%Y %H:%M")
+    marca = Table(
+        [[Paragraph("ESC", styles["center"])]],
+        colWidths=[1.15 * cm],
+        rowHeights=[1.05 * cm],
+    )
+    marca.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), NAVY),
+                ("TEXTCOLOR", (0, 0), (-1, -1), WHITE),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]
         )
-        c.setStrokeColor(LINE)
-        c.setLineWidth(0.35)
-        c.line(0, h - 4.05 * cm, w, h - 4.05 * cm)
-        col_w = w / 2
-        for idx, (label, value) in enumerate(rows):
-            col = idx % 2
-            row = idx // 2
-            x = col * col_w
-            y = h - 4.55 * cm - row * 0.72 * cm
-            c.setFillColor(GOLD)
-            c.setFont(FONT_SANS_BOLD, 6.5)
-            c.drawString(x, y, label.upper())
-            c.setFillColor(NAVY)
-            c.setFont(FONT_SANS, 8.5)
-            c.drawString(x, y - 0.32 * cm, str(value)[:42])
-        c.setStrokeColor(GOLD)
-        c.setLineWidth(0.8)
-        c.line(0, 0.08 * cm, w, 0.08 * cm)
+    )
+    bloco_titulo = Table(
+        [
+            [Paragraph(_clean_text(company), styles["h3"])],
+            [Paragraph("Desempenho Financeiro e Leitura de Cenário", styles["title"])],
+            [Paragraph(_clean_text(str(meta.get("scenario") or "")), styles["h2"])],
+        ],
+        colWidths=[15.2 * cm],
+    )
+    bloco_titulo.setStyle(
+        TableStyle(
+            [
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    topo = Table([[marca, bloco_titulo]], colWidths=[1.25 * cm, 15.35 * cm])
+    topo.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+            ]
+        )
+    )
+    meta_row = Table(
+        [
+            [
+                Paragraph(_clean_text(f"Perfil {meta.get('profile') or '—'}  ·  {meta.get('author') or '—'}"), styles["muted"]),
+                Paragraph(_clean_text(f"{issued}  ·  {meta.get('confidential') or 'Confidencial'}"), styles["muted"]),
+            ]
+        ],
+        colWidths=[8.3 * cm, 8.3 * cm],
+    )
+    meta_row.setStyle(
+        TableStyle(
+            [
+                ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 1),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                ("LINEBELOW", (0, 0), (-1, -1), 1.1, GOLD),
+            ]
+        )
+    )
+    capa = Table([[topo], [meta_row]], colWidths=[16.6 * cm])
+    capa.setStyle(
+        TableStyle(
+            [
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+            ]
+        )
+    )
+    return capa
+
+
+CoverPage = masthead
+
+
+def _stack(items: list[Any], width: float) -> Table:
+    rows = [[item] for item in items if item is not None]
+    stacked = Table(rows, colWidths=[width])
+    stacked.setStyle(
+        TableStyle(
+            [
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    return stacked
+
+
+def side_by_side(left_items: list[Any], right_items: list[Any]) -> Table:
+    """Duas secoes na mesma linha — evita saltar de pagina entre elas."""
+    largura = 8.15 * cm
+    grid = Table([[_stack(left_items, largura), _stack(right_items, largura)]], colWidths=[8.3 * cm, 8.3 * cm])
+    grid.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 2),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ]
+        )
+    )
+    return grid
 
 
 def _header_footer(canvas, doc) -> None:
@@ -441,7 +504,7 @@ def _table(rows: list[list[Any]], widths: list[float] | None = None, *, highligh
             style = styles["td_right_bold"] if numeric and highlight else styles["td_right"] if numeric else styles["td_left"]
             formatted_row.append(Paragraph(_clean_text(cell), style))
         formatted.append(formatted_row)
-    table = Table(formatted, colWidths=widths, hAlign="LEFT", repeatRows=1)
+    table = Table(formatted, colWidths=widths, hAlign="LEFT", repeatRows=1, splitByRow=1)
     commands = [
         ("BACKGROUND", (0, 0), (-1, 0), NAVY),
         ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
@@ -466,44 +529,24 @@ def _table(rows: list[list[Any]], widths: list[float] | None = None, *, highligh
     return table
 
 
-def insight_card(title: str, text: str) -> Table:
+def insight_card(title: str, text: str) -> Paragraph:
+    """Parecer em paragrafo (parte de linha). Nao usa Table unsplittable."""
+    _ = title
     styles = _styles()
-    card = Table(
-        [
-            [Paragraph(_clean_text(title), styles["h3"])],
-            [Paragraph(_clean_text(text), styles["insight"])],
-        ],
-        colWidths=[16.6 * cm],
-    )
-    card.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, -1), ICE),
-                ("BOX", (0, 0), (-1, -1), 0.3, LINE),
-                ("LINEBEFORE", (0, 0), (0, -1), 2.4, GOLD),
-                ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                ("TOPPADDING", (0, 0), (-1, 0), 4),
-                ("BOTTOMPADDING", (0, -1), (-1, -1), 5),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ]
-        )
-    )
-    return card
+    return Paragraph(_clean_text(clip_insight(text)), styles["insight"])
 
 
 def section_block(title: str, insight: str, *flowables: Any) -> list[Any]:
-    """Secao continua: sem PageBreak. Tabelas/KPIs nao partem ao meio."""
+    """Fluxo continuo: sem PageBreak, sem KeepTogether, sem keepWithNext."""
     styles = _styles()
-    pieces: list[Any] = [Spacer(1, 0.1 * cm), Paragraph(title, styles["h2"])]
+    pieces: list[Any] = [Paragraph(title, styles["h2"])]
     if str(insight or "").strip():
-        pieces.append(insight_card("Diagnostic & Insights — Assistente CTI", insight.strip()))
-        pieces.append(Spacer(1, 0.08 * cm))
+        pieces.append(insight_card("", insight))
     for item in flowables:
         if item is None:
             continue
-        pieces.append(KeepTogether([item]))
-        pieces.append(Spacer(1, 0.08 * cm))
+        pieces.append(item)
+    pieces.append(Spacer(1, 0.06 * cm))
     return pieces
 
 
@@ -572,7 +615,7 @@ def _fig_to_image(fig: go.Figure, width: int = 980, height: int = 430):
             _KALEIDO_AVAILABLE = False
             return _fig_to_matplotlib_image(fig)
         _KALEIDO_AVAILABLE = True
-        return Image(BytesIO(png_path.read_bytes()), width=16.5 * cm, height=7.2 * cm)
+        return Image(BytesIO(png_path.read_bytes()), width=16.2 * cm, height=3.6 * cm)
 
 
 def _fig_to_matplotlib_image(fig: go.Figure):
@@ -635,7 +678,7 @@ def _fig_to_matplotlib_image(fig: go.Figure):
     fig_mpl.savefig(buffer, format="png", dpi=300, facecolor=fig_mpl.get_facecolor())
     plt.close(fig_mpl)
     buffer.seek(0)
-    return Image(buffer, width=16.5 * cm, height=7.2 * cm)
+    return Image(buffer, width=16.2 * cm, height=3.6 * cm)
 
 
 def _dre_figure(dre: pd.DataFrame) -> go.Figure:
@@ -689,19 +732,9 @@ def _ltv_cac_figure(ltv: pd.DataFrame) -> go.Figure:
 
 
 def _add_chart(story: list[Any], fig: go.Figure, styles: dict[str, ParagraphStyle], fallback: str) -> None:
-    if _SKIP_CHARTS or os.environ.get("RENDER"):
-        try:
-            from Backend.diag import log_relatorio
-
-            log_relatorio("grafico Plotly/Kaleido saltado — PDF so com tabelas")
-        except Exception:
-            pass
-        return
-    image = _fig_to_image(fig)
-    if image is None:
-        story.append(Paragraph(fallback, styles["body"]))
-        return
-    story.append(KeepTogether([image, Spacer(1, 0.1 * cm)]))
+    """Graficos omitidos de proposito: uma imagem de 7 cm forca uma pagina quase vazia."""
+    _ = story, fig, styles, fallback
+    return
 
 
 def generate_executive_pdf(
@@ -716,7 +749,6 @@ def generate_executive_pdf(
     from Backend.services.report_insights import build_block_insights, merge_notes_with_insights
 
     notes = merge_notes_with_insights(notes, build_block_insights(df, scenario))
-    styles = _styles()
     dre = build_dre(df, scenario)
     be_df = build_break_even(df, scenario)
     ltv = calculate_ltv_cac(df, scenario)
@@ -744,8 +776,10 @@ def generate_executive_pdf(
         topMargin=1.45 * cm,
         bottomMargin=1.35 * cm,
         title="Relatório Executivo ESC",
+        allowSplitting=1,
     )
-    story: list[Any] = [CoverPage(meta)]
+    doc.pageBreakQuick = 0
+    story: list[Any] = [masthead(meta)]
     kpis = _table(
         [
             ["Indicador", "Valor"],
@@ -759,15 +793,29 @@ def generate_executive_pdf(
         highlight_labels={"EBITDA Médio", "Margem EBITDA"},
     )
     story.extend(section_block("Resumo Executivo", notes.get("cover", ""), kpis))
-    dre_chart = _fig_to_image(_dre_figure(dre)) if not dre.empty else Paragraph("Sem dados de DRE para o cenário.", styles["body"])
-    story.extend(section_block("Análise de EBITDA & DRE", notes.get("financial_dre") or notes.get("dre_analysis", ""), dre_chart))
-    be_chart = _fig_to_image(_break_even_figure(be_df)) if not be_df.empty else Paragraph("Sem dados de break-even.", styles["body"])
-    story.extend(section_block("Ponto de Equilíbrio & Risco", notes.get("break_even", ""), be_chart))
+    dre_rows = [
+        ["Métrica", "Média"],
+        ["Receita Líquida", _money(receita)],
+        ["EBITDA", _money(ebitda)],
+        ["Margem EBITDA", _pct(margem_ebitda)],
+    ]
+    be_rows = [
+        ["Indicador", "Média"],
+        ["Break-Even", _money(break_even)],
+        ["LTV/CAC", f"{ltv_summary['ratio']:.1f}x"],
+    ]
+    dre_tbl = _table(dre_rows, [4.0 * cm, 4.0 * cm], highlight_labels={"EBITDA"})
+    be_tbl = _table(be_rows, [4.0 * cm, 4.0 * cm], highlight_labels={"Break-Even"})
+    story.append(
+        side_by_side(
+            section_block("Análise de EBITDA & DRE", notes.get("financial_dre") or notes.get("dre_analysis", ""), dre_tbl)[:-1],
+            section_block("Ponto de Equilíbrio & Risco", notes.get("break_even", ""), be_tbl)[:-1],
+        )
+    )
     ltv_bits: list[Any] = []
     if not ltv.empty:
-        ltv_bits.append(_fig_to_image(_ltv_cac_figure(ltv)))
         rows = [["Ano", "LTV", "CAC", "LTV/CAC"]]
-        for _, row in ltv.head(12).iterrows():
+        for _, row in ltv.head(6).iterrows():
             rows.append([int(row["ano_num"]), _money(row["LTV"]), _money(row["CAC"]), f"{float(row['LTV/CAC']):.1f}x"])
         ltv_bits.append(_table(rows, [2.4 * cm, 4.6 * cm, 4.6 * cm, 4.8 * cm]))
     story.extend(section_block("Eficiência Comercial", notes.get("commercial") or notes.get("ltv_cac", ""), *ltv_bits))
