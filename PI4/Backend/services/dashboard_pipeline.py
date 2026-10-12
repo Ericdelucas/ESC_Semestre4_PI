@@ -10,7 +10,7 @@ import pandas as pd
 from Backend.data_loader import load_cti_csv, otimizar_base_cti
 from Backend.diag import diag
 from Backend.metrics import calcular_kpis_recorte, montar_indicadores, probabilidade_caixa_negativo
-from Backend.metrics.financial_kpis import compactar_indicadores, is_all_scenarios
+from Backend.metrics.financial_kpis import compactar_indicadores, is_all_scenarios, mapa_contas
 
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -35,24 +35,56 @@ def cache_disponivel() -> bool:
     return ind_path.exists() and rank_path.exists()
 
 
+def df_longo_de_indicadores(ind: pd.DataFrame) -> pd.DataFrame:
+    """Reconstroi CONTA/VALOR a partir dos indicadores — sem o CSV de 1M linhas."""
+    if ind is None or ind.empty:
+        diag("cache", "df_longo: indicadores vazios")
+        return pd.DataFrame(columns=["ANO", "CENA", "CONTA", "VALOR", "ano_num"])
+    inverso: dict[str, str] = {}
+    for conta, campo in mapa_contas().items():
+        inverso.setdefault(campo, conta)
+    eixos = [col for col in ("ANO", "ano_num", "CENA") if col in ind.columns]
+    partes: list[pd.DataFrame] = []
+    for campo, conta in inverso.items():
+        if campo not in ind.columns:
+            continue
+        bloco = ind[eixos].copy()
+        bloco["CONTA"] = conta
+        bloco["VALOR"] = pd.to_numeric(ind[campo], errors="coerce").fillna(0.0)
+        partes.append(bloco)
+    if not partes:
+        diag("cache", "df_longo: nenhum campo mapeado")
+        return pd.DataFrame(columns=["ANO", "CENA", "CONTA", "VALOR", "ano_num"])
+    out = otimizar_base_cti(pd.concat(partes, ignore_index=True))
+    diag("cache", f"df_longo reconstruido shape={out.shape} contas={out['CONTA'].nunique()} cenas={out['CENA'].nunique()}")
+    return out
+
+
 def load_cached_dashboard() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Le indicadores/ranking. Na Render nao expande o parquet de 1M linhas."""
+    """Le indicadores/ranking e reconstroi df longo. Nao expande o parquet de 1M."""
     raw_path, ind_path, rank_path = cache_paths()
     if not (ind_path.exists() and rank_path.exists()):
         raise FileNotFoundError(
             f"Cache em falta: {ind_path.name} / {rank_path.name} em {CACHE_DIR}"
         )
+    diag("cache", f"a ler indicadores={ind_path} bytes={ind_path.stat().st_size}")
+    diag("cache", f"a ler ranking={rank_path} bytes={rank_path.stat().st_size}")
     if _na_render():
-        diag("cache", "RENDER: a saltar cti_limpo.parquet (1M linhas) — so indicadores/ranking")
+        diag("cache", "RENDER: a saltar cti_limpo.parquet (1M linhas)")
         df = pd.DataFrame(columns=["ANO", "CENA", "CONTA", "VALOR", "ano_num"])
     else:
         df = pd.read_parquet(raw_path) if raw_path.exists() else pd.DataFrame()
         if not df.empty:
             df = otimizar_base_cti(df)
+        diag("cache", f"cti_limpo lido shape={getattr(df, 'shape', None)}")
     ind = compactar_indicadores(pd.read_parquet(ind_path))
     ranking = compactar_indicadores(pd.read_parquet(rank_path)).copy()
     if "selo" in ranking.columns:
         ranking["selo"] = ranking["selo"].astype("category")
+    if df is None or df.empty:
+        diag("cache", "df vazio — a reconstruir a partir de indicadores (valores reais)")
+        df = df_longo_de_indicadores(ind)
+    diag("cache", f"cache final df={len(df):,} ind={len(ind):,} ranking={len(ranking):,}")
     return df, ind, ranking
 
 
@@ -90,12 +122,14 @@ def prepare_dashboard_data(csv_path: str | Path = CSV_PATH) -> tuple[pd.DataFram
         from Backend.data_loader.sql_reader import load_dashboard_from_sql, postgres_disponivel
 
         if postgres_disponivel():
-            diag("cache", "fonte=PostgreSQL tabela=cti_dados")
-            return load_dashboard_from_sql()
+            diag("cache", "fonte=PostgreSQL tabela=cti_dados (tentativa)")
+            dados = load_dashboard_from_sql()
+            diag("cache", f"SQL OK df={len(dados[0]):,} ind={len(dados[1]):,} ranking={len(dados[2]):,}")
+            return dados
         diag("cache", "DATABASE_URL ausente — a saltar SQL")
     except Exception as exc:  # noqa: BLE001
         diag("cache", f"aviso: PostgreSQL falhou {type(exc).__name__}: {exc}")
-        diag("cache", "a usar parquet/CSV para a interface nao falhar")
+        diag("cache", "fallback: indicadores/ranking locais (nao Cti.csv)")
 
     csv = Path(csv_path)
     _log_ficheiros_cache(csv)

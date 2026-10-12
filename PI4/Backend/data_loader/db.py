@@ -21,12 +21,26 @@ _engine: Engine | None = None
 _sql_ok = False
 _sql_aviso: str | None = None
 _dns_esgotado = False
+_candidatos_cache: list[str] | None = None
 
 # Host directo antigo (sem o 'r') nao resolve — o projecto correcto tem ...rnruspj...
 _HOST_FIXES = {
     "db.rvpfnqaiwqzwhrnuspj.supabase.co": "db.rvpfnqaiwqzwhrnruspj.supabase.co",
 }
-_POOLER_REGIONS = ("sa-east-1", "us-east-1", "us-east-2", "eu-west-1")
+_POOLER_REGIONS = (
+    "us-east-1",
+    "us-east-2",
+    "us-west-1",
+    "us-west-2",
+    "sa-east-1",
+    "eu-west-1",
+    "eu-west-2",
+    "eu-central-1",
+    "ap-southeast-1",
+)
+_POOLER_PREFIXES = ("aws-0", "aws-1")
+_ENV_POOLER = ("DATABASE_URL_POOLER", "SUPABASE_POOLER_URL")
+_ENV_DIRECT = ("DATABASE_URL", "SUPABASE_DB_URL")
 
 
 def _limpar_url(valor: str | None) -> str:
@@ -39,9 +53,10 @@ def is_postgres_url(url: str | None) -> bool:
 
 
 def database_url_raw() -> str:
-    for chave in ("DATABASE_URL", "SUPABASE_DB_URL", "DATABASE_URL_POOLER", "SUPABASE_POOLER_URL"):
+    for chave in (*_ENV_POOLER, *_ENV_DIRECT):
         valor = _limpar_url(os.environ.get(chave))
         if is_postgres_url(valor):
+            diag("db", f"database_url_raw escolheu {chave}")
             return valor
     return ""
 
@@ -135,51 +150,86 @@ def normalize_database_url(raw: str, *, host: str | None = None, port: int | Non
 def _urls_ambiente() -> list[str]:
     vistos: set[str] = set()
     saida: list[str] = []
-    for chave in ("DATABASE_URL", "SUPABASE_DB_URL", "DATABASE_URL_POOLER", "SUPABASE_POOLER_URL"):
+    for chave in (*_ENV_POOLER, *_ENV_DIRECT):
         valor = _limpar_url(os.environ.get(chave))
         if not is_postgres_url(valor):
+            diag("db", f"env {chave} ausente")
             continue
         variante = normalize_database_url(valor)
         if variante not in vistos:
             vistos.add(variante)
             saida.append(variante)
-            diag("db", f"candidato env {chave} {mascarar_url(variante)}")
+            parsed = urlparse(variante)
+            diag(
+                "db",
+                f"candidato env {chave} host={parsed.hostname} port={parsed.port} "
+                f"user={parsed.username} url={mascarar_url(variante)}",
+            )
     return saida
 
 
 def candidate_urls() -> list[str]:
-    """Directo (host corrigido) e, se o DNS falhar, pooler :6543 do Supabase."""
+    """Pooler IPv4 primeiro (6543); o host db.* so-IPv6 fica no fim."""
+    global _candidatos_cache
+    if _candidatos_cache is not None:
+        return _candidatos_cache
     vistos: set[str] = set()
     saida: list[str] = []
 
-    def add(url: str) -> None:
+    def add(url: str, motivo: str = "") -> None:
         if url and url not in vistos:
             vistos.add(url)
             saida.append(url)
+            parsed = urlparse(url)
+            diag("db", f"candidato + {motivo} host={parsed.hostname} port={parsed.port}")
 
     for bruto in _urls_ambiente():
-        add(normalize_database_url(bruto))
+        add(normalize_database_url(bruto), "env")
 
     base = next((u for u in _urls_ambiente()), "")
     if not base:
+        diag("db", f"total candidatos={len(saida)} (so env)")
         return saida
 
     parsed = urlparse(base if "://" in base else f"postgresql://{base}")
     host = _corrigir_host(parsed.hostname or "")
     ref = _project_ref(host)
+    if not ref and "pooler.supabase" in host:
+        user = parsed.username or ""
+        if "." in user:
+            ref = user.split(".", 1)[1]
     user = parsed.username or "postgres"
     regioes: list[str] = []
     extra = _limpar_url(os.environ.get("SUPABASE_REGION"))
     if extra:
         regioes.append(extra)
-    regioes.extend(_POOLER_REGIONS)
+        diag("db", f"SUPABASE_REGION={extra}")
+    regioes.extend([r for r in _POOLER_REGIONS if r not in regioes])
 
     if ref:
-        add(normalize_database_url(base, host=f"db.{ref}.supabase.co", port=5432, user=user.split(".")[0]))
-        pooler_user = user if "." in user else f"{user}.{ref}"
-        for regio in regioes:
-            add(normalize_database_url(base, host=f"aws-0-{regio}.pooler.supabase.co", port=6543, user=pooler_user))
+        pooler_user = user if "." in user else f"{user.split('.')[0]}.{ref}"
+        for prefixo in _POOLER_PREFIXES:
+            for regio in regioes:
+                for porta in (6543, 5432):
+                    add(
+                        normalize_database_url(
+                            base,
+                            host=f"{prefixo}-{regio}.pooler.supabase.co",
+                            port=porta,
+                            user=pooler_user,
+                        ),
+                        f"pooler {prefixo} {regio} :{porta}",
+                    )
+        add(
+            normalize_database_url(base, host=f"db.{ref}.supabase.co", port=6543, user=pooler_user),
+            "db host porta pooler 6543",
+        )
+        add(
+            normalize_database_url(base, host=f"db.{ref}.supabase.co", port=5432, user=user.split(".")[0]),
+            "db host directo 5432",
+        )
     diag("db", f"total candidatos={len(saida)}")
+    _candidatos_cache = saida
     return saida
 
 
