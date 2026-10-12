@@ -80,7 +80,6 @@ def carregar_recorte(cena_sel: str, ano_sel: str | int) -> pd.DataFrame:
 def carregar_estado() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame] | None:
     """PostgreSQL via DATABASE_URL; se o DNS falhar, usa cache sem derrubar a UI."""
     from Backend.data_loader.db import postgres_disponivel, sql_aviso, sql_conectado
-    from Backend.data_loader.sql_reader import contar_linhas, fonte_label
 
     usa_sql = postgres_disponivel()
     diag("boot", f"cwd={Path.cwd()} postgres={usa_sql}")
@@ -104,6 +103,8 @@ def carregar_estado() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame] | None:
                 f"pipeline OK df={len(dados[0]):,} ind={len(dados[1]):,} ranking={len(dados[2]):,} sql={sql_conectado()}",
             )
         if sql_conectado():
+            from Backend.data_loader.sql_reader import contar_linhas, fonte_label
+
             st.session_state["cti_fonte_sql"] = True
             st.session_state.setdefault("cti_active_dataset_name", fonte_label())
             try:

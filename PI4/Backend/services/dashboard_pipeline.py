@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -25,21 +26,29 @@ def cache_paths() -> tuple[Path, Path, Path]:
     )
 
 
+def _na_render() -> bool:
+    return bool(os.environ.get("RENDER"))
+
+
 def cache_disponivel() -> bool:
-    raw_path, ind_path, rank_path = cache_paths()
-    return ind_path.exists() and rank_path.exists() and raw_path.exists()
+    _, ind_path, rank_path = cache_paths()
+    return ind_path.exists() and rank_path.exists()
 
 
 def load_cached_dashboard() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Le apenas os parquets do precompute. Nao relê o CSV nem recalcula KPIs."""
+    """Le indicadores/ranking. Na Render nao expande o parquet de 1M linhas."""
     raw_path, ind_path, rank_path = cache_paths()
     if not (ind_path.exists() and rank_path.exists()):
         raise FileNotFoundError(
             f"Cache em falta: {ind_path.name} / {rank_path.name} em {CACHE_DIR}"
         )
-    df = pd.read_parquet(raw_path) if raw_path.exists() else pd.DataFrame()
-    if not df.empty:
-        df = otimizar_base_cti(df)
+    if _na_render():
+        diag("cache", "RENDER: a saltar cti_limpo.parquet (1M linhas) — so indicadores/ranking")
+        df = pd.DataFrame(columns=["ANO", "CENA", "CONTA", "VALOR", "ano_num"])
+    else:
+        df = pd.read_parquet(raw_path) if raw_path.exists() else pd.DataFrame()
+        if not df.empty:
+            df = otimizar_base_cti(df)
     ind = compactar_indicadores(pd.read_parquet(ind_path))
     ranking = compactar_indicadores(pd.read_parquet(rank_path)).copy()
     if "selo" in ranking.columns:
@@ -99,7 +108,12 @@ def prepare_dashboard_data(csv_path: str | Path = CSV_PATH) -> tuple[pd.DataFram
         except Exception as exc:  # noqa: BLE001
             print(f"[cache] leitura parquet falhou {type(exc).__name__}: {exc}", flush=True)
     else:
-        print("[cache] parquet incompleto — fallback CSV", flush=True)
+        diag("cache", "parquet incompleto")
+    if _na_render():
+        diag("cache", "RENDER: Cti.csv bloqueado em runtime — sem carga de 1M linhas")
+        raise RuntimeError(
+            "Cache de indicadores em falta na Render. Cti.csv nao e lido em runtime."
+        )
     return _carregar_csv(csv)
 
 
