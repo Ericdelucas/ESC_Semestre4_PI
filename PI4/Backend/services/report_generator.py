@@ -5,11 +5,14 @@ from __future__ import annotations
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
+import os
 import subprocess
 import sys
 import tempfile
 from typing import Any
 from xml.sax.saxutils import escape
+
+_SKIP_CHARTS = False
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -551,7 +554,7 @@ def _fig_to_image(fig: go.Figure, width: int = 980, height: int = 430):
             subprocess.run(
                 [sys.executable, "-c", code],
                 check=True,
-                timeout=12,
+                timeout=4,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
@@ -679,6 +682,14 @@ def _ltv_cac_figure(ltv: pd.DataFrame) -> go.Figure:
 
 
 def _add_chart(story: list[Any], fig: go.Figure, styles: dict[str, ParagraphStyle], fallback: str) -> None:
+    if _SKIP_CHARTS or os.environ.get("RENDER"):
+        try:
+            from Backend.diag import log_relatorio
+
+            log_relatorio("grafico Plotly/Kaleido saltado — PDF so com tabelas")
+        except Exception:
+            pass
+        return
     image = _fig_to_image(fig)
     if image is None:
         story.append(Paragraph(fallback, styles["body"]))

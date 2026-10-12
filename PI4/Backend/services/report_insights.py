@@ -34,6 +34,42 @@ def _pct(value: float) -> str:
     return format_exec_pct(value)
 
 
+def collect_table_metrics(dre: pd.DataFrame, be_df: pd.DataFrame, ltv_df: pd.DataFrame | None = None) -> dict[str, float]:
+    """KPIs a partir de DRE/BE/LTV ja calculados — sem varrer a base longa."""
+    receita = _mean(dre, "Receita Líquida", "Receita Liquida")
+    ebitda = _mean(dre, "EBITDA")
+    ebit = _mean(dre, "EBIT")
+    lucro = _mean(dre, "Lucro Líquido", "Lucro Liquido")
+    if abs(lucro) < 1e-9:
+        lucro = _mean(dre, "EBT") + _mean(dre, "Imposto de Renda", "IR/CS")
+    margem_ebitda = ebitda / receita if receita else 0.0
+    if ltv_df is None or ltv_df.empty:
+        ltv = cac = ratio = 0.0
+    else:
+        def _col_mean(nome: str) -> float:
+            if nome not in ltv_df.columns:
+                return 0.0
+            value = float(pd.to_numeric(ltv_df[nome], errors="coerce").mean())
+            return 0.0 if pd.isna(value) else value
+
+        ltv = _col_mean("LTV")
+        cac = _col_mean("CAC")
+        ratio = _col_mean("LTV/CAC")
+    return {
+        "receita": receita,
+        "ebitda": ebitda,
+        "ebit": ebit,
+        "lucro": lucro,
+        "margem_ebitda": margem_ebitda,
+        "break_even": _mean(be_df, "Break-Even"),
+        "margem_contrib": _mean(be_df, "Margem de Contribuição (%)", "Margem de Contribuicao (%)"),
+        "margem_seg": _mean(be_df, "Margem de Segurança (%)", "Margem de Seguranca (%)"),
+        "ltv": ltv,
+        "cac": cac,
+        "ltv_cac": ratio,
+    }
+
+
 def collect_scenario_metrics(df: pd.DataFrame, scenario: str) -> dict[str, float]:
     dre = build_dre(df, scenario)
     be_df = build_break_even(df, scenario)
@@ -132,6 +168,24 @@ def _rule_operational(m: dict[str, float]) -> str:
         f"A leitura operacional deve ser feita contra a geracao media de {_money(m['ebitda'])} de EBITDA. "
         "CapEx, OpEx e depreciação definem se a infraestrutura da concessao escala sem corroer a folga de caixa."
     )
+
+
+def insights_from_tables(
+    scenario: str,
+    dre: pd.DataFrame,
+    be_df: pd.DataFrame,
+    ltv_df: pd.DataFrame | None = None,
+) -> dict[str, str]:
+    """Pareceres a partir de tabelas ja calculadas — sem varrer 1M de linhas e sem LLM."""
+    metrics = collect_table_metrics(dre, be_df, ltv_df)
+    return {
+        "cover": _rule_cover(scenario, metrics),
+        "financial_dre": _rule_dre(metrics),
+        "break_even": _rule_break_even(metrics),
+        "commercial": _rule_commercial(metrics),
+        "operational_tech": _rule_operational(metrics),
+        "scenario_comparison": _rule_comparison(scenario, metrics),
+    }
 
 
 def _rule_comparison(scenario: str, m: dict[str, float]) -> str:

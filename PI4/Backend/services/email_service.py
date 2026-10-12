@@ -13,13 +13,24 @@ import traceback
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from pathlib import Path
 
 logger = logging.getLogger("cti.email")
+_BACKEND_DIR = Path(__file__).resolve().parents[1]
+_SMTP_KEYS = (
+    "SMTP_SERVER",
+    "SMTP_PORT",
+    "SMTP_MODE",
+    "SMTP_TIMEOUT",
+    "SMTP_USER",
+    "SMTP_PASSWORD",
+    "EMAIL_REMETENTE",
+    "EMAIL_ALERTA_CEO",
+)
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 SMTP_NAO_CONFIGURADO = "Preencha SMTP_USER e SMTP_PASSWORD no .env"
 _PLACEHOLDERS = {
-    "",
     "changeme",
     "password",
     "senha",
@@ -34,6 +45,31 @@ _PLACEHOLDERS = {
     "abcdefghijklmnop",
     "abcd efgh ijkl mnop",
 }
+
+
+def _aplicar_dotenv_smtp() -> None:
+    """Preenche SMTP_* a partir do Backend/.env se o processo subiu com a variavel vazia."""
+    try:
+        from dotenv import dotenv_values
+    except Exception:
+        return
+    atual_senha = (os.environ.get("SMTP_PASSWORD") or "").strip()
+    precisa = (not _credencial(atual_senha)) or _senha_e_exemplo(atual_senha)
+    if not precisa and _credencial(os.environ.get("SMTP_USER", "")):
+        return
+    for caminho in (_BACKEND_DIR / ".env", _BACKEND_DIR.parent / ".env"):
+        if not caminho.is_file():
+            continue
+        valores = dotenv_values(caminho)
+        for chave in _SMTP_KEYS:
+            ficheiro = (valores.get(chave) or "").strip()
+            ambiente = (os.environ.get(chave) or "").strip()
+            if not ficheiro:
+                continue
+            if not ambiente or (chave == "SMTP_PASSWORD" and _senha_e_exemplo(ambiente)):
+                os.environ[chave] = ficheiro
+
+
 SENHA_EXEMPLO_GMAIL = (
     "O Gmail recusou a senha (535 BadCredentials). "
     "O valor atual de SMTP_PASSWORD e o exemplo de documentacao (abcd efgh ijkl mnop), "
@@ -50,10 +86,13 @@ def _credencial(valor: str) -> str:
 def _senha_e_exemplo(senha: str) -> bool:
     limpa = _credencial(senha).lower()
     original = (senha or "").strip().lower()
+    if not limpa:
+        return False
     return limpa in _PLACEHOLDERS or original in _PLACEHOLDERS
 
 
 def smtp_configurado() -> bool:
+    _aplicar_dotenv_smtp()
     usuario = _credencial(os.environ.get("SMTP_USER", ""))
     senha = os.environ.get("SMTP_PASSWORD", "")
     if not usuario or not _credencial(senha):
@@ -158,7 +197,19 @@ def enviar_alerta_email(
         destino = validar_email(destinatario)
     except ValueError as exc:
         return {"success": False, "message": "INVALID_EMAIL", "detail": str(exc), "phase": "validacao do destinatario"}
+    _aplicar_dotenv_smtp()
     senha_bruta = os.environ.get("SMTP_PASSWORD", "")
+    if not _credencial(senha_bruta) or not _credencial(os.environ.get("SMTP_USER", "")):
+        return {
+            "success": False,
+            "message": "SMTP_NOT_CONFIGURED",
+            "detail": (
+                "SMTP_USER/SMTP_PASSWORD nao estao definidos neste processo. "
+                "Local: preencha PI4/Backend/.env. Na Render: Environment → SMTP_USER e SMTP_PASSWORD "
+                "(senha de aplicativo Gmail de 16 letras)."
+            ),
+            "phase": "validacao das credenciais .env",
+        }
     if _senha_e_exemplo(senha_bruta):
         return {
             "success": False,

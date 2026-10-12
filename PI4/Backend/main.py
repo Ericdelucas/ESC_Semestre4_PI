@@ -116,6 +116,18 @@ async def lifespan(_app: FastAPI):
     except Exception as exc:  # noqa: BLE001
         _emit(f"aviso seed_usuarios ({type(exc).__name__}: {exc}) — API continua")
     _log_rotas(_app)
+    try:
+        from Backend.services.email_service import smtp_configurado
+
+        smtp_configurado()
+        user = (os.environ.get("SMTP_USER") or "").strip()
+        senha = (os.environ.get("SMTP_PASSWORD") or "").strip()
+        _emit(
+            f"SMTP user_definido={bool(user)} senha_len={len(senha.replace(' ', ''))} "
+            f"configurado={smtp_configurado()}"
+        )
+    except Exception as exc:  # noqa: BLE001
+        _emit(f"aviso SMTP no arranque ({type(exc).__name__}: {exc})")
     _emit("lifespan: API pronta a aceitar pedidos")
     yield
     _emit("lifespan: a encerrar a API")

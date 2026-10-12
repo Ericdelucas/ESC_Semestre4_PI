@@ -158,7 +158,16 @@ def render_analises(ctx: AppContext) -> None:
 
 
 def render_pagina(ctx: AppContext) -> None:
+    from Backend.diag import log_relatorio
+    from src.views.report import PENDING_KEY, flush_pending_pdf
+
     render_cabecalho(ctx)
-    render_analises(ctx)
     if is_relatorio_open():
-        view_report.render_dialog(ctx.df, ctx.cena_sel, ctx.ano_sel)
+        log_relatorio(
+            f"render_pagina: modal aberto — a saltar analises | cena={ctx.cena_sel} "
+            f"ano={ctx.ano_sel} cenas={len(ctx.cenas or [])} pending={bool(st.session_state.get(PENDING_KEY))}"
+        )
+        flush_pending_pdf()
+        view_report.render_dialog(ctx.cena_sel, ctx.ano_sel, list(ctx.cenas or []))
+        return
+    render_analises(ctx)
