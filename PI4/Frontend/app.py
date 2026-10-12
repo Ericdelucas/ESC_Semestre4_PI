@@ -75,8 +75,14 @@ def _bypass_login_temporario() -> None:
 
 def main() -> None:
     configure_page()
+    if not st.session_state.get("_cti_ws_ok"):
+        st.session_state["_cti_ws_ok"] = True
+        st.info("A abrir o painel CTI...")
+        st.rerun()
     diag("app", "Streamlit main() a arrancar")
-    log_ambiente("app")
+    if not st.session_state.get("_cti_env_logged"):
+        log_ambiente("app")
+        st.session_state["_cti_env_logged"] = True
     _bypass_login_temporario()
     diag("app", "arranque direto do painel CTI")
     logging.info("[app] arranque direto do painel CTI")

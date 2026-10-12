@@ -40,9 +40,13 @@ def banner_auditoria_filtro(cena_sel: str, ano_sel: str | int) -> None:
 
 
 def expander_auditoria_base(df: pd.DataFrame, cena_sel: str, ano_sel: str | int) -> None:
+    if df is None or df.empty:
+        with st.expander(t("audit.title")):
+            st.warning(t("audit.empty"))
+        return
     bruto = df if is_all_scenarios(cena_sel) else df.loc[df["CENA"] == cena_sel]
-    if ano_sel != "Todos":
-        bruto = bruto.loc[bruto["ano_num"] == ano_sel]
+    if ano_sel != "Todos" and "ano_num" in bruto.columns:
+        bruto = bruto.loc[pd.to_numeric(bruto["ano_num"], errors="coerce") == int(ano_sel)]
     n = len(bruto)
     with st.expander(t("audit.title")):
         st.caption(
@@ -56,10 +60,12 @@ def expander_auditoria_base(df: pd.DataFrame, cena_sel: str, ano_sel: str | int)
         if n == 0:
             st.warning(t("audit.empty"))
             return
-        visao = bruto[["ANO", "CENA", "CONTA", "VALOR"]].copy()
+        colunas = [c for c in ("ANO", "CENA", "CONTA", "VALOR") if c in bruto.columns]
         if is_all_scenarios(cena_sel) and n > 300:
             st.caption(t("audit.sample", n=300, total=f"{n:,}"))
-            visao = visao.head(300)
+            visao = bruto[colunas].head(300)
+        else:
+            visao = bruto[colunas].head(2000)
         render_table(visao)
 
 

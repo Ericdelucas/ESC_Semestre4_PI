@@ -307,18 +307,30 @@ def calcular_kpis_recorte(foco: pd.DataFrame, foco_ano: pd.DataFrame) -> pd.Seri
 
 
 def _wide(df: pd.DataFrame, cena: str, contas: list[str]) -> pd.DataFrame:
-    conta_keys = {normalize_label(conta): conta for conta in contas}
-    cols = [c for c in ("ano_num", "CONTA", "VALOR") if c in df.columns]
-    source = df[cols].copy() if is_all_scenarios(cena) or "CENA" not in df.columns else df.loc[df["CENA"] == cena, cols].copy()
-    source["CONTA"] = source["CONTA"].map(lambda value: conta_keys.get(normalize_label(value)))
-    base = source.loc[source["CONTA"].notna()].copy()
+    if df is None or df.empty or "CONTA" not in df.columns or "VALOR" not in df.columns:
+        return pd.DataFrame(columns=["ano_num", *contas])
+    alvo = {normalize_label(conta): conta for conta in contas}
+    work = df if is_all_scenarios(cena) or "CENA" not in df.columns else df.loc[df["CENA"] == cena]
+    if work.empty:
+        return pd.DataFrame(columns=["ano_num", *contas])
+    mapa = {valor: alvo.get(normalize_label(valor)) for valor in work["CONTA"].dropna().unique()}
+    conta_ok = work["CONTA"].map(mapa)
+    mask = conta_ok.notna()
+    if not mask.any():
+        return pd.DataFrame(columns=["ano_num", *contas])
+    base = pd.DataFrame(
+        {
+            "ano_num": pd.to_numeric(work.loc[mask, "ano_num"], errors="coerce") if "ano_num" in work.columns else 0,
+            "CONTA": conta_ok.loc[mask],
+            "VALOR": pd.to_numeric(work.loc[mask, "VALOR"], errors="coerce"),
+        }
+    )
+    base = base.dropna(subset=["ano_num"])
     if base.empty:
         return pd.DataFrame(columns=["ano_num", *contas])
-    base["ano_num"] = pd.to_numeric(base["ano_num"], errors="coerce")
-    base["VALOR"] = pd.to_numeric(base["VALOR"], errors="coerce")
     agregador = "mean" if is_all_scenarios(cena) else "sum"
     out = (
-        base.groupby(["ano_num", "CONTA"], as_index=False)["VALOR"]
+        base.groupby(["ano_num", "CONTA"], as_index=False, observed=True)["VALOR"]
         .agg(agregador)
         .pivot(index="ano_num", columns="CONTA", values="VALOR")
         .reset_index()

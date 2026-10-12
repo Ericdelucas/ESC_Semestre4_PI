@@ -146,24 +146,25 @@ def _default_upload_name(uploaded_file) -> str:
 
 
 def _init_datasets(current_df: pd.DataFrame) -> None:
+    """Nao guarda a base de 1M linhas no session_state — isso estourava RAM e gerava 429."""
+    del current_df
     if DATASETS_KEY not in st.session_state or not isinstance(st.session_state.get(DATASETS_KEY), dict):
-        st.session_state[ORIGINAL_DATASET_KEY] = current_df
-        st.session_state[DATASETS_KEY] = {DEFAULT_DATASET_NAME: current_df}
+        st.session_state[DATASETS_KEY] = {}
         st.session_state[ACTIVE_DATASET_KEY] = DEFAULT_DATASET_NAME
         st.session_state[DEFAULT_MODIFIED_KEY] = False
-
         legado = st.session_state.get(DF_OVERRIDE_KEY)
-        if isinstance(legado, pd.DataFrame):
+        if isinstance(legado, pd.DataFrame) and not legado.empty:
             legacy_name = _unique_dataset_name("Base Customizada (Legado)")
             st.session_state[DATASETS_KEY][legacy_name] = otimizar_base_cti(legado)
             st.session_state[ACTIVE_DATASET_KEY] = legacy_name
     else:
-        st.session_state.setdefault(ORIGINAL_DATASET_KEY, current_df)
         st.session_state.setdefault(DEFAULT_MODIFIED_KEY, False)
-        st.session_state[DATASETS_KEY].setdefault(DEFAULT_DATASET_NAME, st.session_state[ORIGINAL_DATASET_KEY])
-        if st.session_state.get(ACTIVE_DATASET_KEY) not in st.session_state[DATASETS_KEY]:
+        st.session_state[DATASETS_KEY].pop(DEFAULT_DATASET_NAME, None)
+        if (
+            st.session_state.get(ACTIVE_DATASET_KEY) not in st.session_state[DATASETS_KEY]
+            and st.session_state.get(ACTIVE_DATASET_KEY) != DEFAULT_DATASET_NAME
+        ):
             st.session_state[ACTIVE_DATASET_KEY] = DEFAULT_DATASET_NAME
-
     st.session_state.setdefault(UPLOAD_COUNTER_KEY, 0)
 
 
@@ -181,7 +182,7 @@ def render_data_input(current_df: pd.DataFrame) -> pd.DataFrame:
     with st.sidebar.expander(t("data.expander"), expanded=False):
         st.subheader(t("data.manager"))
 
-        dataset_names = list(st.session_state[DATASETS_KEY].keys())
+        dataset_names = [DEFAULT_DATASET_NAME, *st.session_state[DATASETS_KEY].keys()]
         pending_name = st.session_state.pop(PENDING_ACTIVE_DATASET_KEY, None)
         if pending_name in dataset_names:
             st.session_state[ACTIVE_DATASET_KEY] = pending_name
@@ -202,7 +203,10 @@ def render_data_input(current_df: pd.DataFrame) -> pd.DataFrame:
             key="active_dataset_selector",
         )
         st.session_state[ACTIVE_DATASET_KEY] = selected_name
-        active_df = st.session_state[DATASETS_KEY][selected_name]
+        if selected_name == DEFAULT_DATASET_NAME and not st.session_state.get(DEFAULT_MODIFIED_KEY):
+            active_df = current_df
+        else:
+            active_df = st.session_state[DATASETS_KEY].get(selected_name, current_df)
         _sync_legacy_override(selected_name, active_df)
 
         st.caption(t("data.active_caption", n=f"{len(active_df):,}"))
@@ -294,8 +298,7 @@ def render_data_input(current_df: pd.DataFrame) -> pd.DataFrame:
                 st.error(_erro_amigavel(exc, nome_arquivo=getattr(uploaded, "name", "")))
 
         if st.button(t("data.restore"), key="restore_original_data"):
-            original_df = st.session_state.get(ORIGINAL_DATASET_KEY, current_df)
-            st.session_state[DATASETS_KEY][DEFAULT_DATASET_NAME] = original_df
+            st.session_state[DATASETS_KEY].pop(DEFAULT_DATASET_NAME, None)
             st.session_state[ACTIVE_DATASET_KEY] = DEFAULT_DATASET_NAME
             st.session_state[PENDING_ACTIVE_DATASET_KEY] = DEFAULT_DATASET_NAME
             st.session_state[DEFAULT_MODIFIED_KEY] = False

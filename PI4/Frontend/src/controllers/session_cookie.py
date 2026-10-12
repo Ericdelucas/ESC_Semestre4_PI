@@ -73,13 +73,27 @@ def decode_session(token: str | None) -> dict[str, Any] | None:
     return payload
 
 
+class _CookieMorto:
+    """CookieManager real gerava 429 no proxy da Render. Sessao fica so no session_state."""
+
+    def get_all(self):
+        return {}
+
+    def get(self, _name: str):
+        return None
+
+    def set(self, *_args, **_kwargs):
+        return None
+
+    def delete(self, *_args, **_kwargs):
+        return None
+
+
 def cookie_manager():
     existente = st.session_state.get("_cti_cm_obj")
     if existente is not None:
         return existente
-    import extra_streamlit_components as stx
-
-    gerente = stx.CookieManager(key="cti_cookie_manager")
+    gerente = _CookieMorto()
     st.session_state["_cti_cm_obj"] = gerente
     return gerente
 
