@@ -16,6 +16,7 @@ from src.controllers.kpis.constants import (
     CONTA_TRIBUTOS,
 )
 from src.controllers.kpis.helpers import _safe_div, _valor_conta_raw
+from Backend.diag import log_ia
 from src.config.i18n import get_lang, t
 from src.models.formatting import cena_rotulo, fmt_pct, fmt_rs, is_all_scenarios
 from src.models.rag_engine import RagEngine, build_focus_context, resolve_api_key
@@ -31,26 +32,39 @@ def _fingerprint(ranking: pd.DataFrame) -> str:
 
 @st.cache_resource(show_spinner=t("ai.indexing"))
 def _carregar_engine(_ranking: pd.DataFrame, fingerprint: str) -> RagEngine:
-    _ = fingerprint
-    return RagEngine.from_ranking(_ranking)
+    import time
+
+    t0 = time.time()
+    log_ia(f"carregar_engine: inicio fingerprint={fingerprint} ranking={len(_ranking)}")
+    engine = RagEngine.from_ranking(_ranking)
+    log_ia(
+        f"carregar_engine: OK backend={engine.backend} docs={len(engine.documents)} "
+        f"em {time.time() - t0:.2f}s"
+    )
+    return engine
 
 
 def _chave_api() -> str | None:
     colada = str(st.session_state.get("gemini_api_key_input", "")).strip()
     if colada:
         st.session_state["google_api_key"] = colada
+        log_ia(f"chave: a usar chave colada na UI len={len(colada)}")
         return colada
     antiga = str(st.session_state.get("google_api_key", "")).strip()
     if antiga:
+        log_ia(f"chave: a usar chave da sessao len={len(antiga)}")
         return antiga
     try:
         for nome in ("GOOGLE_API_KEY", "GEMINI_API_KEY"):
             val = str(st.secrets.get(nome, "")).strip()
             if val:
+                log_ia(f"chave: a usar secrets.{nome} len={len(val)}")
                 return val
-    except Exception:
-        pass
-    return resolve_api_key()
+    except Exception as exc:  # noqa: BLE001
+        log_ia(f"chave: secrets indisponiveis ({type(exc).__name__})")
+    chave = resolve_api_key()
+    log_ia(f"chave: ambiente {'presente' if chave else 'AUSENTE'} len={len(chave or '')}")
+    return chave
 
 
 def _contexto_foco(
@@ -243,9 +257,19 @@ def contexto_dataset_ativo(
     user_role: str | None = None,
 ) -> str:
     """Resume a base ativa para o motor analitico nativo do Dashboard CTI."""
+    import time
+
     from src.models.rag_engine.rbac import normalize_role
 
+    t0 = time.time()
+    log_ia(
+        f"contexto: inicio df={len(df)} ind={len(ind)} ranking={len(ranking)} "
+        f"cena={cena_sel} ano={ano_sel} persona={persona}"
+    )
     papel = normalize_role(user_role or persona)
+    modo_leve = len(df) > 20_000
+    if modo_leve:
+        log_ia(f"contexto: MODO LEVE — df tem {len(df):,} linhas; sem varrer a base longa (evita 429)")
     nome_base = st.session_state.get("cti_active_dataset_name", "Base Padrão (Original)")
     anos_src = ind if isinstance(ind, pd.DataFrame) and "ano_num" in ind.columns else df
     anos = sorted(pd.to_numeric(anos_src.get("ano_num", pd.Series(dtype=float)), errors="coerce").dropna().astype(int).unique())
@@ -279,30 +303,38 @@ def contexto_dataset_ativo(
         "",
     ]
     try:
-        linhas.append(
-            _contexto_cartoes_visuais(
-                persona,
-                k if isinstance(k, pd.Series) else pd.Series(dtype=float),
-                ranking,
-                df,
-                cena_sel,
-                ano_sel,
+        if modo_leve:
+            k_vis = k if isinstance(k, pd.Series) else pd.Series(dtype=float)
+            linhas.append("Cartoes visuais (modo leve, sem recalcular na base longa):")
+            for nome, valor in k_vis.items():
+                linhas.append(f"- {nome}: {valor}")
+        else:
+            linhas.append(
+                _contexto_cartoes_visuais(
+                    persona,
+                    k if isinstance(k, pd.Series) else pd.Series(dtype=float),
+                    ranking,
+                    df,
+                    cena_sel,
+                    ano_sel,
+                )
             )
-        )
     except Exception as exc:  # noqa: BLE001
+        log_ia(f"contexto: cartoes FALHOU {type(exc).__name__}: {exc}")
         linhas.append(f"Cartoes visuais indisponiveis ({type(exc).__name__}).")
-    if papel in {"ceo", "cfo", "acionistas"}:
+    if papel in {"ceo", "cfo", "acionistas"} and not modo_leve:
         try:
             linhas.extend(["", _contexto_acionistas(df, cena_sel, ano_sel)])
         except Exception as exc:  # noqa: BLE001
+            log_ia(f"contexto: acionistas FALHOU {type(exc).__name__}: {exc}")
             linhas.append(f"Retorno de acionistas indisponivel ({type(exc).__name__}).")
-    if papel in {"ceo", "cfo", "concedente"}:
+    if papel in {"ceo", "cfo", "concedente"} and not modo_leve:
         linhas.extend(["", _contexto_concedente(df, cena_sel, ano_sel)])
     if papel in {"ceo", "cfo"}:
+        extra_dre = [] if modo_leve else ["", _contexto_dre(df, cena_sel, ano_sel)]
         linhas.extend(
-            [
-                "",
-                _contexto_dre(df, cena_sel, ano_sel),
+            extra_dre
+            + [
                 "",
                 "Capital de giro, liquidez e risco do recorte:",
                 f"- NCG media: {rs(_safe_mean(foco, 'NCG'))}",
@@ -328,21 +360,24 @@ def contexto_dataset_ativo(
         ]
     )
     if papel in {"ceo", "cfo"}:
+        pecas = [] if modo_leve else [
+            f"- Saldo final medio: {rs(_conta_total(df, 'FLU - Saldo Final', cena_sel, ano_sel))}",
+            "Principais contas DFC no recorte:",
+            _peca_resumo(df, "FLU -", cena_sel, ano_sel),
+            "",
+            "Principais contas BP no recorte:",
+            _peca_resumo(df, "BAL -", cena_sel, ano_sel),
+            "",
+            "Principais contas DRE no recorte:",
+            _peca_resumo(df, "DRE -", cena_sel, ano_sel),
+        ]
         linhas.extend(
             [
                 "",
                 "DFC e caixa:",
                 f"- Geracao de Caixa media: {rs(_safe_mean(foco, 'geracao_caixa'))}",
                 f"- Investimentos medios: {rs(_safe_mean(foco, 'investimentos'))}",
-                f"- Saldo final medio: {rs(_conta_total(df, 'FLU - Saldo Final', cena_sel, ano_sel))}",
-                "Principais contas DFC no recorte:",
-                _peca_resumo(df, "FLU -", cena_sel, ano_sel),
-                "",
-                "Principais contas BP no recorte:",
-                _peca_resumo(df, "BAL -", cena_sel, ano_sel),
-                "",
-                "Principais contas DRE no recorte:",
-                _peca_resumo(df, "DRE -", cena_sel, ano_sel),
+                *pecas,
                 "",
                 "Formulas de negocio CTI:",
                 "- NCG = ACO - PCO.",
@@ -356,12 +391,15 @@ def contexto_dataset_ativo(
             ]
         )
     elif papel == "concedente":
+        pecas_reg = [] if modo_leve else [
+            _peca_resumo(df, "FLU - Investimentos", cena_sel, ano_sel),
+            _peca_resumo(df, "BAL -", cena_sel, ano_sel),
+        ]
         linhas.extend(
             [
                 "",
                 "Contas regulatórias do recorte:",
-                _peca_resumo(df, "FLU - Investimentos", cena_sel, ano_sel),
-                _peca_resumo(df, "BAL -", cena_sel, ano_sel),
+                *pecas_reg,
                 "",
                 "Formulas permitidas:",
                 "- CAPEX = FLU - Investimentos.",
@@ -379,4 +417,6 @@ def contexto_dataset_ativo(
                 "- DY = Dividendos / Capital Investido.",
             ]
         )
-    return "\n".join(linhas)
+    texto = "\n".join(linhas)
+    log_ia(f"contexto: pronto chars={len(texto)} modo_leve={modo_leve} em {time.time() - t0:.2f}s")
+    return texto
