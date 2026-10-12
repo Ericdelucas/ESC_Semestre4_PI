@@ -2,7 +2,68 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
+
+_LOOPBACK = {"127.0.0.1", "localhost", "::1"}
+_BIND_ALL = {"0.0.0.0", "::"}
+_PUBLIC_HINTS = ("onrender.com",)
+_INTERNAL_FALLBACK = "http://127.0.0.1:8081"
+
+
+def default_api_port() -> str:
+    return os.environ.get("API_PORT") or "8081"
+
+
+def _normalize_url(value: str) -> str:
+    url = (value or "").strip().rstrip("/")
+    if not url:
+        return ""
+    if "://" not in url:
+        host = url.split("/")[0].split(":")[0].lower()
+        scheme = "http" if host in _LOOPBACK or host in _BIND_ALL else (
+            "https" if os.environ.get("RENDER") else "http"
+        )
+        url = f"{scheme}://{url}"
+    return url
+
+
+def _is_public_render_url(url: str) -> bool:
+    lowered = url.lower()
+    return any(hint in lowered for hint in _PUBLIC_HINTS)
+
+
+def _rewrite_bind_all(url: str) -> str:
+    """0.0.0.0 e URL publica nao servem para o cliente no mesmo container."""
+    from urllib.parse import urlparse, urlunparse
+
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    port = parsed.port or int(default_api_port())
+    if host in _BIND_ALL or (os.environ.get("RENDER") and _is_public_render_url(url)):
+        return f"http://127.0.0.1:{port if not _is_public_render_url(url) else default_api_port()}"
+    if host in _LOOPBACK and parsed.scheme == "https":
+        netloc = f"{host}:{port}" if parsed.port else host
+        return urlunparse(("http", netloc, parsed.path, "", "", "")).rstrip("/")
+    return url
+
+
+def resolve_api_base_url() -> str:
+    """Em producao o cliente fala com o FastAPI no mesmo container (loopback)."""
+    if os.environ.get("RENDER"):
+        return f"http://127.0.0.1:{default_api_port()}"
+    for name in ("BACKEND_URL", "CTI_API_URL"):
+        raw = (os.environ.get(name) or "").strip()
+        if not raw:
+            continue
+        url = _rewrite_bind_all(_normalize_url(raw))
+        if url and not _is_public_render_url(url):
+            return url
+    host = os.environ.get("API_HOST", "127.0.0.1")
+    if host in _BIND_ALL:
+        host = "127.0.0.1"
+    return _rewrite_bind_all(_normalize_url(f"http://{host}:{default_api_port()}")) or _INTERNAL_FALLBACK
+
 
 _FRONTEND = Path(__file__).resolve().parents[2]
 PI4 = _FRONTEND.parent
@@ -11,8 +72,10 @@ BACKEND = PI4 / "Backend"
 CSV_PATH = BACKEND / "Cti.csv"
 CACHE_DIR = BACKEND / "cache"
 DOCS_DIR = BACKEND / "documentos"
-REPO_DOCS_DIR = PI4.parent / "documentos"
 VENV_PY = ROOT / ".venv" / "bin" / "python"
+API_HOST = os.environ.get("API_HOST", "127.0.0.1")
+API_PORT = default_api_port()
+API_BASE_URL = resolve_api_base_url()
 
 COR = "#1F4E45"
 COR_SUAVE = "#5B8A7A"
@@ -48,7 +111,8 @@ PERSONAS = [
     "ceo",
     "cfo",
     "acionistas",
-    "docente",
+    "concedente",
+    "teste",
 ]
 
 METRICAS_NUVEM: dict[str, tuple[str, bool]] = {
@@ -64,8 +128,8 @@ NAV_KEYS = [
     "mapeamento",
     "distribuicao",
     "faixa",
-    "comparar",
     "como_ler",
+    "comparar",
 ]
 
 CORES_COMPARA = [COR, COR_ALERTA, "#3D6B5A"]

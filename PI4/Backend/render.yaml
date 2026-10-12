@@ -1,0 +1,20 @@
+# Blueprint legado (pasta Backend). Preferir o render.yaml na raiz do repositório.
+services:
+  - type: web
+    name: cti-api
+    runtime: python
+    plan: free
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: RENDER
+        value: "true"
+      - key: CORS_ORIGIN_REGEX
+        value: "https://.*\\.onrender\\.com"
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false

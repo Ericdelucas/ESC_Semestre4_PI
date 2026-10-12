@@ -1,148 +1,135 @@
-"""
-Painel financeiro CTI — orquestrador (< 100 linhas).
-
-Execute:
-  py -m streamlit run app.py
-"""
+"""Orquestrador do dashboard CTI."""
 
 from __future__ import annotations
 
+import logging
+import sys
+from pathlib import Path
+
+try:
+    sys.stdout.reconfigure(line_buffering=True)
+except Exception:
+    pass
+
+logging.basicConfig(
+    level=logging.INFO,
+    stream=sys.stdout,
+    format="%(asctime)s %(name)s %(levelname)s %(message)s",
+    force=True,
+)
+
+import pandas as pd
 import streamlit as st
 
-from chat_component import render_floating_chat
-from src.config import NAV_KEYS
-from src.views import perfis as view_perfis
-from src.config.i18n import get_lang, t
-from src.controllers.bootstrap import AppContext, carregar_estado, montar_contexto, render_cabecalho
-from src.controllers.headers import expander_auditoria_base
-from src.controllers.resilience import safe_render
+PI4_ROOT = Path(__file__).resolve().parents[1]
+if str(PI4_ROOT) not in sys.path:
+    sys.path.insert(0, str(PI4_ROOT))
+
+from Backend.diag import diag, log_ambiente
+from Backend.metrics import montar_indicadores
+from src.controllers.auth import (
+    AUTH_KEY,
+    EMAIL_ALERTA_FLAG,
+    EMAIL_KEY,
+    FUNCAO_KEY,
+    ROLE_KEY,
+    flush_login_email_toast,
+    is_authenticated,
+    render_logout_button,
+)
+from src.controllers.bootstrap import carregar_estado, montar_contexto
+from src.controllers.data_input import has_custom_data, render_data_input
+from src.controllers.modals import ensure_modal_state, is_relatorio_open
+from src.controllers.navigation import render_pagina
+from src.controllers.page_setup import configure_page
 from src.controllers.sidebar import render_language_selector, render_persona, render_sidebar
-from src.views import (
-    capital_giro as view_capital_giro,
-    comparar as view_comparar,
-    como_ler as view_como_ler,
-    distribuicao as view_distribuicao,
-    faixa_risco as view_faixa_risco,
-    mapeamento_risco as view_mapeamento_risco,
-    prazos_ciclo as view_prazos_ciclo,
-)
-
-st.set_page_config(layout="wide", page_title="Dashboard CTI", page_icon="📊")
-
-# Contraste dos KPIs no Dark Mode (st.metric herda textColor do tema).
-st.markdown(
-    """
-<style>
-div[data-testid="stMetricValue"],
-div[data-testid="stMetricValue"] * {
-  color: #FFFFFF !important;
-  -webkit-text-fill-color: #FFFFFF !important;
-  opacity: 1 !important;
-}
-div[data-testid="stMetricLabel"],
-div[data-testid="stMetricLabel"] * {
-  color: rgba(255, 255, 255, 0.92) !important;
-  -webkit-text-fill-color: rgba(255, 255, 255, 0.92) !important;
-  opacity: 1 !important;
-}
-</style>
-""",
-    unsafe_allow_html=True,
-)
-
-# Chaves estáveis — rótulos vêm do i18n (troca de idioma não perde a seção).
-VIEW_RENDERERS = {
-    "overview": view_perfis.render,
-    "capital_giro": lambda ctx: view_capital_giro.render(ctx.foco, ctx.foco_ano, ctx.cena_sel, ctx.ano_sel),
-    "prazos": lambda ctx: view_prazos_ciclo.render(ctx.foco, ctx.k, ctx.cena_sel, ctx.ano_sel),
-    "mapeamento": lambda ctx: view_mapeamento_risco.render(
-        ctx.ranking, ctx.persona, ctx.cenas, ctx.mapa_rotulo, ctx.n_cenarios
-    ),
-    "distribuicao": lambda ctx: view_distribuicao.render(
-        ctx.ranking, ctx.ano_enc, ctx.n_cenarios, ctx.p_ruina
-    ),
-    "faixa": lambda ctx: view_faixa_risco.render(ctx.ind, ctx.cena_sel, ctx.ano_sel, ctx.anos),
-    "comparar": lambda ctx: view_comparar.render(ctx.ind, ctx.cenas, ctx.cena_sel, ctx.ano_sel),
-    "assistente": lambda ctx: view_ai_assistant.render(
-        ctx.ranking, ctx.n_cenarios, ctx.p_ruina, ctx.cena_sel, ctx.k, ctx.ano_enc
-    ),
-    "como_ler": lambda ctx: view_como_ler.render(
-        ctx.n_cenarios, ctx.cena_sel, ctx.k, ctx.ano_enc, ctx.p_ruina
-    ),
-}
+from src.views.ai_assistant.panel import render_floating_chat
 
 
-def render_analises(ctx: AppContext) -> None:
-    lang = get_lang()
-    if st.session_state.get("nav_key") not in VIEW_RENDERERS:
-        st.session_state["nav_key"] = NAV_KEYS[0]
-    labels = [t(f"nav.{k}") for k in NAV_KEYS]
-    label_to_key = dict(zip(labels, NAV_KEYS, strict=True))
-    default_label = t(f"nav.{st.session_state['nav_key']}")
-    secao_label = st.segmented_control(
-        "nav",
-        options=labels,
-        default=default_label if default_label in labels else labels[0],
-        key=f"nav_secao_{lang}",
-        label_visibility="collapsed",
+def montar_indicadores_customizados(df):
+    """Evita recalcular indicadores de bases customizadas em todo rerun."""
+    cache = st.session_state.setdefault("cti_custom_indicator_cache", {})
+    signature = (
+        st.session_state.get("cti_active_dataset_name"),
+        bool(st.session_state.get("cti_default_dataset_modified")),
+        id(df),
+        len(df),
     )
-    nav_key = label_to_key.get(secao_label or default_label, NAV_KEYS[0])
-    st.session_state["nav_key"] = nav_key
-    st.space("small")
-    safe_render("auditoria da base", expander_auditoria_base, ctx.df, ctx.cena_sel, ctx.ano_sel)
-    VIEW_RENDERERS[nav_key](ctx)
-    st.caption(t("app.footer"))
+    if cache.get("signature") != signature:
+        cache["signature"] = signature
+        cache["value"] = montar_indicadores(df)
+    return cache["value"]
 
 
-def render_pagina(ctx: AppContext) -> None:
-    render_cabecalho(ctx)
-    render_analises(ctx)
+def _bypass_login_temporario() -> None:
+    """TEMPORARIO: abre o dashboard como CEO sem passar pelo formulario."""
+    st.session_state[AUTH_KEY] = True
+    st.session_state[ROLE_KEY] = "ceo"
+    st.session_state[EMAIL_KEY] = "ericdelucass@gmail.com"
+    st.session_state[FUNCAO_KEY] = "CEO"
+    st.session_state[EMAIL_ALERTA_FLAG] = True
+    st.session_state.setdefault("persona_id", "ceo")
+    diag("app", "BYPASS LOGIN ativo — sessao CEO forcada")
+    logging.info("[app] BYPASS LOGIN ativo — sessao CEO forcada")
 
 
 def main() -> None:
-    st.html("""
-        <style>
-        [data-testid="stAppDeployButton"], .stAppDeployButton {
-            display: none !important;
-        }
-        /* Bring the role selector closer to the top, below the app toolbar. */
-        [data-testid="stMainBlockContainer"] {
-            padding-top: 3.5rem;
-        }
-        </style>
-    """)
+    configure_page()
+    if not st.session_state.get("_cti_ws_ok"):
+        st.session_state["_cti_ws_ok"] = True
+        st.info("A abrir o painel CTI...")
+        st.rerun()
+    diag("app", "Streamlit main() a arrancar")
+    if not st.session_state.get("_cti_env_logged"):
+        log_ambiente("app")
+        st.session_state["_cti_env_logged"] = True
+    _bypass_login_temporario()
+    diag("app", "arranque direto do painel CTI")
+    logging.info("[app] arranque direto do painel CTI")
+    ensure_modal_state()
     render_language_selector()
+    if not is_authenticated():
+        print("[app] bypass falhou — sem ecran de login neste modo", flush=True)
+        st.stop()
+    flush_login_email_toast()
+    render_logout_button()
     estado = carregar_estado()
     if estado is None:
+        diag("app", "carregar_estado devolveu None — st.stop")
         st.stop()
     df, ind, ranking = estado
+    diag("app", f"estado df={len(df):,} ind={len(ind):,} ranking={len(ranking):,} fonte=local")
+    df = render_data_input(df)
+    if has_custom_data():
+        if df is None or df.empty or "CENA" not in df.columns:
+            st.error(
+                "A coluna CENA não foi encontrada no ficheiro enviado. "
+                "No formato largo use ID_Cenario ou Nome_Cenario; no formato longo use CENA."
+            )
+        else:
+            try:
+                ind, ranking = montar_indicadores_customizados(df)
+            except Exception as exc:  # noqa: BLE001
+                st.error(
+                    f"Não foi possível calcular os indicadores da base enviada: {type(exc).__name__}: {exc}. "
+                    "A barra lateral permanece disponível para restaurar a base original."
+                )
+                if "CENA" not in getattr(ranking, "columns", []):
+                    ranking = pd.DataFrame({"CENA": df["CENA"].dropna().unique()})
+                if "CENA" not in getattr(ind, "columns", []):
+                    ind = ranking.copy()
 
-    ano_sel, cena_sel, anos, cenas = render_sidebar(df, ind, int(ranking["CENA"].nunique()))
-    # Keep existing profile IDs so the indicators and pages retain their behavior.
-    profile_labels = dict(zip(
-        ("geral", "cfo", "acionistas", "concedente"),
-        ("CEO", "CFO", "Shareholders", "Granting Authority")
-        if get_lang() == "en" else
-        ("CEO", "CFO", "Acionistas", "Poder concedente"),
-    ))
-    current_profile = st.session_state.get("persona_id", "geral")
-    if current_profile not in profile_labels:
-        current_profile = "cfo" if current_profile == "credores" else "geral"
-    selected_profile = st.segmented_control(
-        "Role / profile" if get_lang() == "en" else "Cargo / perfil",
-        options=list(profile_labels), format_func=profile_labels.get,
-        default=current_profile, key="profiles_ceo_cfo",
-        help="CEO: strategy; CFO: financial management; Shareholders: return and risk; Granting Authority: sustainability."
-        if get_lang() == "en" else
-        "CEO: decisão estratégica; CFO: gestão financeira; Acionistas: retorno e risco; Poder concedente: sustentabilidade.",
-    )
-    persona = selected_profile or current_profile
-    st.session_state["persona_id"] = persona
+    n_cenarios = int(ranking["CENA"].nunique()) if "CENA" in getattr(ranking, "columns", []) else 0
+    ano_sel, cena_sel, anos, cenas = render_sidebar(df, ind, n_cenarios)
+    diag("app", f"filtros ano={ano_sel} cena={cena_sel} n_cenarios={n_cenarios} fonte=local")
+    persona = render_persona()
+    diag("app", f"persona={persona} a montar contexto e pagina")
     ctx = montar_contexto(
         df, ind, ranking, ano_sel=ano_sel, cena_sel=cena_sel, anos=anos, cenas=cenas, persona=persona
     )
     render_pagina(ctx)
-    render_floating_chat()
+    if not is_relatorio_open():
+        render_floating_chat(ctx)
 
 
 main()

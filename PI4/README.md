@@ -41,7 +41,7 @@ A chave sai do [Google AI Studio](https://aistudio.google.com/apikey).
 py -m uvicorn Backend.main:app --host 127.0.0.1 --port 8000
 ```
 
-Confirme em [http://localhost:8000/api/health](http://localhost:8000/api/health). A resposta esperada é `{"status":"ok"}`. Deixe esse terminal aberto.
+Confirme em [http://localhost:8000/](http://localhost:8000/) ou [http://localhost:8000/api/v1/health](http://localhost:8000/api/v1/health). A resposta esperada é `{"status":"online","message":"API CTI Backend Ativa"}`. Deixe esse terminal aberto.
 
 ### 5. Subir o dashboard (terminal 2)
 
@@ -62,7 +62,7 @@ O Streamlit mostra o endereço, em geral [http://localhost:8501](http://localhos
 
 O chat é o botão do robô no canto inferior direito. Ele envia as perguntas para `http://localhost:8000/api/chat`. A primeira pergunta demora mais, porque o índice dos cenários é montado nesse momento.
 
-PDFs e Markdown extras para o assistente ficam em `Backend/documentos/`.
+PDFs e Markdown extras para o assistente ficam em `Backend/documentos/` (incluindo subpastas). O índice RAG varre `**/*.md` e `**/*.pdf`.
 
 ## Estrutura
 
@@ -72,14 +72,29 @@ PI4/
   Frontend/    # Streamlit, src (config, controllers, models, views)
 ```
 
-## Visões por perfil
+### para rodar tudo de uma vez em computador novo
 
-- **CEO - Visão estratégica:** receita, resultado, EBITDA, custos e capacidade de investir.
-- **CFO - Gestão financeira:** capital de giro, tesouraria, empréstimos e evolução de caixa.
-- **Acionistas - Retorno e risco:** lucro, margem líquida, crescimento, distribuições e sustentação do caixa.
-- **Poder concedente - Sustentabilidade da concessão:** liquidez, continuidade financeira, investimentos e anos críticos.
+```
+cd PI4
+py -m pip install -r Frontend/requirements_dashboard.txt
+py -m pip install -r Backend/requirements.txt
+copy .env.example .env
+py -m uvicorn Backend.main:app --host 127.0.0.1 --port 8000
+py -m streamlit run Frontend/app.py
+```
 
-Cada perfil abre uma visão própria e oferece análises detalhadas relevantes ao cargo.
-Os cartões mostram médias anuais quando o filtro está em Todos; gráficos e tabelas respeitam o período selecionado.
-A variação anual usa o ano anterior do mesmo cenário, inclusive quando apenas um ano está selecionado.
-A frequência de cenários com sinais financeiros considera caixa final negativo, liquidez abaixo de 1 ou geração de caixa negativa, com pesos iguais; não representa probabilidade de falência.
+
+
+```
+cd PI4
+copy .env.example .env
+py -m uvicorn Backend.main:app --host 127.0.0.1 --port 8000
+py -m streamlit run Frontend/app.py
+```
+
+## Deploy na Render
+
+Na raiz do repositório (`ESC_Semestre4_PI`) estão `requirements.txt`, `Procfile`, `start.sh` e `render.yaml`.
+
+- **Um serviço só (recomendado):** Root Directory vazio, Build `pip install -r requirements.txt && chmod +x start.sh`, Start `./start.sh`. O script sobe a API em `127.0.0.1:8081` e o Streamlit na `$PORT` pública.
+- Preencha no painel: `GOOGLE_API_KEY`, SMTP e demais secrets. Não commite `.env`.
