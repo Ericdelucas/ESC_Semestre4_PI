@@ -50,7 +50,16 @@ def _executar(sql: str, params: dict | None = None, tentativas: int = 3) -> pd.D
             )
             texto = str(exc).lower()
             dispose_engine()
-            if any(k in texto for k in ("translate host", "name or service not known", "resolvivel", "network is unreachable")):
+            if any(
+                k in texto
+                for k in (
+                    "translate host",
+                    "name or service not known",
+                    "resolvivel",
+                    "network is unreachable",
+                    "ipv4",
+                )
+            ):
                 break
             time.sleep(0.45 * tentativa)
     assert ultimo is not None
@@ -69,7 +78,16 @@ def _escalar(sql: str, params: dict | None = None) -> object:
             diag("sql", f"escalar falhou tentativa={tentativa} {type(exc).__name__}: {exc}")
             texto = str(exc).lower()
             dispose_engine()
-            if any(k in texto for k in ("translate host", "name or service not known", "resolvivel", "network is unreachable")):
+            if any(
+                k in texto
+                for k in (
+                    "translate host",
+                    "name or service not known",
+                    "resolvivel",
+                    "network is unreachable",
+                    "ipv4",
+                )
+            ):
                 break
             time.sleep(0.45 * tentativa)
     assert ultimo is not None
