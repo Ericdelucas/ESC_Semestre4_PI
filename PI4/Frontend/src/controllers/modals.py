@@ -51,14 +51,20 @@ def close_relatorio() -> None:
 
 
 def open_chat() -> None:
+    from Backend.diag import log_ia
+
     ensure_modal_state()
     _set_relatorio(False)
     _set_chat(True)
+    log_ia("CLIQUE abrir painel do assistente")
 
 
 def close_chat() -> None:
+    from Backend.diag import log_ia
+
     ensure_modal_state()
     _set_chat(False)
+    log_ia("CLIQUE fechar painel do assistente")
 
 
 def dialog_kwargs(width: str = "large", on_dismiss=None) -> dict[str, object]:
