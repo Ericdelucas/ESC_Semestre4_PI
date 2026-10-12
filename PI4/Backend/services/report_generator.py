@@ -26,11 +26,9 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen.canvas import Canvas
 from reportlab.platypus import (
-    CondPageBreak,
     Flowable,
     Image,
     KeepTogether,
-    PageBreak,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -158,48 +156,50 @@ def _styles() -> dict[str, ParagraphStyle]:
             "ESCReportTitle",
             parent=base["Title"],
             fontName=FONT_SERIF,
-            fontSize=20,
-            leading=24,
+            fontSize=16,
+            leading=19,
             textColor=NAVY,
-            spaceAfter=10,
+            spaceAfter=4,
             alignment=TA_LEFT,
         ),
         "h2": ParagraphStyle(
             "ESCReportH2",
             parent=base["Heading2"],
             fontName=FONT_SANS_BOLD,
-            fontSize=13,
-            leading=16,
+            fontSize=11,
+            leading=13,
             textColor=NAVY,
-            spaceBefore=4,
-            spaceAfter=8,
+            spaceBefore=2,
+            spaceAfter=3,
+            keepWithNext=True,
         ),
         "h3": ParagraphStyle(
             "ESCReportH3",
             parent=base["Heading3"],
             fontName=FONT_SANS_BOLD,
-            fontSize=9,
-            leading=12,
+            fontSize=8,
+            leading=10,
             textColor=GOLD,
-            spaceBefore=2,
-            spaceAfter=4,
+            spaceBefore=0,
+            spaceAfter=2,
+            keepWithNext=True,
         ),
         "body": ParagraphStyle(
             "ESCReportBody",
             parent=base["BodyText"],
             fontName=FONT_SANS,
-            fontSize=9.5,
-            leading=13.5,
+            fontSize=8.5,
+            leading=11.5,
             textColor=SLATE,
             alignment=TA_JUSTIFY,
-            spaceAfter=8,
+            spaceAfter=3,
         ),
         "insight": ParagraphStyle(
             "ESCReportInsight",
             parent=base["BodyText"],
             fontName=FONT_SANS,
-            fontSize=9,
-            leading=13,
+            fontSize=8,
+            leading=11,
             textColor=SLATE,
             alignment=TA_JUSTIFY,
             spaceAfter=0,
@@ -208,9 +208,10 @@ def _styles() -> dict[str, ParagraphStyle]:
             "ESCReportMuted",
             parent=base["BodyText"],
             fontName=FONT_SANS,
-            fontSize=8,
-            leading=11,
+            fontSize=7.5,
+            leading=10,
             textColor=SLATE,
+            spaceAfter=2,
         ),
         "center": ParagraphStyle(
             "ESCReportCenter",
@@ -329,7 +330,7 @@ def executive_canvas_factory(meta: dict[str, str]):
 
 
 class CoverPage(Flowable):
-    """Capa executiva A4 com marca, titulo, cenario e metadados."""
+    """Masthead compacto — nao ocupa uma pagina inteira em branco."""
 
     def __init__(self, meta: dict[str, str]):
         super().__init__()
@@ -337,7 +338,7 @@ class CoverPage(Flowable):
 
     def wrap(self, availWidth, availHeight):
         self.width = availWidth
-        self.height = max(availHeight - 0.2 * cm, 18 * cm)
+        self.height = min(6.35 * cm, availHeight)
         return self.width, self.height
 
     def draw(self) -> None:
@@ -346,51 +347,56 @@ class CoverPage(Flowable):
         w, h = self.width, self.height
         issued = self.meta.get("issued_at") or datetime.now().strftime("%d/%m/%Y %H:%M")
         c.setFillColor(NAVY)
-        c.roundRect(0, h - 1.65 * cm, 1.65 * cm, 1.65 * cm, 3, fill=1, stroke=0)
+        c.roundRect(0, h - 1.15 * cm, 1.15 * cm, 1.15 * cm, 2, fill=1, stroke=0)
         c.setFillColor(WHITE)
-        c.setFont(FONT_SANS_BOLD, 12)
-        c.drawCentredString(0.825 * cm, h - 1.0 * cm, "ESC")
+        c.setFont(FONT_SANS_BOLD, 10)
+        c.drawCentredString(0.575 * cm, h - 0.7 * cm, "ESC")
         c.setFillColor(GOLD)
-        c.setFont(FONT_SANS_BOLD, 9)
-        c.drawString(2.0 * cm, h - 0.65 * cm, self.meta.get("company_name") or "Grupo ESC")
+        c.setFont(FONT_SANS_BOLD, 8.5)
+        c.drawString(1.45 * cm, h - 0.45 * cm, self.meta.get("company_name") or "Grupo ESC")
         c.setFillColor(SLATE)
-        c.setFont(FONT_SANS, 8)
-        c.drawString(2.0 * cm, h - 1.15 * cm, "Corporate Intelligence  ·  Dashboard CTI")
+        c.setFont(FONT_SANS, 7.5)
+        c.drawString(1.45 * cm, h - 0.9 * cm, "Corporate Intelligence  ·  Dashboard CTI")
         c.setStrokeColor(GOLD)
-        c.setLineWidth(1.6)
-        c.line(0, h - 2.15 * cm, w * 0.42, h - 2.15 * cm)
+        c.setLineWidth(1.3)
+        c.line(0, h - 1.4 * cm, w * 0.48, h - 1.4 * cm)
         c.setFillColor(GOLD)
-        c.setFont(FONT_SANS, 8)
-        c.drawString(0, h - 3.05 * cm, "RELATÓRIO EXECUTIVO")
+        c.setFont(FONT_SANS, 7.5)
+        c.drawString(0, h - 1.95 * cm, "RELATÓRIO EXECUTIVO")
         c.setFillColor(NAVY)
-        c.setFont(FONT_SERIF, 22)
-        c.drawString(0, h - 4.25 * cm, "Desempenho Financeiro")
-        c.setFont(FONT_SERIF, 20)
-        c.drawString(0, h - 5.15 * cm, "e Leitura de Cenário")
+        c.setFont(FONT_SERIF, 15)
+        c.drawString(0, h - 2.65 * cm, "Desempenho Financeiro e Leitura de Cenário")
         c.setFillColor(GOLD)
-        c.setFont(FONT_SANS_BOLD, 11)
-        c.drawString(0, h - 6.25 * cm, str(self.meta.get("scenario") or ""))
+        c.setFont(FONT_SANS_BOLD, 9.5)
+        c.drawString(0, h - 3.25 * cm, str(self.meta.get("scenario") or ""))
         c.setFillColor(SLATE)
-        c.setFont(FONT_SANS, 9)
-        c.drawString(0, h - 7.05 * cm, self.meta.get("title") or "Relatório personalizado para apresentação C-Level")
-        y = 4.8 * cm
+        c.setFont(FONT_SANS, 8)
+        titulo = self.meta.get("title") or "Relatório personalizado para apresentação C-Level"
+        c.drawString(0, h - 3.75 * cm, str(titulo)[:92])
         rows = (
-            ("Perfil destinatário", self.meta.get("profile") or "—"),
+            ("Perfil", self.meta.get("profile") or "—"),
             ("Autor", self.meta.get("author") or "—"),
             ("Emissão", issued),
             ("Classificação", self.meta.get("confidential") or "Confidencial — Uso Interno"),
         )
         c.setStrokeColor(LINE)
-        c.setLineWidth(0.4)
-        c.line(0, y + 1.55 * cm, w, y + 1.55 * cm)
-        for label, value in rows:
+        c.setLineWidth(0.35)
+        c.line(0, h - 4.05 * cm, w, h - 4.05 * cm)
+        col_w = w / 2
+        for idx, (label, value) in enumerate(rows):
+            col = idx % 2
+            row = idx // 2
+            x = col * col_w
+            y = h - 4.55 * cm - row * 0.72 * cm
             c.setFillColor(GOLD)
-            c.setFont(FONT_SANS_BOLD, 7.5)
-            c.drawString(0, y, label.upper())
+            c.setFont(FONT_SANS_BOLD, 6.5)
+            c.drawString(x, y, label.upper())
             c.setFillColor(NAVY)
-            c.setFont(FONT_SANS, 10)
-            c.drawString(4.4 * cm, y, str(value))
-            y -= 0.85 * cm
+            c.setFont(FONT_SANS, 8.5)
+            c.drawString(x, y - 0.32 * cm, str(value)[:42])
+        c.setStrokeColor(GOLD)
+        c.setLineWidth(0.8)
+        c.line(0, 0.08 * cm, w, 0.08 * cm)
 
 
 def _header_footer(canvas, doc) -> None:
@@ -441,10 +447,10 @@ def _table(rows: list[list[Any]], widths: list[float] | None = None, *, highligh
         ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
         ("FONTNAME", (0, 0), (-1, 0), FONT_SANS_BOLD),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 3.5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3.5),
         ("LINEBELOW", (0, 0), (-1, 0), 1.1, GOLD),
         ("BOX", (0, 0), (-1, -1), 0.25, LINE),
         ("ALIGN", (0, 0), (0, -1), "LEFT"),
@@ -467,18 +473,18 @@ def insight_card(title: str, text: str) -> Table:
             [Paragraph(_clean_text(title), styles["h3"])],
             [Paragraph(_clean_text(text), styles["insight"])],
         ],
-        colWidths=[16.4 * cm],
+        colWidths=[16.6 * cm],
     )
     card.setStyle(
         TableStyle(
             [
                 ("BACKGROUND", (0, 0), (-1, -1), ICE),
-                ("BOX", (0, 0), (-1, -1), 0.4, LINE),
-                ("LINEBEFORE", (0, 0), (0, -1), 3.2, GOLD),
-                ("LEFTPADDING", (0, 0), (-1, -1), 10),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 10),
-                ("TOPPADDING", (0, 0), (-1, 0), 8),
-                ("BOTTOMPADDING", (0, -1), (-1, -1), 10),
+                ("BOX", (0, 0), (-1, -1), 0.3, LINE),
+                ("LINEBEFORE", (0, 0), (0, -1), 2.4, GOLD),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, 0), 4),
+                ("BOTTOMPADDING", (0, -1), (-1, -1), 5),
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ]
         )
@@ -487,17 +493,18 @@ def insight_card(title: str, text: str) -> Table:
 
 
 def section_block(title: str, insight: str, *flowables: Any) -> list[Any]:
+    """Secao continua: sem PageBreak. Tabelas/KPIs nao partem ao meio."""
     styles = _styles()
-    heading = [Paragraph(title, styles["h2"])]
-    if insight.strip():
-        heading.append(insight_card("Diagnostic & Insights — Assistente CTI", insight))
-        heading.append(Spacer(1, 0.25 * cm))
-    pieces: list[Any] = [KeepTogether(heading)]
+    pieces: list[Any] = [Spacer(1, 0.1 * cm), Paragraph(title, styles["h2"])]
+    if str(insight or "").strip():
+        pieces.append(insight_card("Diagnostic & Insights — Assistente CTI", insight.strip()))
+        pieces.append(Spacer(1, 0.08 * cm))
     for item in flowables:
         if item is None:
             continue
-        pieces.append(KeepTogether([item, Spacer(1, 0.18 * cm)]))
-    return [CondPageBreak(7.2 * cm), *pieces]
+        pieces.append(KeepTogether([item]))
+        pieces.append(Spacer(1, 0.08 * cm))
+    return pieces
 
 
 def _apply_chart_theme(fig: go.Figure, *, x_title: str, y_title: str, title: str) -> go.Figure:
@@ -694,7 +701,7 @@ def _add_chart(story: list[Any], fig: go.Figure, styles: dict[str, ParagraphStyl
     if image is None:
         story.append(Paragraph(fallback, styles["body"]))
         return
-    story.append(KeepTogether([image, Spacer(1, 0.2 * cm)]))
+    story.append(KeepTogether([image, Spacer(1, 0.1 * cm)]))
 
 
 def generate_executive_pdf(
@@ -732,13 +739,13 @@ def generate_executive_pdf(
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        leftMargin=1.7 * cm,
-        rightMargin=1.7 * cm,
-        topMargin=1.7 * cm,
-        bottomMargin=1.6 * cm,
+        leftMargin=1.5 * cm,
+        rightMargin=1.5 * cm,
+        topMargin=1.45 * cm,
+        bottomMargin=1.35 * cm,
         title="Relatório Executivo ESC",
     )
-    story: list[Any] = [CoverPage(meta), PageBreak()]
+    story: list[Any] = [CoverPage(meta)]
     kpis = _table(
         [
             ["Indicador", "Valor"],
