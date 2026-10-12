@@ -184,13 +184,16 @@ def candidate_urls() -> list[str]:
 
 
 def preferred_database_url() -> str:
-    """Primeira URL cujo host resolve em DNS. Vazio se nenhum resolver."""
+    """Primeira URL com IPv4. Host so-IPv6 e inutil na Render."""
     for url in candidate_urls():
         host = urlparse(url).hostname or ""
-        if _host_resolves(host):
-            diag("db", f"preferred host={host}")
+        if not _host_resolves(host):
+            continue
+        if ipv4_de(host):
+            diag("db", f"preferred host={host} (IPv4)")
             return url
-    diag("db", "aviso: nenhum host PostgreSQL resolveu DNS")
+        diag("db", f"a ignorar host so-IPv6 {host}")
+    diag("db", "aviso: nenhum host PostgreSQL com IPv4")
     return ""
 
 
