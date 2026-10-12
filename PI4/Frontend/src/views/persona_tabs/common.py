@@ -42,13 +42,27 @@ def _be_padrao(cena: str) -> pd.DataFrame:
     return build_break_even(df, cena)
 
 
+def _ltv_from_be(be: pd.DataFrame) -> pd.DataFrame:
+    """LTV/CAC a partir do Break-Even já cacheado — sem varrer 1M de linhas."""
+    dados = be.copy()
+    if dados.empty:
+        return dados
+    margem = None
+    for nome in ("Margem de Contribuição (%)", "Margem de Contribuicao (%)"):
+        if nome in dados.columns:
+            margem = pd.to_numeric(dados[nome], errors="coerce")
+            break
+    if margem is None:
+        margem = pd.Series(0.0, index=dados.index)
+    dados["CAC"] = 100.0
+    dados["LTV"] = 4_500.0 * margem.fillna(0.0) * 10.0
+    dados["LTV/CAC"] = dados["LTV"] / pd.to_numeric(dados["CAC"], errors="coerce").replace(0, pd.NA)
+    return dados
+
+
 @st.cache_data(show_spinner=False)
 def _ltv_padrao(cena: str) -> pd.DataFrame:
-    from Backend.metrics import calculate_ltv_cac
-    from src.controllers.bootstrap import carregar_pipeline
-
-    df, _, _ = carregar_pipeline()
-    return calculate_ltv_cac(df, cena)
+    return _ltv_from_be(_be_padrao(cena))
 
 
 def _dre(df: pd.DataFrame, cena: str) -> pd.DataFrame:
@@ -68,12 +82,11 @@ def _break_even_df(df: pd.DataFrame, cena: str) -> pd.DataFrame:
 
 
 def _ltv_df(df: pd.DataFrame, cena: str) -> pd.DataFrame:
-    from Backend.metrics import calculate_ltv_cac
     from src.controllers.data_input import has_custom_data
 
     if not has_custom_data():
         return _ltv_padrao(str(cena))
-    return calculate_ltv_cac(df, cena)
+    return _ltv_from_be(_break_even_df(df, cena))
 
 __all__ = [
     "ALIQUOTA_IR_FALLBACK",

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import html
 import os
 import time
 import traceback
 from datetime import datetime
+from io import BytesIO
 
 import pandas as pd
 import streamlit as st
@@ -132,7 +134,181 @@ def _gerar_pdf(payload: dict) -> bytes:
         use_llm=False,
     )
     _log(f"PDF OK bytes={len(pdf_bytes)} em {time.time() - t0:.2f}s")
+    st.session_state["custom_report_preview_meta"] = _meta_preview(frames, payload)
     return pdf_bytes
+
+
+def _meta_preview(frames: dict[str, pd.DataFrame], payload: dict) -> dict:
+    from Backend.services.report_generator import format_exec_money, format_exec_pct
+
+    dre = frames.get("dre") if isinstance(frames.get("dre"), pd.DataFrame) else pd.DataFrame()
+    be = frames.get("be") if isinstance(frames.get("be"), pd.DataFrame) else pd.DataFrame()
+    ltv = frames.get("ltv") if isinstance(frames.get("ltv"), pd.DataFrame) else pd.DataFrame()
+
+    def _mean(tabela: pd.DataFrame, *nomes: str) -> float:
+        for nome in nomes:
+            if tabela is None or tabela.empty or nome not in tabela.columns:
+                continue
+            value = float(pd.to_numeric(tabela[nome], errors="coerce").mean())
+            if not pd.isna(value):
+                return value
+        return 0.0
+
+    receita = _mean(dre, "Receita Líquida", "Receita Liquida")
+    ebitda = _mean(dre, "EBITDA")
+    return {
+        "company": payload.get("company_name") or "Grupo ESC",
+        "profile": payload.get("profile") or "CEO",
+        "scenario": payload.get("scenario") or "",
+        "author": payload.get("author") or "",
+        "blocks": list(payload.get("selected_blocks") or []),
+        "notes": payload.get("notes") or {},
+        "kpis": {
+            "ebitda": format_exec_money(ebitda),
+            "margem": format_exec_pct(ebitda / receita if receita else 0.0),
+            "break_even": format_exec_money(_mean(be, "Break-Even")),
+            "ltv_cac": f"{_mean(ltv, 'LTV/CAC'):.1f}x",
+        },
+        "dre": dre.head(12).to_dict("records") if not dre.empty else [],
+        "be": be.head(12).to_dict("records") if not be.empty else [],
+    }
+
+
+def _pdf_para_imagens(pdf_bytes: bytes, max_paginas: int = 8) -> list[bytes]:
+    """Rasteriza paginas do PDF em JPEG compacto para o modal."""
+    t0 = time.time()
+    try:
+        import pypdfium2 as pdfium
+    except Exception as exc:  # noqa: BLE001
+        _log(f"pypdfium2 ausente ({type(exc).__name__}: {exc})")
+        pdfium = None
+    if pdfium is not None:
+        try:
+            doc = pdfium.PdfDocument(pdf_bytes)
+            imagens: list[bytes] = []
+            total = min(len(doc), max_paginas)
+            for indice in range(total):
+                pagina = doc[indice]
+                pil = pagina.render(scale=1.35).to_pil().convert("RGB")
+                if pil.width > 920:
+                    ratio = 920 / pil.width
+                    pil = pil.resize((920, max(1, int(pil.height * ratio))))
+                buf = BytesIO()
+                pil.save(buf, format="JPEG", quality=72, optimize=True)
+                imagens.append(buf.getvalue())
+            _log(f"preview pypdfium2 paginas={len(imagens)} em {time.time() - t0:.2f}s")
+            return imagens
+        except Exception as exc:  # noqa: BLE001
+            _log(f"pypdfium2 FALHOU {type(exc).__name__}: {exc}")
+    try:
+        import fitz
+
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        imagens = []
+        total = min(doc.page_count, max_paginas)
+        for indice in range(total):
+            pix = doc.load_page(indice).get_pixmap(matrix=fitz.Matrix(1.3, 1.3), alpha=False)
+            pil_bytes = pix.tobytes("jpeg")
+            imagens.append(pil_bytes)
+        _log(f"preview pymupdf paginas={len(imagens)} em {time.time() - t0:.2f}s")
+        return imagens
+    except Exception as exc:  # noqa: BLE001
+        _log(f"raster PDF indisponivel ({type(exc).__name__}: {exc})")
+    return []
+
+
+def _html_folhas(meta: dict) -> str:
+    kpis = meta.get("kpis") or {}
+    notas = meta.get("notes") or {}
+    kpis_html = "".join(
+        f"<div class='kpi'><span>{html.escape(str(rotulo))}</span><strong>{html.escape(str(valor))}</strong></div>"
+        for rotulo, valor in (
+            ("EBITDA", kpis.get("ebitda", "—")),
+            ("Margem", kpis.get("margem", "—")),
+            ("Break-Even", kpis.get("break_even", "—")),
+            ("LTV/CAC", kpis.get("ltv_cac", "—")),
+        )
+    )
+    linhas_dre = "".join(
+        "<tr>"
+        + "".join(f"<td>{html.escape(str(row.get(col, '')))}</td>" for col in ("ano_num", "Receita Líquida", "EBITDA", "EBIT", "Lucro Líquido"))
+        + "</tr>"
+        for row in (meta.get("dre") or [])[:8]
+    )
+    pareceres = "".join(
+        f"<p><strong>{html.escape(str(chave))}:</strong> {html.escape(str(texto)[:400])}</p>"
+        for chave, texto in notas.items()
+        if str(texto).strip()
+    )
+    return f"""
+    <div class="folha">
+      <h1>{html.escape(str(meta.get('company') or 'Grupo ESC'))}</h1>
+      <p class="meta">{html.escape(str(meta.get('profile') or ''))} · {html.escape(str(meta.get('scenario') or ''))} · {html.escape(str(meta.get('author') or ''))}</p>
+      <div class="kpis">{kpis_html}</div>
+      <h2>DRE</h2>
+      <table><thead><tr><th>Ano</th><th>Receita</th><th>EBITDA</th><th>EBIT</th><th>Lucro</th></tr></thead>
+      <tbody>{linhas_dre or "<tr><td colspan='5'>—</td></tr>"}</tbody></table>
+      {pareceres}
+    </div>
+    <style>
+      .folha {{ background:#fff; color:#0f172a; padding:28px 32px; border-radius:10px;
+                 font-family:Georgia, 'Times New Roman', serif; border:1px solid #cbd5e1; }}
+      .folha h1 {{ margin:0 0 6px; font-size:22px; color:#0b1f33; }}
+      .folha h2 {{ font-size:16px; color:#0b1f33; margin:18px 0 8px; }}
+      .meta {{ color:#64748b; margin:0 0 16px; font-size:13px; }}
+      .kpis {{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:12px 0 18px; }}
+      .kpi {{ background:#0b1f33; color:#fff; padding:10px 8px; text-align:center; border-radius:6px; }}
+      .kpi span {{ display:block; font-size:10px; letter-spacing:.04em; color:#93c5fd; }}
+      .kpi strong {{ font-size:14px; }}
+      table {{ width:100%; border-collapse:collapse; font-size:12px; }}
+      th, td {{ border-bottom:1px solid #e2e8f0; padding:6px 4px; text-align:left; }}
+      p {{ font-size:13px; line-height:1.45; }}
+    </style>
+    """
+
+
+def _botao_download(pdf_bytes: bytes, filename: str, cena_sel: str, key: str) -> None:
+    st.download_button(
+        t("report.download"),
+        data=pdf_bytes,
+        file_name=filename,
+        mime="application/pdf",
+        help=f"Relatorio personalizado do cenario {cena_rotulo(cena_sel)}.",
+        use_container_width=True,
+        key=key,
+    )
+
+
+def _mostrar_previsualizacao(pdf_bytes: bytes, filename: str, cena_sel: str) -> None:
+    st.subheader(t("report.preview"))
+    st.caption(t("report.preview_hint"))
+    paginas = st.session_state.get("custom_report_preview_pages") or []
+    mostrou = False
+    if paginas:
+        rotulos = [t("report.page", n=indice + 1, total=len(paginas)) for indice in range(len(paginas))]
+        abas = st.tabs(rotulos)
+        for aba, imagem in zip(abas, paginas):
+            with aba:
+                st.image(imagem, use_container_width=True)
+        mostrou = True
+    elif hasattr(st, "pdf"):
+        try:
+            st.pdf(pdf_bytes, height=620)
+            mostrou = True
+        except TypeError:
+            try:
+                st.pdf(pdf_bytes)
+                mostrou = True
+            except Exception as exc:  # noqa: BLE001
+                _log(f"st.pdf FALHOU {type(exc).__name__}: {exc}")
+        except Exception as exc:  # noqa: BLE001
+            _log(f"st.pdf FALHOU {type(exc).__name__}: {exc}")
+    if not mostrou:
+        meta = st.session_state.get("custom_report_preview_meta") or {}
+        import streamlit.components.v1 as components
+
+        components.html(_html_folhas(meta), height=520, scrolling=True)
+    _botao_download(pdf_bytes, filename, cena_sel, key="report_download_top")
 
 
 def flush_pending_pdf() -> None:
@@ -153,7 +329,11 @@ def flush_pending_pdf() -> None:
     st.session_state.pop("_cti_report_error", None)
     st.session_state["custom_report_pdf"] = pdf_bytes
     st.session_state["custom_report_filename"] = pending["filename"]
-    _log(f"flush_pending_pdf OK bytes={len(pdf_bytes)}")
+    st.session_state["custom_report_preview_pages"] = _pdf_para_imagens(pdf_bytes)
+    _log(
+        f"flush_pending_pdf OK bytes={len(pdf_bytes)} "
+        f"paginas_preview={len(st.session_state['custom_report_preview_pages'])}"
+    )
 
 
 def render_dialog(cena_sel: str, ano_sel: str | int, cenas: list[str] | None = None, df: pd.DataFrame | None = None) -> None:
@@ -195,8 +375,18 @@ def _render_report_body(cena_sel: str, ano_sel: str | int, cenas: list[str] | No
     erro = st.session_state.pop("_cti_report_error", None)
     if erro:
         st.error(t("report.pdf_error", err=erro))
-    elif st.session_state.get("custom_report_pdf"):
+
+    preview_pdf = st.session_state.get("custom_report_pdf")
+    if isinstance(preview_pdf, dict):
+        preview_pdf = preview_pdf.get("bytes")
+    filename_atual = st.session_state.get(
+        "custom_report_filename",
+        f"relatorio_personalizado_esc_{datetime.now():%Y%m%d}.pdf",
+    )
+    if preview_pdf:
         st.success(t("report.preview_ok"))
+        _mostrar_previsualizacao(preview_pdf, filename_atual, cena_sel)
+        st.divider()
 
     with st.form("form_report_builder", clear_on_submit=False):
         profile_col, author_col, company_col = st.columns([0.22, 0.38, 0.4])
@@ -279,17 +469,10 @@ def _render_report_body(cena_sel: str, ano_sel: str | int, cenas: list[str] | No
         }
         st.rerun()
 
-    preview_pdf = st.session_state.get("custom_report_pdf")
-    if isinstance(preview_pdf, dict):
-        preview_pdf = preview_pdf.get("bytes")
     if preview_pdf:
-        st.subheader(t("report.preview"))
-        st.caption(t("report.download"))
-        st.download_button(
-            t("report.download"),
-            data=preview_pdf,
-            file_name=st.session_state.get("custom_report_filename", filename),
-            mime="application/pdf",
-            help=f"Relatorio personalizado do cenario {cena_rotulo(cena_sel)}.",
-            use_container_width=True,
+        _botao_download(
+            preview_pdf,
+            st.session_state.get("custom_report_filename", filename),
+            cena_sel,
+            key="report_download_bottom",
         )
