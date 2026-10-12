@@ -66,15 +66,20 @@ def load_cti_csv(path: Path | str | None = None, *, forcar_ficheiro: bool = Fals
 
             if postgres_disponivel():
                 print("[csv] DATABASE_URL — recorte agregado em cti_dados (sem ficheiro)", flush=True)
-                return fetch_recorte("Todos", "Todos")
+                recorte = fetch_recorte("Todos", "Todos")
+                print(f"[csv] recorte SQL shape={recorte.shape}", flush=True)
+                return recorte
             if sql_conectado():
                 print("[csv] SQL ja ligado — recorte agregado", flush=True)
-                return fetch_recorte("Todos", "Todos")
+                recorte = fetch_recorte("Todos", "Todos")
+                print(f"[csv] recorte SQL shape={recorte.shape}", flush=True)
+                return recorte
+            print("[csv] Postgres configurado=False ligado=False", flush=True)
         except Exception as exc:  # noqa: BLE001
             print(f"[csv] aviso: SQL indisponivel ({type(exc).__name__}: {exc}); a tentar ficheiro", flush=True)
 
     if os.environ.get("RENDER") and not forcar_ficheiro:
-        print("[csv] RENDER runtime: Cti.csv bloqueado — nao carregar 1M linhas", flush=True)
+        print("[csv] RENDER runtime: Cti.csv bloqueado — df vazio, pipeline deve reconstruir pelos indicadores", flush=True)
         return pd.DataFrame(columns=["ANO", "CENA", "CONTA", "VALOR", "ano_num"])
 
     csv_path = Path(path) if path is not None else CSV_PATH

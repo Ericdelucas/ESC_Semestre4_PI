@@ -116,6 +116,13 @@ def carregar_estado() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame] | None:
             if usa_sql:
                 diag("boot", f"aviso: fallback cache ({sql_aviso()})")
                 st.warning(t("boot.sql_fallback"))
+            if dados and not dados[0].empty:
+                st.session_state.setdefault("cti_row_count", len(dados[0]))
+        diag(
+            "boot",
+            f"estado final df={len(dados[0]):,} ind={len(dados[1]):,} ranking={len(dados[2]):,} "
+            f"sql={sql_conectado()} df_cols={list(dados[0].columns)[:8]}",
+        )
         return dados
     except MemoryError:
         diag("boot", "MemoryError no carregamento")

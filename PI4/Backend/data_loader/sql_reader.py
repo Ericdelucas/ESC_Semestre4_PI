@@ -195,9 +195,17 @@ def load_dashboard_from_sql() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]
 
     diag("sql", "a montar indicadores a partir de cti_dados")
     wide = fetch_wide_indicadores()
+    diag("sql", f"wide shape={wide.shape}")
     ind, ranking = montar_indicadores_from_wide(wide)
+    diag("sql", f"indicadores shape={ind.shape} ranking shape={ranking.shape}")
     df = fetch_recorte("Todos", "Todos")
-    diag("sql", f"dashboard SQL pronto ind={len(ind):,} ranking={len(ranking):,} recorte={len(df):,}")
+    diag("sql", f"recorte shape={df.shape}")
+    if df is None or df.empty:
+        from Backend.services.dashboard_pipeline import df_longo_de_indicadores
+
+        diag("sql", "recorte vazio — a reconstruir df a partir de indicadores")
+        df = df_longo_de_indicadores(ind)
+    diag("sql", f"dashboard SQL pronto df={len(df):,} ind={len(ind):,} ranking={len(ranking):,}")
     return df, ind, ranking
 
 
