@@ -31,6 +31,9 @@ _ENV_POOLER = ("DATABASE_URL_POOLER", "SUPABASE_POOLER_URL")
 _ENV_DIRECT = ("DATABASE_URL", "SUPABASE_DB_URL")
 _dns_cache: dict[tuple[str, int], list[str]] = {}
 
+# Dashboard e auth voltam ao modo local (parquet/CSV + SQLite). DATABASE_URL na Render e ignorada.
+USAR_SUPABASE = False
+
 
 def _limpar_url(valor: str | None) -> str:
     return (valor or "").strip().strip("\"'").replace("\n", "").replace("\r", "").replace("\t", "").strip()
@@ -51,11 +54,15 @@ def database_url_raw() -> str:
 
 
 def postgres_disponivel() -> bool:
+    if not USAR_SUPABASE:
+        return False
     return is_postgres_url(database_url_raw())
 
 
 def postgres_ipv4_disponivel() -> bool:
     """True so se alguma URL configurada (pooler ou directa) tiver A/IPv4."""
+    if not USAR_SUPABASE:
+        return False
     for url in candidate_urls():
         host = urlparse(url).hostname or ""
         if ipv4_de(host):
@@ -185,6 +192,8 @@ def candidate_urls() -> list[str]:
 
 def preferred_database_url() -> str:
     """Primeira URL com IPv4. Host so-IPv6 e inutil na Render."""
+    if not USAR_SUPABASE:
+        return ""
     for url in candidate_urls():
         host = urlparse(url).hostname or ""
         if not _host_resolves(host):
@@ -242,6 +251,10 @@ def _falha_sem_retry(exc: BaseException) -> bool:
 def get_cti_engine() -> Engine:
     """Tenta host directo em IPv4; se falhar, pooler. Nao imprime senha."""
     global _engine, _sql_ok, _sql_aviso, _dns_esgotado
+    if not USAR_SUPABASE:
+        _sql_ok = False
+        _sql_aviso = "PostgreSQL desligado — a usar cache local"
+        raise RuntimeError(_sql_aviso)
     if _engine is not None:
         diag("db", "reutilizar engine ja ligada")
         return _engine
