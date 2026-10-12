@@ -22,7 +22,7 @@ def _emit(message: str) -> None:
     _log.info(message)
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
@@ -235,8 +235,20 @@ def health_v1() -> dict[str, object]:
     }
 
 
+def _alerta_risco_em_fundo(email: str) -> None:
+    try:
+        disparar_alerta_risco(
+            email,
+            forcar=False,
+            simular=forcar_alerta_login(),
+            origem="login",
+        )
+    except Exception as exc:  # noqa: BLE001
+        _emit(f"LOGIN alerta risco em fundo falhou: {type(exc).__name__}: {exc}")
+
+
 @app.post("/api/v1/auth/login")
-def login(body: LoginIn, request: Request) -> dict[str, object]:
+def login(body: LoginIn, request: Request, background_tasks: BackgroundTasks) -> dict[str, object]:
     ip = _ip_cliente(request)
     _emit(
         f"LOGIN CHEGOU method={request.method} url={request.url} ip={ip} "
@@ -254,20 +266,10 @@ def login(body: LoginIn, request: Request) -> dict[str, object]:
     if usuario is None or publico is None:
         _emit(f"LOGIN REJEITADO 401 email={body.email!r} detalhe={mensagem!r}")
         raise HTTPException(status_code=401, detail=mensagem)
-    risco: dict[str, object] | None = None
     if str(publico.get("funcao") or "") in FUNCOES_EXECUTIVAS or bool(publico.get("is_super_admin")):
-        try:
-            risco = disparar_alerta_risco(
-                str(publico.get("email") or body.email),
-                forcar=False,
-                simular=forcar_alerta_login(),
-                origem="login",
-            )
-        except Exception as exc:  # noqa: BLE001
-            risco = {"critical": False, "sent": False, "summary": f"Varredura indisponivel: {type(exc).__name__}: {exc}"}
-            _emit(f"LOGIN alerta risco falhou: {risco}")
-    _emit(f"LOGIN OK 200 email={publico.get('email')!r} role={publico.get('role')!r} risco_sent={(risco or {}).get('sent')}")
-    return {"ok": True, "message": mensagem, "user": publico, "risk_alert": risco}
+        background_tasks.add_task(_alerta_risco_em_fundo, str(publico.get("email") or body.email))
+    _emit(f"LOGIN OK 200 email={publico.get('email')!r} role={publico.get('role')!r}")
+    return {"ok": True, "message": mensagem, "user": publico, "risk_alert": None}
 
 
 @app.post("/api/v1/auth/logout")

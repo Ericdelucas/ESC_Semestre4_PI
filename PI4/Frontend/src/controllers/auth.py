@@ -168,12 +168,45 @@ def _detalhe_erro(payload: dict[str, object]) -> str:
     return str(detalhe or t("login.error"))
 
 
+def _abrir_sessao(email: str, role: str, funcao: str, mensagem: str) -> tuple[bool, str]:
+    if role not in ROLE_PERSONAS:
+        return False, t("login.error")
+    _aplicar_usuario(email, role, funcao)
+    st.session_state[EMAIL_ALERTA_FLAG] = True
+    return True, mensagem
+
+
+def _autenticar_local(email: str, password: str) -> tuple[bool, str]:
+    """Mesma validacao da API, no SQLite do processo Streamlit, se o uvicorn estiver em baixo."""
+    from Backend.db import seed_usuarios, session_scope
+    from Backend.db.auth import autenticar as autenticar_db
+    from Backend.db.auth import usuario_publico
+
+    _login_emit("API indisponivel — a validar login na base local")
+    seed_usuarios()
+    with session_scope() as db:
+        usuario, mensagem = autenticar_db(db, email, password)
+        if usuario is None:
+            return False, mensagem
+        publico = usuario_publico(usuario)
+    return _abrir_sessao(
+        str(publico.get("email") or email).strip().lower(),
+        str(publico.get("role") or ""),
+        str(publico.get("funcao") or ""),
+        str(mensagem or ""),
+    )
+
+
 def authenticate(email: str, password: str) -> tuple[bool, str]:
     destino = f"{resolve_api_base_url()}/api/v1/auth/login"
     _login_emit(
         f"authenticate() a enviar POST {destino} email={email!r} senha=***len={len(password or '')}"
     )
-    payload, status = post_json("/api/v1/auth/login", {"email": email, "password": password})
+    payload, status = post_json(
+        "/api/v1/auth/login",
+        {"email": email, "password": password},
+        timeout=20,
+    )
     _login_emit(
         f"authenticate() resposta status={status} ok={payload.get('ok')} "
         f"keys={list(payload)} detail={payload.get('detail')!r} message={payload.get('message')!r}"
@@ -182,25 +215,18 @@ def authenticate(email: str, password: str) -> tuple[bool, str]:
         _login_emit("authenticate() recebeu 429 Too Many Requests do cliente HTTP")
     if status == 200 and payload.get("ok"):
         user = payload.get("user") if isinstance(payload.get("user"), dict) else {}
-        role = str(user.get("role") or "")
-        if role not in ROLE_PERSONAS:
-            return False, t("login.error")
-        email_norm = str(user.get("email") or email).strip().lower()
-        funcao = str(user.get("funcao") or "")
-        _aplicar_usuario(email_norm, role, funcao)
-        risco = payload.get("risk_alert") if isinstance(payload.get("risk_alert"), dict) else None
-        if risco is not None:
-            st.session_state["risk_scan"] = risco
-        if not st.session_state.get(EMAIL_ALERTA_FLAG):
-            erro = str((risco or {}).get("email_error") or (risco or {}).get("message") or "")
-            if risco and (erro in {"SMTP_NOT_CONFIGURED"} or "SMTP_NOT_CONFIGURED" in erro):
-                st.session_state[EMAIL_TOAST_KEY] = "smtp"
-            elif risco and risco.get("sent"):
-                st.session_state[EMAIL_TOAST_KEY] = "sent"
-        st.session_state[EMAIL_ALERTA_FLAG] = True
-        return True, str(payload.get("message") or "")
+        return _abrir_sessao(
+            str(user.get("email") or email).strip().lower(),
+            str(user.get("role") or ""),
+            str(user.get("funcao") or ""),
+            str(payload.get("message") or ""),
+        )
     if status == 503:
-        return False, t("login.backend_offline", url=resolve_api_base_url())
+        try:
+            return _autenticar_local(email, password)
+        except Exception as exc:  # noqa: BLE001
+            _login_emit(f"fallback local falhou {type(exc).__name__}: {exc}")
+            return False, t("login.backend_offline", url=resolve_api_base_url())
     return False, _detalhe_erro(payload)
 
 
