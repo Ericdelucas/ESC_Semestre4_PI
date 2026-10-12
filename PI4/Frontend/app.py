@@ -25,7 +25,7 @@ PI4_ROOT = Path(__file__).resolve().parents[1]
 if str(PI4_ROOT) not in sys.path:
     sys.path.insert(0, str(PI4_ROOT))
 
-from Backend.diag import diag, log_ambiente
+from Backend.diag import diag, log_ambiente, log_ia
 from Backend.metrics import montar_indicadores
 from src.controllers.auth import (
     AUTH_KEY,
@@ -39,7 +39,7 @@ from src.controllers.auth import (
 )
 from src.controllers.bootstrap import carregar_estado, montar_contexto
 from src.controllers.data_input import has_custom_data, render_data_input
-from src.controllers.modals import ensure_modal_state, is_relatorio_open
+from src.controllers.modals import ensure_modal_state, is_chat_open, is_relatorio_open
 from src.controllers.navigation import render_pagina
 from src.controllers.page_setup import configure_page
 from src.controllers.sidebar import render_language_selector, render_persona, render_sidebar
@@ -74,9 +74,16 @@ def _bypass_login_temporario() -> None:
 
 
 def main() -> None:
+    log_ia(
+        f"RERUN Streamlit main() chat_aberto={st.session_state.get('chat_ia_open')} "
+        f"pending={bool(st.session_state.get('cti_chat_pending_prompt'))} "
+        f"ws_ok={st.session_state.get('_cti_ws_ok')} "
+        f"mensagens={len(st.session_state.get('messages') or [])}"
+    )
     configure_page()
     if not st.session_state.get("_cti_ws_ok"):
         st.session_state["_cti_ws_ok"] = True
+        log_ia("handshake websocket — primeiro rerun leve")
         st.info("A abrir o painel CTI...")
         st.rerun()
     diag("app", "Streamlit main() a arrancar")
@@ -128,8 +135,23 @@ def main() -> None:
         df, ind, ranking, ano_sel=ano_sel, cena_sel=cena_sel, anos=anos, cenas=cenas, persona=persona
     )
     render_pagina(ctx)
+    st.session_state["cti_chat_ctx"] = {
+        "n_cenarios": ctx.n_cenarios,
+        "p_ruina": ctx.p_ruina,
+        "cena_sel": ctx.cena_sel,
+        "ano_sel": ctx.ano_sel,
+        "ano_enc": ctx.ano_enc,
+        "persona": ctx.persona,
+        "k": ctx.k.to_dict() if hasattr(ctx.k, "to_dict") else {},
+        "ranking": ctx.ranking,
+    }
+    log_ia(
+        f"contexto leve do assistente gravado persona={ctx.persona} "
+        f"ranking={len(ctx.ranking)} k={len(st.session_state['cti_chat_ctx']['k'])} "
+        f"SEM df longo chat_aberto={is_chat_open()}"
+    )
     if not is_relatorio_open():
-        render_floating_chat(ctx)
+        render_floating_chat()
 
 
 main()

@@ -8,7 +8,6 @@ import streamlit as st
 from Backend.diag import log_ia
 from src.config.i18n import get_lang, t
 from src.controllers.auth import can_access_persona, current_role
-from src.controllers.bootstrap import AppContext
 from src.controllers.modals import close_chat, is_chat_open, open_chat
 from src.controllers.resilience import resilient_view
 from src.models.formatting.tables import render_markdown_with_tables
@@ -175,6 +174,8 @@ def _render_chat_input_panel() -> str:
             key="cti_chat_text_input",
         )
         enviar = st.form_submit_button(t("ai.send"), type="primary", width="stretch")
+    if enviar:
+        log_ia(f"CLIQUE Enviar prompt={str(prompt or '')[:120]!r} vazio={not str(prompt or '').strip()}")
     return str(prompt or "").strip() if enviar else ""
 
 
@@ -491,16 +492,28 @@ div[data-testid="stPopoverBody"], .floating-chat-container {
 
 
 @st.fragment
-def render_floating_chat(ctx: AppContext) -> None:
-    """Renderiza o assistente em um painel flutuante acionado por botao."""
-    log_ia(f"painel: aberto={is_chat_open()} persona={ctx.persona} cena={ctx.cena_sel}")
+def render_floating_chat() -> None:
+    """Painel do assistente. Nao recebe o df de 1M linhas — isso gerava 429 no fragmento."""
+    leve = st.session_state.get("cti_chat_ctx") or {}
+    log_ia(
+        f"FRAGMENTO assistente a correr aberto={is_chat_open()} "
+        f"persona={leve.get('persona')} cena={leve.get('cena_sel')} "
+        f"pending={bool(st.session_state.get(PENDING_PROMPT_KEY))} "
+        f"ranking={len(leve.get('ranking') if isinstance(leve.get('ranking'), pd.DataFrame) else [])}"
+    )
     st.markdown(_FLOATING_CHAT_CSS, unsafe_allow_html=True)
 
     if not is_chat_open():
+        log_ia("FRAGMENTO: botao flutuante visivel (chat fechado)")
         with st.container(key="cti_chat_fab"):
             st.button("🤖", key="cti_chat_open_btn", help=t("ai.toggle"), on_click=open_chat)
         return
 
+    log_ia("FRAGMENTO: painel aberto a desenhar conversa")
+    ranking = leve.get("ranking")
+    if not isinstance(ranking, pd.DataFrame):
+        ranking = pd.DataFrame()
+    k = pd.Series(leve.get("k") or {})
     with st.container(key="cti_chat_panel", border=False):
         col_title, col_close = st.columns([0.82, 0.18], vertical_alignment="center")
         with col_title:
@@ -508,16 +521,16 @@ def render_floating_chat(ctx: AppContext) -> None:
         with col_close:
             st.button("×", key="cti_chat_close_btn", help=t("ai.close"), on_click=close_chat)
         render_chat_panel(
-            ctx.ranking,
-            ctx.n_cenarios,
-            ctx.p_ruina,
-            ctx.cena_sel,
-            ctx.k,
-            ctx.ano_enc,
-            ctx.ano_sel,
-            df_ativo=ctx.df,
-            ind=ctx.ind,
-            persona=ctx.persona,
+            ranking,
+            int(leve.get("n_cenarios") or 0),
+            float(leve.get("p_ruina") or 0.0),
+            str(leve.get("cena_sel") or "Todos"),
+            k,
+            int(leve.get("ano_enc") or 12),
+            leve.get("ano_sel") or "Todos",
+            df_ativo=pd.DataFrame(),
+            ind=pd.DataFrame(),
+            persona=str(leve.get("persona") or "ceo"),
             show_title=False,
         )
 

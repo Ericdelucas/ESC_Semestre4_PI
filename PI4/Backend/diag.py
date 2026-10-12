@@ -2,9 +2,19 @@
 
 from __future__ import annotations
 
+import logging
 import os
+import sys
 import time
 from urllib.parse import urlparse
+
+_log_ia = logging.getLogger("assistente-ia")
+if not _log_ia.handlers:
+    _handler = logging.StreamHandler(sys.stdout)
+    _handler.setFormatter(logging.Formatter("%(asctime)s [assistente-ia] %(levelname)s %(message)s"))
+    _log_ia.addHandler(_handler)
+    _log_ia.setLevel(logging.INFO)
+    _log_ia.propagate = False
 
 
 def diag(tag: str, mensagem: str) -> None:
@@ -12,8 +22,15 @@ def diag(tag: str, mensagem: str) -> None:
 
 
 def log_ia(mensagem: str) -> None:
-    """Log exclusivo do Assistente de IA — visivel no Live Tail da Render."""
-    print(f"[assistente-ia] {time.strftime('%H:%M:%S')} {mensagem}", flush=True)
+    """Log exclusivo do Assistente de IA — stdout + stderr + logger (Render)."""
+    linha = f"[assistente-ia] {time.strftime('%H:%M:%S')} {mensagem}"
+    print(linha, flush=True)
+    try:
+        sys.stderr.write(linha + "\n")
+        sys.stderr.flush()
+    except Exception:
+        pass
+    _log_ia.info(mensagem)
 
 
 def mascarar_url(url: str) -> str:
