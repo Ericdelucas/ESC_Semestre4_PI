@@ -37,7 +37,7 @@ from src.controllers.auth import (
     is_authenticated,
     render_logout_button,
 )
-from src.controllers.bootstrap import carregar_estado, carregar_recorte, fonte_sql_ativa, montar_contexto
+from src.controllers.bootstrap import carregar_estado, montar_contexto
 from src.controllers.data_input import has_custom_data, render_data_input
 from src.controllers.modals import ensure_modal_state, is_relatorio_open
 from src.controllers.navigation import render_pagina
@@ -92,7 +92,7 @@ def main() -> None:
         diag("app", "carregar_estado devolveu None — st.stop")
         st.stop()
     df, ind, ranking = estado
-    diag("app", f"estado df={len(df):,} ind={len(ind):,} ranking={len(ranking):,} sql={fonte_sql_ativa()}")
+    diag("app", f"estado df={len(df):,} ind={len(ind):,} ranking={len(ranking):,} fonte=local")
     df = render_data_input(df)
     if has_custom_data():
         if df is None or df.empty or "CENA" not in df.columns:
@@ -115,15 +115,7 @@ def main() -> None:
 
     n_cenarios = int(ranking["CENA"].nunique()) if "CENA" in getattr(ranking, "columns", []) else 0
     ano_sel, cena_sel, anos, cenas = render_sidebar(df, ind, n_cenarios)
-    diag("app", f"filtros ano={ano_sel} cena={cena_sel} n_cenarios={n_cenarios} sql={fonte_sql_ativa()}")
-    if not has_custom_data() and fonte_sql_ativa():
-        try:
-            recorte = carregar_recorte(str(cena_sel), ano_sel)
-            if recorte is not None and not recorte.empty:
-                df = recorte
-                diag("app", f"recorte SQL aplicado linhas={len(df):,}")
-        except Exception as exc:  # noqa: BLE001
-            diag("app", f"recorte SQL falhou {type(exc).__name__}: {exc}")
+    diag("app", f"filtros ano={ano_sel} cena={cena_sel} n_cenarios={n_cenarios} fonte=local")
     persona = render_persona()
     diag("app", f"persona={persona} a montar contexto e pagina")
     ctx = montar_contexto(

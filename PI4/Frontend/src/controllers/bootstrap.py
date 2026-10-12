@@ -49,19 +49,12 @@ class AppContext:
 
 
 def fonte_sql_ativa() -> bool:
-    if "cti_fonte_sql" in st.session_state:
-        return bool(st.session_state["cti_fonte_sql"])
-    try:
-        from Backend.data_loader.db import sql_conectado
-
-        return sql_conectado()
-    except Exception:  # noqa: BLE001
-        return False
+    return False
 
 
 @st.cache_data(show_spinner=False)
 def carregar_pipeline() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Cacheia o resultado. PostgreSQL primeiro; parquet/CSV so sem DATABASE_URL."""
+    """Cacheia parquet/CSV local. Sem PostgreSQL."""
     df, ind, ranking = prepare_dashboard_data(CSV_PATH)
     ranking = ranking.copy()
     if "CENA" in ranking.columns:
@@ -71,57 +64,34 @@ def carregar_pipeline() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
 
 @st.cache_data(show_spinner=False, ttl=180)
 def carregar_recorte(cena_sel: str, ano_sel: str | int) -> pd.DataFrame:
-    """Fatia filtrada no PostgreSQL — nao carrega o milhao de linhas."""
-    from Backend.data_loader.sql_reader import fetch_recorte
-
-    return fetch_recorte(cena_sel, ano_sel)
+    """Mantido por compatibilidade — recorte SQL esta desligado."""
+    return pd.DataFrame()
 
 
 def carregar_estado() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame] | None:
-    """PostgreSQL via DATABASE_URL; se o DNS falhar, usa cache sem derrubar a UI."""
-    from Backend.data_loader.db import postgres_ipv4_disponivel, postgres_disponivel, sql_aviso, sql_conectado
-
-    usa_sql = postgres_disponivel() and postgres_ipv4_disponivel()
-    diag("boot", f"cwd={Path.cwd()} postgres={postgres_disponivel()} ipv4={usa_sql}")
+    """Carrega o dashboard pelos parquets (ou CSV local). Sem Supabase."""
+    diag("boot", f"cwd={Path.cwd()} fonte=local")
     raw_path, ind_path, rank_path = cache_paths()
     diag("boot", f"CACHE_DIR={CACHE_DIR.resolve()} disponivel={cache_disponivel()}")
     for path in (raw_path, ind_path, rank_path, CSV_PATH):
         existe = path.exists()
         tamanho = path.stat().st_size if existe else 0
         diag("boot", f"{path.resolve()} existe={existe} bytes={tamanho}")
-    spinner = (
-        "A consultar cti_dados no PostgreSQL..."
-        if usa_sql
-        else "A carregar base (cache ou CSV)..."
-    )
     try:
-        with st.spinner(spinner):
-            diag("boot", f"spinner={spinner!r} a chamar carregar_pipeline")
+        with st.spinner("A carregar base (cache ou CSV)..."):
+            diag("boot", "spinner cache local a chamar carregar_pipeline")
             dados = carregar_pipeline()
             diag(
                 "boot",
-                f"pipeline OK df={len(dados[0]):,} ind={len(dados[1]):,} ranking={len(dados[2]):,} sql={sql_conectado()}",
+                f"pipeline OK df={len(dados[0]):,} ind={len(dados[1]):,} ranking={len(dados[2]):,}",
             )
-        if sql_conectado():
-            from Backend.data_loader.sql_reader import contar_linhas, fonte_label
-
-            st.session_state["cti_fonte_sql"] = True
-            st.session_state.setdefault("cti_active_dataset_name", fonte_label())
-            try:
-                st.session_state.setdefault("cti_row_count", contar_linhas())
-            except Exception as exc:  # noqa: BLE001
-                diag("boot", f"aviso COUNT(*) {type(exc).__name__}: {exc}")
-        else:
-            st.session_state["cti_fonte_sql"] = False
-            if usa_sql:
-                diag("boot", f"aviso: fallback cache ({sql_aviso()})")
-                st.warning(t("boot.sql_fallback"))
-            if dados and not dados[0].empty:
-                st.session_state.setdefault("cti_row_count", len(dados[0]))
+        st.session_state["cti_fonte_sql"] = False
+        if dados and not dados[0].empty:
+            st.session_state.setdefault("cti_row_count", len(dados[0]))
         diag(
             "boot",
             f"estado final df={len(dados[0]):,} ind={len(dados[1]):,} ranking={len(dados[2]):,} "
-            f"sql={sql_conectado()} df_cols={list(dados[0].columns)[:8]}",
+            f"df_cols={list(dados[0].columns)[:8]}",
         )
         return dados
     except MemoryError:
@@ -136,7 +106,6 @@ def carregar_estado() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame] | None:
 
                 dados = load_cached_dashboard()
                 st.session_state["cti_fonte_sql"] = False
-                st.warning(t("boot.sql_fallback"))
                 return dados
         except Exception as cache_exc:  # noqa: BLE001
             diag("boot", f"cache tambem falhou {type(cache_exc).__name__}: {cache_exc}")

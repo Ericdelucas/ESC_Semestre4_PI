@@ -133,24 +133,8 @@ def _carregar_csv(csv: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
 
 
 def prepare_dashboard_data(csv_path: str | Path = CSV_PATH) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """PostgreSQL (DATABASE_URL) tem prioridade; senao parquet/CSV local."""
-    try:
-        from Backend.data_loader.db import postgres_ipv4_disponivel
-        from Backend.data_loader.sql_reader import load_dashboard_from_sql, postgres_disponivel
-
-        if postgres_disponivel() and postgres_ipv4_disponivel():
-            diag("cache", "fonte=PostgreSQL tabela=cti_dados (IPv4 OK)")
-            dados = load_dashboard_from_sql()
-            diag("cache", f"SQL OK df={len(dados[0]):,} ind={len(dados[1]):,} ranking={len(dados[2]):,}")
-            return dados
-        if postgres_disponivel():
-            diag("cache", "Postgres sem IPv4 — a ir directo aos parquets (evita 429)")
-        else:
-            diag("cache", "DATABASE_URL ausente — a saltar SQL")
-    except Exception as exc:  # noqa: BLE001
-        diag("cache", f"aviso: PostgreSQL falhou {type(exc).__name__}: {exc}")
-        diag("cache", "fallback: parquets completos do precompute (nao Cti.csv)")
-
+    """Parquet do precompute; CSV so em ambiente local se o cache faltar."""
+    diag("cache", "fonte=local (parquet/CSV) — Supabase desligado")
     csv = Path(csv_path)
     _log_ficheiros_cache(csv)
     if cache_disponivel():

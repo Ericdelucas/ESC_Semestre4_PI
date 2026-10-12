@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 from urllib.parse import urlparse
 
-from Backend.data_loader.db import ipv4_de, is_postgres_url, preferred_database_url
+from Backend.data_loader.db import USAR_SUPABASE, ipv4_de, is_postgres_url, preferred_database_url
 from Backend.diag import diag, mascarar_url
 
 _BACKEND = Path(__file__).resolve().parents[1]
@@ -85,7 +85,7 @@ def get_engine():
     if _engine is None:
         _DEFAULT_SQLITE.parent.mkdir(parents=True, exist_ok=True)
         url = database_url()
-        if is_postgres_url(url):
+        if USAR_SUPABASE and is_postgres_url(url):
             resolvida = preferred_database_url()
             if resolvida:
                 diag("auth", f"PostgreSQL {mascarar_url(resolvida)}")
@@ -93,7 +93,7 @@ def get_engine():
             else:
                 _usar_sqlite("DATABASE_URL sem DNS resolvivel")
         else:
-            diag("auth", "DATABASE_URL nao e Postgres — SQLite")
+            diag("auth", "SQLite local (Supabase desligado)")
             _bind_engine(_sqlite_url(), postgres=False)
     return _engine
 
