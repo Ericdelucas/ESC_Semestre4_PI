@@ -31,8 +31,23 @@ def _na_render() -> bool:
 
 
 def cache_disponivel() -> bool:
-    _, ind_path, rank_path = cache_paths()
-    return ind_path.exists() and rank_path.exists()
+    raw_path, ind_path, rank_path = cache_paths()
+    return raw_path.exists() and ind_path.exists() and rank_path.exists()
+
+
+def _log_volume(tag: str, df: pd.DataFrame, nome: str) -> None:
+    if df is None or df.empty:
+        diag(tag, f"{nome} vazio")
+        return
+    contas = int(df["CONTA"].nunique()) if "CONTA" in df.columns else 0
+    cenas = int(df["CENA"].nunique()) if "CENA" in df.columns else 0
+    anos = int(df["ano_num"].nunique()) if "ano_num" in df.columns else 0
+    mem = 0
+    try:
+        mem = int(df.memory_usage(deep=True).sum())
+    except Exception:
+        pass
+    diag(tag, f"{nome} linhas={len(df):,} shape={df.shape} contas={contas} cenas={cenas} anos={anos} ram={mem:,}B")
 
 
 def df_longo_de_indicadores(ind: pd.DataFrame) -> pd.DataFrame:
@@ -61,28 +76,29 @@ def df_longo_de_indicadores(ind: pd.DataFrame) -> pd.DataFrame:
 
 
 def load_cached_dashboard() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Le indicadores/ranking e reconstroi df longo. Nao expande o parquet de 1M."""
+    """Le os 3 parquets do precompute — mesma volumetria que o ambiente local."""
     raw_path, ind_path, rank_path = cache_paths()
     if not (ind_path.exists() and rank_path.exists()):
         raise FileNotFoundError(
             f"Cache em falta: {ind_path.name} / {rank_path.name} em {CACHE_DIR}"
         )
+    diag("cache", f"a ler cti_limpo={raw_path} existe={raw_path.exists()} bytes={raw_path.stat().st_size if raw_path.exists() else 0}")
     diag("cache", f"a ler indicadores={ind_path} bytes={ind_path.stat().st_size}")
     diag("cache", f"a ler ranking={rank_path} bytes={rank_path.stat().st_size}")
-    if _na_render():
-        diag("cache", "RENDER: a saltar cti_limpo.parquet (1M linhas)")
-        df = pd.DataFrame(columns=["ANO", "CENA", "CONTA", "VALOR", "ano_num"])
+    if raw_path.exists():
+        df = otimizar_base_cti(pd.read_parquet(raw_path))
+        _log_volume("cache", df, "cti_limpo")
     else:
-        df = pd.read_parquet(raw_path) if raw_path.exists() else pd.DataFrame()
-        if not df.empty:
-            df = otimizar_base_cti(df)
-        diag("cache", f"cti_limpo lido shape={getattr(df, 'shape', None)}")
+        diag("cache", "MISS cti_limpo.parquet — DRE/break-even ficam incompletos")
+        df = pd.DataFrame(columns=["ANO", "CENA", "CONTA", "VALOR", "ano_num"])
     ind = compactar_indicadores(pd.read_parquet(ind_path))
     ranking = compactar_indicadores(pd.read_parquet(rank_path)).copy()
     if "selo" in ranking.columns:
         ranking["selo"] = ranking["selo"].astype("category")
+    _log_volume("cache", ind, "indicadores")
+    diag("cache", f"ranking linhas={len(ranking):,}")
     if df is None or df.empty:
-        diag("cache", "df vazio — a reconstruir a partir de indicadores (valores reais)")
+        diag("cache", "aviso: cti_limpo ausente — reconstrucao parcial pelos indicadores")
         df = df_longo_de_indicadores(ind)
     diag("cache", f"cache final df={len(df):,} ind={len(ind):,} ranking={len(ranking):,}")
     return df, ind, ranking
@@ -129,7 +145,7 @@ def prepare_dashboard_data(csv_path: str | Path = CSV_PATH) -> tuple[pd.DataFram
         diag("cache", "DATABASE_URL ausente — a saltar SQL")
     except Exception as exc:  # noqa: BLE001
         diag("cache", f"aviso: PostgreSQL falhou {type(exc).__name__}: {exc}")
-        diag("cache", "fallback: indicadores/ranking locais (nao Cti.csv)")
+        diag("cache", "fallback: parquets completos do precompute (nao Cti.csv)")
 
     csv = Path(csv_path)
     _log_ficheiros_cache(csv)
