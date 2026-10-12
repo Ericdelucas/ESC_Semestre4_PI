@@ -35,6 +35,7 @@ load_dotenv(_PI4 / ".env")
 if str(_PI4) not in sys.path:
     sys.path.insert(0, str(_PI4))
 
+from Backend.diag import log_ambiente
 from Backend.db import init_db, seed_usuarios, session_scope
 from Backend.db.auth import autenticar, listar_logs, registrar_log, usuario_publico
 from Backend.db.models import Usuario
@@ -87,6 +88,7 @@ def _log_bind_info() -> None:
     _emit(f"PORT publica (Streamlit/Render)={public_port} | API_HOST={api_host} | API_PORT={api_port}")
     _emit(f"BACKEND_URL={os.environ.get('BACKEND_URL')} CTI_API_URL={os.environ.get('CTI_API_URL')}")
     _emit("uvicorn deve escutar apenas em API_HOST:API_PORT, nunca na PORT publica")
+    log_ambiente("fastapi")
 
 
 def _log_rotas(application: FastAPI) -> None:

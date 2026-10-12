@@ -1,4 +1,4 @@
-"""Conexao PostgreSQL (Supabase) via DATABASE_URL, com SSL e reconexao."""
+"""Conexao PostgreSQL (Supabase) via DATABASE_URL, com SSL, IPv4 e reconexao."""
 
 from __future__ import annotations
 
@@ -10,6 +10,8 @@ from urllib.parse import parse_qsl, quote_plus, urlencode, urlparse, urlunparse
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
+
+from Backend.diag import diag, log_ambiente, mascarar_url
 
 _BACKEND = Path(__file__).resolve().parents[1]
 load_dotenv(_BACKEND / ".env")
@@ -57,27 +59,52 @@ def sql_aviso() -> str | None:
 
 
 def _corrigir_host(host: str) -> str:
-    return _HOST_FIXES.get((host or "").lower(), host)
+    corrigido = _HOST_FIXES.get((host or "").lower(), host)
+    if corrigido != host:
+        diag("db", f"host corrigido {host} -> {corrigido}")
+    return corrigido
 
 
 def _project_ref(host: str) -> str:
     nome = (host or "").lower()
     if nome.startswith("db.") and nome.endswith(".supabase.co"):
         return _corrigir_host(nome)[3 : -len(".supabase.co")]
-    if ".pooler.supabase.co" in nome:
-        return ""
     return ""
+
+
+def _listar_ips(host: str, family: int) -> list[str]:
+    try:
+        return sorted({item[4][0] for item in socket.getaddrinfo(host, None, family, socket.SOCK_STREAM)})
+    except socket.gaierror:
+        return []
+
+
+def log_dns(host: str) -> None:
+    ipv4 = _listar_ips(host, socket.AF_INET)
+    ipv6 = _listar_ips(host, socket.AF_INET6)
+    diag("db", f"DNS host={host} IPv4={ipv4 or 'NENHUM'} IPv6={ipv6 or 'NENHUM'}")
+
+
+def ipv4_de(host: str) -> str | None:
+    ips = _listar_ips(host, socket.AF_INET)
+    if ips:
+        diag("db", f"IPv4 escolhido host={host} ip={ips[0]}")
+        return ips[0]
+    diag("db", f"IPv4 ausente host={host}")
+    return None
 
 
 def _host_resolves(host: str) -> bool:
     if not host:
         return False
-    try:
-        socket.getaddrinfo(host, None)
+    log_dns(host)
+    if _listar_ips(host, socket.AF_INET):
         return True
-    except socket.gaierror as exc:
-        print(f"[db] DNS falhou host={host} ({exc})", flush=True)
-        return False
+    if _listar_ips(host, socket.AF_INET6):
+        diag("db", f"host={host} so tem IPv6 — a Render costuma falhar (Network is unreachable)")
+        return True
+    diag("db", f"DNS falhou host={host}")
+    return False
 
 
 def normalize_database_url(raw: str, *, host: str | None = None, port: int | None = None, user: str | None = None) -> str:
@@ -116,6 +143,7 @@ def _urls_ambiente() -> list[str]:
         if variante not in vistos:
             vistos.add(variante)
             saida.append(variante)
+            diag("db", f"candidato env {chave} {mascarar_url(variante)}")
     return saida
 
 
@@ -151,6 +179,7 @@ def candidate_urls() -> list[str]:
         pooler_user = user if "." in user else f"{user}.{ref}"
         for regio in regioes:
             add(normalize_database_url(base, host=f"aws-0-{regio}.pooler.supabase.co", port=6543, user=pooler_user))
+    diag("db", f"total candidatos={len(saida)}")
     return saida
 
 
@@ -159,8 +188,9 @@ def preferred_database_url() -> str:
     for url in candidate_urls():
         host = urlparse(url).hostname or ""
         if _host_resolves(host):
+            diag("db", f"preferred host={host}")
             return url
-    print("[db] aviso: nenhum host PostgreSQL resolveu DNS", flush=True)
+    diag("db", "aviso: nenhum host PostgreSQL resolveu DNS")
     return ""
 
 
@@ -169,12 +199,17 @@ def dispose_engine() -> None:
     if _engine is not None:
         try:
             _engine.dispose()
+            diag("db", "pool libertado")
         except Exception as exc:  # noqa: BLE001
-            print(f"[db] aviso ao libertar pool ({type(exc).__name__}: {exc})", flush=True)
+            diag("db", f"aviso ao libertar pool ({type(exc).__name__}: {exc})")
         _engine = None
 
 
-def _criar_engine(url: str) -> Engine:
+def _criar_engine(url: str, hostaddr: str | None = None) -> Engine:
+    args: dict[str, object] = {"sslmode": "require", "connect_timeout": 12}
+    if hostaddr:
+        args["hostaddr"] = hostaddr
+        diag("db", f"connect_args hostaddr={hostaddr} (forcar IPv4 na Render)")
     return create_engine(
         url,
         future=True,
@@ -183,44 +218,65 @@ def _criar_engine(url: str) -> Engine:
         pool_size=2,
         max_overflow=2,
         pool_timeout=30,
-        connect_args={"sslmode": "require", "connect_timeout": 12},
+        connect_args=args,
+    )
+
+
+def _falha_sem_retry(exc: BaseException) -> bool:
+    texto = str(exc).lower()
+    return any(
+        chave in texto
+        for chave in (
+            "translate host",
+            "name or service not known",
+            "network is unreachable",
+            "resolvivel",
+        )
     )
 
 
 def get_cti_engine() -> Engine:
-    """Tenta host directo; se o DNS falhar, usa o pooler. Marca aviso sem derrubar a app."""
+    """Tenta host directo em IPv4; se falhar, pooler. Nao imprime senha."""
     global _engine, _sql_ok, _sql_aviso, _dns_esgotado
     if _engine is not None:
+        diag("db", "reutilizar engine ja ligada")
         return _engine
     if _dns_esgotado:
+        diag("db", f"a saltar novas tentativas — {_sql_aviso}")
         raise RuntimeError(_sql_aviso or "nenhum host PostgreSQL resolvivel (DNS)")
+    log_ambiente("db")
     ultimo: Exception | None = None
     for url in candidate_urls():
-        host = urlparse(url).hostname or ""
-        porta = urlparse(url).port
+        parsed = urlparse(url)
+        host = parsed.hostname or ""
+        porta = parsed.port
         if not _host_resolves(host):
             continue
-        print(f"[db] a criar engine host={host} port={porta} sslmode=require", flush=True)
-        engine = _criar_engine(url)
+        ipv4 = ipv4_de(host)
+        if not ipv4:
+            diag("db", f"a saltar host={host} sem IPv4 (Render nao fala IPv6)")
+            continue
+        diag("db", f"a criar engine host={host} port={porta} ipv4={ipv4} sslmode=require")
+        engine = _criar_engine(url, hostaddr=ipv4)
         try:
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
             _engine = engine
             _sql_ok = True
             _sql_aviso = None
-            print(f"[db] PostgreSQL OK host={host}", flush=True)
+            diag("db", f"PostgreSQL OK host={host} ipv4={ipv4}")
             return engine
         except Exception as exc:  # noqa: BLE001
             ultimo = exc
-            print(f"[db] ligacao falhou host={host} {type(exc).__name__}: {exc}", flush=True)
+            diag("db", f"ligacao falhou host={host} ipv4={ipv4} {type(exc).__name__}: {exc}")
             try:
                 engine.dispose()
             except Exception:
                 pass
     _sql_ok = False
     _sql_aviso = (
-        f"{type(ultimo).__name__}: {ultimo}" if ultimo else "nenhum host PostgreSQL resolvivel (DNS)"
+        f"{type(ultimo).__name__}: {ultimo}" if ultimo else "nenhum host PostgreSQL com IPv4"
     )
-    _dns_esgotado = "translate host" in _sql_aviso.lower() or "name or service not known" in _sql_aviso.lower() or ultimo is None
-    print(f"[db] aviso: Supabase indisponivel — {_sql_aviso}", flush=True)
+    _dns_esgotado = ultimo is None or _falha_sem_retry(ultimo)
+    diag("db", f"aviso: Supabase indisponivel — {_sql_aviso}")
     raise RuntimeError(_sql_aviso)

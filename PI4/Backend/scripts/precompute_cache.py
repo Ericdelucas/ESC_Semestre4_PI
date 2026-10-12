@@ -19,9 +19,9 @@ def main() -> None:
         raise FileNotFoundError(f"Arquivo base nao encontrado: {CSV_PATH}")
 
     CACHE_DIR.mkdir(exist_ok=True)
-    print(f"[precompute] Lendo base: {CSV_PATH}")
-    df = load_cti_csv(CSV_PATH)
-    print(f"[precompute] Base compactada: {len(df):,} linhas")
+    print(f"[precompute] Lendo CSV local (sem Postgres no build): {CSV_PATH}", flush=True)
+    df = load_cti_csv(CSV_PATH, forcar_ficheiro=True)
+    print(f"[precompute] Base compactada: {len(df):,} linhas", flush=True)
 
     print("[precompute] Calculando indicadores e ranking...")
     ind, ranking = montar_indicadores(df)

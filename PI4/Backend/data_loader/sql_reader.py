@@ -10,6 +10,7 @@ from sqlalchemy.exc import DBAPIError, OperationalError
 
 from Backend.data_loader.csv_reader import otimizar_base_cti
 from Backend.data_loader.db import dispose_engine, get_cti_engine, postgres_disponivel
+from Backend.diag import diag
 
 TABLE = "cti_dados"
 _COUNT_CACHE: int | None = None
@@ -37,19 +38,19 @@ def _executar(sql: str, params: dict | None = None, tentativas: int = 3) -> pd.D
     ultimo: Exception | None = None
     for tentativa in range(1, tentativas + 1):
         try:
+            diag("sql", f"a executar tentativa={tentativa}/{tentativas}")
             engine = get_cti_engine()
             with engine.connect() as conn:
                 return _normalizar_colunas(pd.read_sql(text(sql), conn, params=params or {}))
         except (OperationalError, DBAPIError, RuntimeError) as exc:
             ultimo = exc
-            print(
-                f"[db] consulta falhou tentativa={tentativa}/{tentativas} "
-                f"{type(exc).__name__}: {exc}",
-                flush=True,
+            diag(
+                "sql",
+                f"consulta falhou tentativa={tentativa}/{tentativas} {type(exc).__name__}: {exc}",
             )
             texto = str(exc).lower()
             dispose_engine()
-            if "translate host" in texto or "name or service not known" in texto or "resolvivel" in texto:
+            if any(k in texto for k in ("translate host", "name or service not known", "resolvivel", "network is unreachable")):
                 break
             time.sleep(0.45 * tentativa)
     assert ultimo is not None
@@ -65,10 +66,10 @@ def _escalar(sql: str, params: dict | None = None) -> object:
                 return conn.execute(text(sql), params or {}).scalar()
         except (OperationalError, DBAPIError, RuntimeError) as exc:
             ultimo = exc
-            print(f"[db] escalar falhou tentativa={tentativa} {type(exc).__name__}: {exc}", flush=True)
+            diag("sql", f"escalar falhou tentativa={tentativa} {type(exc).__name__}: {exc}")
             texto = str(exc).lower()
             dispose_engine()
-            if "translate host" in texto or "name or service not known" in texto or "resolvivel" in texto:
+            if any(k in texto for k in ("translate host", "name or service not known", "resolvivel", "network is unreachable")):
                 break
             time.sleep(0.45 * tentativa)
     assert ultimo is not None
@@ -81,7 +82,7 @@ def contar_linhas() -> int:
         return _COUNT_CACHE
     valor = _escalar(f"SELECT COUNT(*) FROM {TABLE}")
     _COUNT_CACHE = int(valor or 0)
-    print(f"[db] COUNT(*) cti_dados={_COUNT_CACHE:,}", flush=True)
+        diag("sql", f"COUNT(*) cti_dados={_COUNT_CACHE:,}")
     return _COUNT_CACHE
 
 
@@ -105,7 +106,7 @@ def listar_contas() -> list[str]:
         return _CONTAS_CACHE
     frame = _executar(f'SELECT DISTINCT "CONTA" FROM {TABLE} WHERE "CONTA" IS NOT NULL')
     _CONTAS_CACHE = [str(v) for v in frame.iloc[:, 0].tolist()] if not frame.empty else []
-    print(f"[db] contas distintas={len(_CONTAS_CACHE)}", flush=True)
+    diag("sql", f"contas distintas={len(_CONTAS_CACHE)}")
     return _CONTAS_CACHE
 
 
@@ -134,7 +135,7 @@ def fetch_recorte(cena_sel: str | None, ano_sel: str | int | None) -> pd.DataFra
             WHERE (:ano IS NULL OR ano_num = :ano)
             GROUP BY "ANO", "CONTA"
         """
-        print(f"[db] recorte agregado cena=Todos ano={ano}", flush=True)
+        diag("sql", f"recorte agregado cena=Todos ano={ano}")
         frame = _executar(sql, {"ano": ano})
     else:
         sql = f"""
@@ -143,9 +144,9 @@ def fetch_recorte(cena_sel: str | None, ano_sel: str | int | None) -> pd.DataFra
             WHERE "CENA" = :cena
               AND (:ano IS NULL OR ano_num = :ano)
         """
-        print(f"[db] recorte cena={cena_sel} ano={ano}", flush=True)
+        diag("sql", f"recorte cena={cena_sel} ano={ano}")
         frame = _executar(sql, {"cena": str(cena_sel), "ano": ano})
-    print(f"[db] recorte linhas={len(frame):,}", flush=True)
+    diag("sql", f"recorte linhas={len(frame):,} cols={list(frame.columns)}")
     return otimizar_base_cti(frame)
 
 
@@ -164,7 +165,7 @@ def fetch_wide_indicadores() -> pd.DataFrame:
             campo_contas.setdefault(campo, []).append(conta)
 
     if not campo_contas:
-        print("[db] nenhuma conta mapeada em cti_dados", flush=True)
+        diag("sql", "nenhuma conta mapeada em cti_dados")
         return pd.DataFrame(columns=["ANO", "ano_num", "CENA"])
 
     selects = ['"ANO"', "ano_num", '"CENA"']
@@ -183,23 +184,20 @@ def fetch_wide_indicadores() -> pd.DataFrame:
         FROM {TABLE}
         GROUP BY "ANO", ano_num, "CENA"
     """
-    print(f"[db] wide SQL campos={len(campo_contas)} contas={sum(len(v) for v in campo_contas.values())}", flush=True)
+    diag("sql", f"wide SQL campos={len(campo_contas)} contas={sum(len(v) for v in campo_contas.values())}")
     frame = _executar(sql, params)
-    print(f"[db] wide linhas={len(frame):,}", flush=True)
+    diag("sql", f"wide linhas={len(frame):,} cols={list(frame.columns)}")
     return frame
 
 
 def load_dashboard_from_sql() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     from Backend.metrics.financial_kpis import montar_indicadores_from_wide
 
-    print("[db] a montar indicadores a partir de cti_dados", flush=True)
+    diag("sql", "a montar indicadores a partir de cti_dados")
     wide = fetch_wide_indicadores()
     ind, ranking = montar_indicadores_from_wide(wide)
     df = fetch_recorte("Todos", "Todos")
-    print(
-        f"[db] dashboard SQL pronto ind={len(ind):,} ranking={len(ranking):,} recorte={len(df):,}",
-        flush=True,
-    )
+    diag("sql", f"dashboard SQL pronto ind={len(ind):,} ranking={len(ranking):,} recorte={len(df):,}")
     return df, ind, ranking
 
 

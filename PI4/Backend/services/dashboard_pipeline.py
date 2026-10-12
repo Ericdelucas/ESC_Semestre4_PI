@@ -7,6 +7,7 @@ from pathlib import Path
 import pandas as pd
 
 from Backend.data_loader import load_cti_csv, otimizar_base_cti
+from Backend.diag import diag
 from Backend.metrics import calcular_kpis_recorte, montar_indicadores, probabilidade_caixa_negativo
 from Backend.metrics.financial_kpis import compactar_indicadores, is_all_scenarios
 
@@ -47,19 +48,19 @@ def load_cached_dashboard() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
 
 
 def _log_ficheiros_cache(csv: Path) -> None:
-    print(f"[cache] CACHE_DIR={CACHE_DIR.resolve()}", flush=True)
-    print(f"[cache] CSV={csv.resolve()} existe={csv.exists()}", flush=True)
+    diag("cache", f"CACHE_DIR={CACHE_DIR.resolve()}")
+    diag("cache", f"CSV={csv.resolve()} existe={csv.exists()}")
     for path in cache_paths():
         if path.exists():
-            print(f"[cache] HIT {path.resolve()} bytes={path.stat().st_size}", flush=True)
+            diag("cache", f"HIT {path.resolve()} bytes={path.stat().st_size}")
         else:
-            print(f"[cache] MISS {path.resolve()}", flush=True)
+            diag("cache", f"MISS {path.resolve()}")
 
 
 def _carregar_csv(csv: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    print(f"[cache] FALLBACK CSV a ler {csv.resolve()}", flush=True)
+    diag("cache", f"FALLBACK CSV a ler {csv.resolve()}")
     df = load_cti_csv(csv, forcar_ficheiro=True)
-    print(f"[cache] CSV carregado linhas={len(df):,}; a calcular indicadores", flush=True)
+    diag("cache", f"CSV carregado linhas={len(df):,}; a calcular indicadores")
     ind, ranking = montar_indicadores(df)
     CACHE_DIR.mkdir(exist_ok=True)
     raw_path, ind_path, rank_path = cache_paths()
@@ -80,19 +81,20 @@ def prepare_dashboard_data(csv_path: str | Path = CSV_PATH) -> tuple[pd.DataFram
         from Backend.data_loader.sql_reader import load_dashboard_from_sql, postgres_disponivel
 
         if postgres_disponivel():
-            print("[cache] fonte=PostgreSQL tabela=cti_dados", flush=True)
+            diag("cache", "fonte=PostgreSQL tabela=cti_dados")
             return load_dashboard_from_sql()
+        diag("cache", "DATABASE_URL ausente — a saltar SQL")
     except Exception as exc:  # noqa: BLE001
-        print(f"[cache] aviso: PostgreSQL falhou {type(exc).__name__}: {exc}", flush=True)
-        print("[cache] a usar parquet/CSV para a interface nao falhar", flush=True)
+        diag("cache", f"aviso: PostgreSQL falhou {type(exc).__name__}: {exc}")
+        diag("cache", "a usar parquet/CSV para a interface nao falhar")
 
     csv = Path(csv_path)
     _log_ficheiros_cache(csv)
     if cache_disponivel():
         try:
-            print("[cache] a ler os 3 parquets", flush=True)
+            diag("cache", "a ler os 3 parquets")
             dados = load_cached_dashboard()
-            print("[cache] parquet OK", flush=True)
+            diag("cache", f"parquet OK df={len(dados[0]):,} ind={len(dados[1]):,} ranking={len(dados[2]):,}")
             return dados
         except Exception as exc:  # noqa: BLE001
             print(f"[cache] leitura parquet falhou {type(exc).__name__}: {exc}", flush=True)

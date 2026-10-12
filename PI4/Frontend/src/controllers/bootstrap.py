@@ -14,6 +14,7 @@ PI4_ROOT = Path(__file__).resolve().parents[3]
 if str(PI4_ROOT) not in sys.path:
     sys.path.insert(0, str(PI4_ROOT))
 
+from Backend.diag import diag  # noqa: E402
 from Backend.services import build_context_metrics, prepare_dashboard_data  # noqa: E402
 from Backend.services.dashboard_pipeline import CACHE_DIR, cache_disponivel, cache_paths  # noqa: E402
 from src.config import CSV_PATH  # noqa: E402
@@ -82,11 +83,13 @@ def carregar_estado() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame] | None:
     from Backend.data_loader.sql_reader import contar_linhas, fonte_label
 
     usa_sql = postgres_disponivel()
-    print(f"[boot] cwd={Path.cwd()} postgres={usa_sql}", flush=True)
+    diag("boot", f"cwd={Path.cwd()} postgres={usa_sql}")
     raw_path, ind_path, rank_path = cache_paths()
-    print(f"[boot] CACHE_DIR={CACHE_DIR.resolve()} disponivel={cache_disponivel()}", flush=True)
+    diag("boot", f"CACHE_DIR={CACHE_DIR.resolve()} disponivel={cache_disponivel()}")
     for path in (raw_path, ind_path, rank_path, CSV_PATH):
-        print(f"[boot] {path.resolve()} existe={path.exists()}", flush=True)
+        existe = path.exists()
+        tamanho = path.stat().st_size if existe else 0
+        diag("boot", f"{path.resolve()} existe={existe} bytes={tamanho}")
     spinner = (
         "A consultar cti_dados no PostgreSQL..."
         if usa_sql
@@ -94,26 +97,31 @@ def carregar_estado() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame] | None:
     )
     try:
         with st.spinner(spinner):
+            diag("boot", f"spinner={spinner!r} a chamar carregar_pipeline")
             dados = carregar_pipeline()
+            diag(
+                "boot",
+                f"pipeline OK df={len(dados[0]):,} ind={len(dados[1]):,} ranking={len(dados[2]):,} sql={sql_conectado()}",
+            )
         if sql_conectado():
             st.session_state["cti_fonte_sql"] = True
             st.session_state.setdefault("cti_active_dataset_name", fonte_label())
             try:
                 st.session_state.setdefault("cti_row_count", contar_linhas())
             except Exception as exc:  # noqa: BLE001
-                print(f"[boot] aviso COUNT(*) {type(exc).__name__}: {exc}", flush=True)
+                diag("boot", f"aviso COUNT(*) {type(exc).__name__}: {exc}")
         else:
             st.session_state["cti_fonte_sql"] = False
             if usa_sql:
-                print(f"[boot] aviso: fallback cache ({sql_aviso()})", flush=True)
+                diag("boot", f"aviso: fallback cache ({sql_aviso()})")
                 st.warning(t("boot.sql_fallback"))
         return dados
     except MemoryError:
-        print("[boot] MemoryError no carregamento", flush=True)
+        diag("boot", "MemoryError no carregamento")
         st.error(t("boot.memory"))
         return None
     except Exception as exc:  # noqa: BLE001
-        print(f"[boot] aviso {type(exc).__name__}: {exc} — a tentar cache", flush=True)
+        diag("boot", f"aviso {type(exc).__name__}: {exc} — a tentar cache")
         try:
             if cache_disponivel():
                 from Backend.services.dashboard_pipeline import load_cached_dashboard
@@ -123,7 +131,7 @@ def carregar_estado() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame] | None:
                 st.warning(t("boot.sql_fallback"))
                 return dados
         except Exception as cache_exc:  # noqa: BLE001
-            print(f"[boot] cache tambem falhou {type(cache_exc).__name__}: {cache_exc}", flush=True)
+            diag("boot", f"cache tambem falhou {type(cache_exc).__name__}: {cache_exc}")
         st.error(t("boot.prep_error", err=f"{type(exc).__name__}: {exc}"))
         return None
 

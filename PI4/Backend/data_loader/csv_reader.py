@@ -67,6 +67,7 @@ def load_cti_csv(path: Path | str | None = None, *, forcar_ficheiro: bool = Fals
                 print("[csv] DATABASE_URL — recorte agregado em cti_dados (sem ficheiro)", flush=True)
                 return fetch_recorte("Todos", "Todos")
             if sql_conectado():
+                print("[csv] SQL ja ligado — recorte agregado", flush=True)
                 return fetch_recorte("Todos", "Todos")
         except Exception as exc:  # noqa: BLE001
             print(f"[csv] aviso: SQL indisponivel ({type(exc).__name__}: {exc}); a tentar ficheiro", flush=True)
