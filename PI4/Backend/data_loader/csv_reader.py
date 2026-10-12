@@ -56,17 +56,20 @@ def _preparar_chunk(chunk: pd.DataFrame) -> pd.DataFrame:
     return chunk[["ANO", "CENA", "CONTA", "VALOR", "ano_num"]]
 
 
-def load_cti_csv(path: Path | str | None = None) -> pd.DataFrame:
+def load_cti_csv(path: Path | str | None = None, *, forcar_ficheiro: bool = False) -> pd.DataFrame:
     """Le a base: PostgreSQL (DATABASE_URL) ou Cti.csv em chunks."""
-    try:
-        from Backend.data_loader.db import postgres_disponivel
-        from Backend.data_loader.sql_reader import fetch_recorte
+    if not forcar_ficheiro:
+        try:
+            from Backend.data_loader.db import postgres_disponivel, sql_conectado
+            from Backend.data_loader.sql_reader import fetch_recorte
 
-        if postgres_disponivel():
-            print("[csv] DATABASE_URL — recorte agregado em cti_dados (sem ficheiro)", flush=True)
-            return fetch_recorte("Todos", "Todos")
-    except Exception as exc:  # noqa: BLE001
-        print(f"[csv] SQL indisponivel ({type(exc).__name__}: {exc}); a tentar ficheiro", flush=True)
+            if postgres_disponivel():
+                print("[csv] DATABASE_URL — recorte agregado em cti_dados (sem ficheiro)", flush=True)
+                return fetch_recorte("Todos", "Todos")
+            if sql_conectado():
+                return fetch_recorte("Todos", "Todos")
+        except Exception as exc:  # noqa: BLE001
+            print(f"[csv] aviso: SQL indisponivel ({type(exc).__name__}: {exc}); a tentar ficheiro", flush=True)
 
     csv_path = Path(path) if path is not None else CSV_PATH
     CACHE_DIR.mkdir(exist_ok=True)
