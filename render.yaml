@@ -1,0 +1,49 @@
+# Blueprint da Render: um Web Service unificado (FastAPI interno + Streamlit em $PORT).
+# Start Command no painel: ./start.sh
+# Variáveis secretas (SMTP, GOOGLE_API_KEY) ficam no painel.
+
+databases: []
+
+services:
+  - type: web
+    name: cti
+    runtime: python
+    plan: free
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt && chmod +x start.sh
+    startCommand: ./start.sh
+    healthCheckPath: /_stcore/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: RENDER
+        value: "true"
+      - key: API_HOST
+        value: "127.0.0.1"
+      - key: API_PORT
+        value: "8081"
+      - key: BACKEND_URL
+        value: "http://127.0.0.1:8081"
+      - key: CTI_API_URL
+        value: "http://127.0.0.1:8081"
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_POOLER
+        sync: false
+      - key: SUPABASE_REGION
+        sync: false
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SMTP_SERVER
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: EMAIL_REMETENTE
+        sync: false
+      - key: EMAIL_ALERTA_CEO
+        sync: false

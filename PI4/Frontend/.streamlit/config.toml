@@ -3,10 +3,10 @@ gatherUsageStats = false
 
 [server]
 headless = true
-
-[theme]
-base = "dark"
-primaryColor = "#1F4E45"
-backgroundColor = "#0E1117"
-secondaryBackgroundColor = "#262730"
-textColor = "#FAFAFA"
+address = "0.0.0.0"
+enableCORS = false
+enableXsrfProtection = false
+fileWatcherType = "none"
+runOnSave = false
+enableWebsocketCompression = false
+maxMessageSize = 50

@@ -1,0 +1,146 @@
+﻿"""Comparacoes das personas CEO e CFO."""
+
+from __future__ import annotations
+
+import pandas as pd
+import plotly.graph_objects as go
+import streamlit as st
+
+from Backend.metrics.column_resolver import series_by_alias
+from src.config import COR_VERMELHO
+from src.config.i18n import t
+from src.models.formatting import cena_rotulo, fmt_dias, fmt_rs
+
+from .common import _break_even_df, _dre, _safe_div
+from .comparison_helpers import _metric_base
+from .styles import SERIES_STYLES
+
+
+def _col(base: pd.DataFrame, *aliases: str) -> pd.Series:
+    return series_by_alias(base, aliases)
+
+
+def _ceo_cmp(df: pd.DataFrame, cena: str) -> pd.DataFrame:
+    dre = _dre(df, cena)
+    be = _break_even_df(df, cena)
+    return dre.merge(be[["ano_num", "Break-Even"]], on="ano_num", how="left")
+
+
+def _render_cmp_ceo(df: pd.DataFrame, cenarios: list[tuple[str, str]]) -> None:
+    dados = {rotulo: _ceo_cmp(df, cena) for rotulo, cena in cenarios}
+    metricas = {}
+    for rotulo, base in dados.items():
+        receita = _col(base, "Receita Líquida", "Receita Liquida")
+        ebitda = _col(base, "EBITDA")
+        metricas[rotulo] = {
+            "receita": receita.sum(),
+            "ebitda": ebitda.sum(),
+            "margem": _safe_div(ebitda.sum(), receita.sum()),
+            "break_even": _col(base, "Break-Even").mean(),
+        }
+
+    comp = [rotulo for rotulo, _ in cenarios if rotulo != "A"]
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        _metric_base(t("cmp.ceo.rev_acc"), metricas["A"]["receita"], [(r, metricas[r]["receita"]) for r in comp], fmt_rs)
+    with c2:
+        margem_a = metricas["A"]["margem"]
+        margem_a = 0.0 if pd.isna(margem_a) else margem_a
+        _metric_base(
+            t("cmp.ceo.ebitda_acc"),
+            metricas["A"]["ebitda"],
+            [(r, metricas[r]["ebitda"]) for r in comp],
+            fmt_rs,
+            extra=t("cmp.ceo.margin_a", pct=margem_a * 100),
+        )
+    with c3:
+        _metric_base(t("cmp.ceo.be_avg"), metricas["A"]["break_even"], [(r, metricas[r]["break_even"]) for r in comp], fmt_rs, maior_melhor=False)
+
+    metric_options = {t("cmp.ceo.metric.rev"): "receita", "EBITDA": "ebitda"}
+    selected_metric_labels = st.multiselect(
+        t("cmp.ceo.metrics"),
+        options=list(metric_options),
+        default=list(metric_options),
+        key=f"cmp_ceo_metricas_receita_ebitda_{t('cmp.ceo.metric.rev')}",
+    )
+    selected_metrics = {metric_options[label] for label in selected_metric_labels}
+
+    series_options = {
+        "A": t("cmp.scene.a").rstrip(":"),
+        "B": t("cmp.scene.b").rstrip(":"),
+        "C": t("cmp.scene.c").split("/")[0].strip().rstrip(":"),
+    }
+    available_series = [(rotulo, series_options.get(rotulo, t("cmp.series", rotulo=rotulo))) for rotulo, _ in cenarios]
+    selected_series_labels = st.multiselect(
+        t("cmp.show"),
+        options=[label for _, label in available_series],
+        default=[label for _, label in available_series],
+        key=f"cmp_ceo_series_receita_ebitda_{t('cmp.scene.a')}",
+    )
+    selected_series = {rotulo for rotulo, label in available_series if label in selected_series_labels}
+
+    fig = go.Figure()
+    for rotulo, cena in cenarios:
+        if rotulo not in selected_series:
+            continue
+        estilo = SERIES_STYLES[rotulo]
+        base = dados[rotulo]
+        nome = t("cmp.series_named", rotulo=rotulo, cena=cena_rotulo(cena))
+        if "receita" in selected_metrics:
+            fig.add_scatter(
+                x=base["ano_num"],
+                y=_col(base, "Receita Líquida", "Receita Liquida"),
+                mode="lines+markers",
+                name=t("cmp.series_metric", nome=nome, metric=t("ceo.axis.revenue")),
+                line={"color": estilo["color"], "dash": estilo["dash"]},
+            )
+        if "ebitda" in selected_metrics:
+            fig.add_scatter(
+                x=base["ano_num"],
+                y=_col(base, "EBITDA"),
+                mode="lines+markers",
+                name=t("cmp.series_metric", nome=nome, metric="EBITDA"),
+                line={"color": estilo["color"], "dash": estilo["dash"], "width": 2},
+            )
+    fig.update_layout(title=t("cmp.ceo.rev_ebitda"), xaxis_title=t("chart.year"), yaxis_title="R$", hovermode="x unified")
+    fig.update_xaxes(tickmode="linear", tick0=1, dtick=1)
+    if fig.data:
+        st.plotly_chart(fig, width="stretch", theme="streamlit")
+    else:
+        st.info(t("cmp.empty_metric"))
+
+
+def _render_cmp_cfo(ind: pd.DataFrame, cenarios: list[tuple[str, str]]) -> None:
+    dados = {rotulo: ind[ind["CENA"] == cena].sort_values("ano_num") for rotulo, cena in cenarios}
+    metricas = {
+        rotulo: {"ncg": base["NCG"].mean(), "tesouraria": base["Saldo_Tesouraria"].min(), "ciclo": base["Ciclo_Financeiro"].mean()}
+        for rotulo, base in dados.items()
+    }
+    comp = [rotulo for rotulo, _ in cenarios if rotulo != "A"]
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        _metric_base(t("cmp.cfo.ncg"), metricas["A"]["ncg"], [(r, metricas[r]["ncg"]) for r in comp], fmt_rs, maior_melhor=False)
+    with c2:
+        _metric_base(t("cmp.cfo.treasury"), metricas["A"]["tesouraria"], [(r, metricas[r]["tesouraria"]) for r in comp], fmt_rs)
+    with c3:
+        _metric_base(t("cmp.cfo.cycle"), metricas["A"]["ciclo"], [(r, metricas[r]["ciclo"]) for r in comp], fmt_dias, maior_melhor=False)
+
+    fig = go.Figure()
+    for rotulo, cena in cenarios:
+        estilo = SERIES_STYLES[rotulo]
+        base = dados[rotulo]
+        fig.add_scatter(
+            x=base["ano_num"],
+            y=base["Saldo_Tesouraria"],
+            mode="lines",
+            fill="tozeroy",
+            fillcolor=estilo["fill"],
+            name=t("cmp.series_named", rotulo=rotulo, cena=cena_rotulo(cena)),
+            line={"color": estilo["color"], "dash": estilo["dash"]},
+        )
+    fig.add_hline(y=0, line_dash="dash", line_color=COR_VERMELHO, annotation_text=t("cmp.cfo.zero"))
+    fig.update_layout(title=t("cmp.cfo.stress"), xaxis_title=t("chart.year"), yaxis_title="R$", hovermode="x unified")
+    fig.update_xaxes(tickmode="linear", tick0=1, dtick=1)
+    st.plotly_chart(fig, width="stretch", theme="streamlit")
+

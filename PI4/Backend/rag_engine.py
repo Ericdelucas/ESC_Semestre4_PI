@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -19,8 +20,8 @@ _FRONTEND = BACKEND_DIR.parent / "Frontend"
 if str(_FRONTEND) not in sys.path:
     sys.path.insert(0, str(_FRONTEND))
 
-from src.models.analytics import montar_indicadores
-from src.models.loaders import load_cti_csv
+from Backend.data_loader import load_cti_csv
+from Backend.metrics import montar_indicadores
 from src.models.rag_engine import RagEngine, resolve_api_key
 
 
@@ -35,6 +36,7 @@ class CTIRag:
         self,
         message: str,
         history: list[dict[str, str]] | None = None,
+        user_role: str | None = None,
     ) -> tuple[str, list[str]]:
         resposta, fontes = self._engine.ask(
             message,
@@ -43,6 +45,7 @@ class CTIRag:
             api_key=resolve_api_key(),
             extra_context="",
             cena_sel=None,
+            user_role=user_role,
         )
         return resposta, fontes
 
@@ -50,8 +53,10 @@ class CTIRag:
 def _carregar_ranking() -> pd.DataFrame:
     CACHE_DIR.mkdir(exist_ok=True)
     cache = CACHE_DIR / "ranking.parquet"
-    if cache.exists() and CSV_PATH.exists() and cache.stat().st_mtime >= CSV_PATH.stat().st_mtime:
+    if cache.exists():
         return pd.read_parquet(cache)
+    if os.environ.get("RENDER"):
+        return pd.DataFrame(columns=["CENA", "selo", "caixa_ano12"])
     df = load_cti_csv(CSV_PATH)
     _ind, ranking = montar_indicadores(df)
     return ranking
