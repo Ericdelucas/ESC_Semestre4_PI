@@ -28,21 +28,19 @@ if str(PI4_ROOT) not in sys.path:
 from Backend.diag import diag, log_ambiente, log_ia
 from Backend.metrics import montar_indicadores
 from src.controllers.auth import (
-    AUTH_KEY,
-    EMAIL_ALERTA_FLAG,
-    EMAIL_KEY,
-    FUNCAO_KEY,
-    ROLE_KEY,
     flush_login_email_toast,
     is_authenticated,
+    render_login,
     render_logout_button,
 )
+from src.config.i18n import t
 from src.controllers.bootstrap import carregar_estado, montar_contexto
 from src.controllers.data_input import has_custom_data, render_data_input
-from src.controllers.modals import ensure_modal_state, is_chat_open, is_relatorio_open
+from src.controllers.modals import ensure_modal_state, is_relatorio_open
 from src.controllers.navigation import render_pagina
 from src.controllers.page_setup import configure_page
 from src.controllers.sidebar import render_language_selector, render_persona, render_sidebar
+from src.controllers.stability import preparar_troca_vista
 from src.views.ai_assistant.panel import render_floating_chat
 
 log_ia("app.py carregado — Streamlit e assistente de IA activos")
@@ -63,18 +61,6 @@ def montar_indicadores_customizados(df):
     return cache["value"]
 
 
-def _bypass_login_temporario() -> None:
-    """TEMPORARIO: abre o dashboard como CEO sem passar pelo formulario."""
-    st.session_state[AUTH_KEY] = True
-    st.session_state[ROLE_KEY] = "ceo"
-    st.session_state[EMAIL_KEY] = "ericdelucass@gmail.com"
-    st.session_state[FUNCAO_KEY] = "CEO"
-    st.session_state[EMAIL_ALERTA_FLAG] = True
-    st.session_state.setdefault("persona_id", "ceo")
-    diag("app", "BYPASS LOGIN ativo — sessao CEO forcada")
-    logging.info("[app] BYPASS LOGIN ativo — sessao CEO forcada")
-
-
 def main() -> None:
     log_ia(
         f"RERUN Streamlit main() chat_aberto={st.session_state.get('chat_ia_open')} "
@@ -92,13 +78,12 @@ def main() -> None:
     if not st.session_state.get("_cti_env_logged"):
         log_ambiente("app")
         st.session_state["_cti_env_logged"] = True
-    _bypass_login_temporario()
-    diag("app", "arranque direto do painel CTI")
-    logging.info("[app] arranque direto do painel CTI")
     ensure_modal_state()
     render_language_selector()
     if not is_authenticated():
-        print("[app] bypass falhou — sem ecran de login neste modo", flush=True)
+        diag("app", "ecran de login — a API so sera chamada no clique Entrar")
+        logging.info("[app] ecran de login — a API so sera chamada no clique Entrar")
+        render_login()
         st.stop()
     flush_login_email_toast()
     render_logout_button()
@@ -132,26 +117,31 @@ def main() -> None:
     ano_sel, cena_sel, anos, cenas = render_sidebar(df, ind, n_cenarios)
     diag("app", f"filtros ano={ano_sel} cena={cena_sel} n_cenarios={n_cenarios} fonte=local")
     persona = render_persona()
+    if preparar_troca_vista(persona, ano_sel, cena_sel):
+        diag("app", f"troca leve persona={persona} ano={ano_sel} cena={cena_sel}")
+        st.info(t("ui.loading_view", persona=t(f"persona.{persona}")))
+        if not is_relatorio_open():
+            render_floating_chat()
+        st.rerun()
     diag("app", f"persona={persona} a montar contexto e pagina")
-    ctx = montar_contexto(
-        df, ind, ranking, ano_sel=ano_sel, cena_sel=cena_sel, anos=anos, cenas=cenas, persona=persona
-    )
-    render_pagina(ctx)
-    st.session_state["cti_chat_ctx"] = {
-        "n_cenarios": ctx.n_cenarios,
-        "p_ruina": ctx.p_ruina,
-        "cena_sel": ctx.cena_sel,
-        "ano_sel": ctx.ano_sel,
-        "ano_enc": ctx.ano_enc,
-        "persona": ctx.persona,
-        "k": ctx.k.to_dict() if hasattr(ctx.k, "to_dict") else {},
-        "ranking": ctx.ranking,
-    }
-    log_ia(
-        f"contexto leve do assistente gravado persona={ctx.persona} "
-        f"ranking={len(ctx.ranking)} k={len(st.session_state['cti_chat_ctx']['k'])} "
-        f"SEM df longo chat_aberto={is_chat_open()}"
-    )
+    try:
+        ctx = montar_contexto(
+            df, ind, ranking, ano_sel=ano_sel, cena_sel=cena_sel, anos=anos, cenas=cenas, persona=persona
+        )
+        render_pagina(ctx)
+        st.session_state["cti_chat_ctx"] = {
+            "n_cenarios": ctx.n_cenarios,
+            "p_ruina": ctx.p_ruina,
+            "cena_sel": ctx.cena_sel,
+            "ano_sel": ctx.ano_sel,
+            "ano_enc": ctx.ano_enc,
+            "persona": ctx.persona,
+            "k": ctx.k.to_dict() if hasattr(ctx.k, "to_dict") else {},
+            "ranking": None,
+        }
+    except Exception as exc:  # noqa: BLE001
+        diag("app", f"pagina FALHOU {type(exc).__name__}: {exc}")
+        st.error(t("ui.render_error", label=t(f"persona.{persona}"), detail=f"{type(exc).__name__}: {exc}"))
     if not is_relatorio_open():
         render_floating_chat()
 

@@ -113,6 +113,23 @@ def carregar_estado() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame] | None:
         return None
 
 
+@st.cache_data(show_spinner=False)
+def _metricas_padrao(cena_sel: str, ano_sel: str) -> tuple[int, float, pd.DataFrame, pd.DataFrame, pd.Series]:
+    _, ind, ranking = carregar_pipeline()
+    ano: str | int = "Todos" if ano_sel == "Todos" else int(ano_sel) if str(ano_sel).isdigit() else ano_sel
+    return build_context_metrics(ind, ranking, cena_sel=cena_sel, ano_sel=ano)
+
+
+@st.cache_data(show_spinner=False)
+def kpis_padrao(persona: str, cena_sel: str, ano_sel: str):
+    from src.controllers.kpis import kpis_por_persona
+
+    df, _ind, ranking = carregar_pipeline()
+    _ano_enc, _p_ruina, _foco, _foco_ano, k = _metricas_padrao(cena_sel, ano_sel)
+    ano: str | int = "Todos" if ano_sel == "Todos" else int(ano_sel) if str(ano_sel).isdigit() else ano_sel
+    return kpis_por_persona(persona, k, ranking, df, cena_sel, ano)
+
+
 def montar_contexto(
     df: pd.DataFrame,
     ind: pd.DataFrame,
@@ -125,18 +142,27 @@ def montar_contexto(
     persona: str,
 ) -> AppContext:
     """Monta contexto visual usando metricas calculadas pelo backend."""
-    ranking = ranking.copy() if isinstance(ranking, pd.DataFrame) else pd.DataFrame()
+    if not isinstance(ranking, pd.DataFrame):
+        ranking = pd.DataFrame()
     if "CENA" not in ranking.columns:
+        ranking = ranking.copy()
         ranking["CENA"] = pd.Series(dtype="object")
-    ranking["rotulo"] = ranking["CENA"].map(cena_rotulo)
+    if "rotulo" not in ranking.columns:
+        ranking = ranking.copy()
+        ranking["rotulo"] = ranking["CENA"].map(cena_rotulo)
     mapa_rotulo = dict(zip(ranking["rotulo"], ranking["CENA"], strict=False))
     n_cenarios = int(ranking["CENA"].nunique()) if not ranking.empty else 0
-    ano_enc, p_ruina, foco, foco_ano, k = build_context_metrics(
-        ind,
-        ranking,
-        cena_sel=cena_sel,
-        ano_sel=ano_sel,
-    )
+    from src.controllers.data_input import has_custom_data
+
+    if not has_custom_data():
+        ano_enc, p_ruina, foco, foco_ano, k = _metricas_padrao(str(cena_sel), str(ano_sel))
+    else:
+        ano_enc, p_ruina, foco, foco_ano, k = build_context_metrics(
+            ind,
+            ranking,
+            cena_sel=cena_sel,
+            ano_sel=ano_sel,
+        )
     return AppContext(
         df=df,
         ind=ind,
@@ -176,7 +202,13 @@ def render_cabecalho(ctx: AppContext) -> None:
     if is_all_scenarios(ctx.cena_sel):
         st.write(t("header.avg_scenes"))
     st.write(t("header.avg_all") if ctx.ano_sel == "Todos" else t("header.avg_year", ano=ctx.ano_sel))
-    render_kpi_row(kpis_por_persona(ctx.persona, ctx.k, ctx.ranking, ctx.df, ctx.cena_sel, ctx.ano_sel))
+    from src.controllers.data_input import has_custom_data
+
+    if has_custom_data():
+        itens = kpis_por_persona(ctx.persona, ctx.k, ctx.ranking, ctx.df, ctx.cena_sel, ctx.ano_sel)
+    else:
+        itens = kpis_padrao(ctx.persona, str(ctx.cena_sel), str(ctx.ano_sel))
+    render_kpi_row(itens)
     st.info(t(f"persona.blurb.{ctx.persona}"))
     if ctx.persona == "cfo":
         st.caption(texto_ncg(ctx.k["NCG"]) if "NCG" in ctx.k.index else "")

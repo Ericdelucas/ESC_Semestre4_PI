@@ -144,9 +144,16 @@ def render_analises(ctx: AppContext) -> None:
     st.space("small")
     safe_render(t("ui.audit_base"), expander_auditoria_base, ctx.df, ctx.cena_sel, ctx.ano_sel)
     if nav_key in custom_by_key:
-        view_persona_tabs.render_custom_analysis(ctx.df, custom_by_key[nav_key], ctx.cena_sel, ctx.ano_sel)
-    else:
-        renderers[nav_key](ctx)
+        safe_render(
+            t(f"nav.{nav_key}") if nav_key in NAV_KEYS else nav_key,
+            view_persona_tabs.render_custom_analysis,
+            ctx.df,
+            custom_by_key[nav_key],
+            ctx.cena_sel,
+            ctx.ano_sel,
+        )
+    elif nav_key in renderers:
+        safe_render(t(f"nav.{nav_key}") if nav_key in NAV_KEYS else nav_key, renderers[nav_key], ctx)
     st.caption(t("app.footer"))
 
 

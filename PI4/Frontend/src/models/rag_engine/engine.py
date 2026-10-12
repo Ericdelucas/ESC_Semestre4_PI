@@ -118,7 +118,7 @@ def _trechos_rag(contexto: str, termos: tuple[str, ...]) -> list[str]:
 
 _GUIAS_METRICAS: dict[str, dict[str, object]] = {
     "ebitda": {
-        "aliases": ("ebitda",),
+        "aliases": ("ebitda operacional", "ebitda",),
         "termos": ("ebitda", "margem ebitda", "receita liquida"),
         "chaves": ("EBITDA", "Margem EBITDA", "Receita Liquida", "Receita"),
         "pt": (
@@ -144,7 +144,7 @@ _GUIAS_METRICAS: dict[str, dict[str, object]] = {
         ),
     },
     "roic": {
-        "aliases": ("roic",),
+        "aliases": ("retorno sobre o capital investido", "retorno sobre o capital", "roic",),
         "termos": ("roic", "nopat", "capital investido", "wacc", "eva"),
         "chaves": ("ROIC", "Capital Investido", "NOPAT", "WACC", "EVA"),
         "pt": (
@@ -172,7 +172,7 @@ _GUIAS_METRICAS: dict[str, dict[str, object]] = {
         ),
     },
     "capex": {
-        "aliases": ("capex", "investimento", "investimentos"),
+        "aliases": ("capex investido", "capex", "infraestrutura"),
         "termos": ("capex", "investimentos", "infraestrutura", "flu - investimentos"),
         "chaves": ("CAPEX", "Investimentos", "CAPEX Acumulado", "Infraestrutura"),
         "pt": (
@@ -197,7 +197,7 @@ _GUIAS_METRICAS: dict[str, dict[str, object]] = {
         ),
     },
     "ncg": {
-        "aliases": ("ncg",),
+        "aliases": ("necessidade de capital de giro", "capital de giro", "ncg"),
         "termos": ("ncg", "capital de giro", "tesouraria"),
         "chaves": ("NCG",),
         "pt": (
@@ -217,34 +217,50 @@ _GUIAS_METRICAS: dict[str, dict[str, object]] = {
             "Would you like me to open CFO / Working Capital to compare NCG and treasury in the current slice?",
         ),
     },
-    "liquidez": {
-        "aliases": ("liquidez", "solvencia", "solvência"),
-        "termos": ("liquidez", "solvencia", "ativo circulante", "passivo circulante"),
-        "chaves": ("Liquidez corrente", "Liquidez Geral"),
+    "liquidez_geral": {
+        "aliases": ("liquidez geral", "solvencia de longo prazo", "solvencia"),
+        "termos": ("liquidez geral", "solvencia", "exigivel a longo prazo"),
+        "chaves": ("Liquidez Geral",),
         "pt": (
-            "Liquidez mede a capacidade de honrar obrigações. A liquidez corrente olha o curto prazo; "
-            "a liquidez geral inclui ativos e passivos de longo prazo e avalia solvência da concessão.",
-            "Liquidez corrente = Ativo Circulante / Passivo Circulante. "
-            "Liquidez geral = (Ativo Circulante + Realizável a Longo Prazo) / (Passivo Circulante + Exigível a Longo Prazo).",
-            "Valor abaixo de 1,0x sinaliza aperto. Para o Poder Concedente, a liquidez geral indica se a "
-            "concessão consegue cumprir obrigações contratuais ao longo do horizonte.",
-            "Liquidez corrente aparece em CFO > Faixa de Risco. Solvência de longo prazo fica em "
-            "Poder Concedente > Solvência & Liquidez Geral, com linha de referência mínima.",
-            "Quer que eu abra a aba de liquidez correspondente ao recorte que você está analisando?",
+            "A liquidez geral mede a solvência de longo prazo da concessão: se os ativos cobrem "
+            "as obrigações de curto e de longo prazo.",
+            "Fórmula: Liquidez Geral = (Ativo Circulante + Realizável a Longo Prazo) / "
+            "(Passivo Circulante + Exigível a Longo Prazo).",
+            "Valor abaixo de 1,0x sinaliza aperto estrutural. Para o Poder Concedente, é o indicador "
+            "de capacidade de cumprir obrigações contratuais ao longo do horizonte.",
+            "A visualização está em Poder Concedente > Solvência & Liquidez Geral, com linha de referência mínima.",
+            "Posso abrir Poder Concedente / Solvência & Liquidez Geral para você ver a trajetória no recorte atual.",
         ),
         "en": (
-            "Liquidity measures the ability to meet obligations. Current liquidity is short-term; "
-            "general liquidity includes long-term items and assesses concession solvency.",
-            "Current liquidity = current assets / current liabilities. "
+            "General liquidity measures long-term solvency: whether assets cover short- and long-term obligations.",
             "General liquidity = (current assets + long-term receivables) / (current liabilities + long-term payables).",
-            "A reading below 1.0x signals tightness. For the Granting Authority, general liquidity shows "
+            "A reading below 1.0x signals structural tightness. For the Granting Authority, it shows "
             "whether contractual obligations can be met over the horizon.",
-            "Current liquidity is in CFO > Risk Band. Long-term solvency is in Granting Authority > Solvency & General Liquidity.",
-            "Would you like me to open the liquidity tab that matches the slice you are reviewing?",
+            "The chart is in Granting Authority > Solvency & General Liquidity, with a minimum reference line.",
+            "Would you like me to open Granting Authority / Solvency & General Liquidity in the current slice?",
+        ),
+    },
+    "liquidez_corrente": {
+        "aliases": ("liquidez corrente", "liquidez"),
+        "termos": ("liquidez corrente", "ativo circulante", "passivo circulante"),
+        "chaves": ("Liquidez corrente",),
+        "pt": (
+            "A liquidez corrente (LC) mede a capacidade de honrar obrigações de curto prazo.",
+            "Fórmula: LC = Ativo Circulante / Passivo Circulante.",
+            "Valor abaixo de 1,0x sinaliza aperto de caixa no curto prazo; acima de 1,0x indica folga corrente.",
+            "A visualização está em CFO > Faixa de Risco, no enquadramento da liquidez corrente por cenário.",
+            "Posso abrir CFO / Faixa de Risco para você ver a liquidez corrente no recorte atual.",
+        ),
+        "en": (
+            "Current liquidity (CR) measures the ability to meet short-term obligations.",
+            "Current liquidity = current assets / current liabilities.",
+            "A reading below 1.0x signals a short-term cash squeeze; above 1.0x shows current slack.",
+            "The view is CFO > Risk Band, with current-liquidity framing by scenario.",
+            "Would you like me to open CFO / Risk Band to review current liquidity in the current slice?",
         ),
     },
     "ciclo": {
-        "aliases": ("ciclo", "pmr", "pme", "pmp"),
+        "aliases": ("ciclo financeiro", "prazos e ciclo", "ciclo", "pmr", "pme", "pmp"),
         "termos": ("ciclo financeiro", "pmr", "pme", "pmp"),
         "chaves": ("Ciclo Financeiro",),
         "pt": (
@@ -285,7 +301,7 @@ _GUIAS_METRICAS: dict[str, dict[str, object]] = {
         ),
     },
     "break": {
-        "aliases": ("break", "equilibrio", "equilíbrio", "breakeven"),
+        "aliases": ("ponto de equilibrio", "break-even", "breakeven", "break even", "equilibrio"),
         "termos": ("break-even", "ponto de equilibrio", "margem de seguranca", "margem de contribuicao"),
         "chaves": ("Ponto de equilibrio", "Margem de seguranca", "Margem de contribuicao", "Break-Even"),
         "pt": (
@@ -328,7 +344,7 @@ _GUIAS_METRICAS: dict[str, dict[str, object]] = {
         ),
     },
     "eva": {
-        "aliases": ("eva",),
+        "aliases": ("criacao de valor economico", "valor economico", "eva"),
         "termos": ("eva", "valor economico", "nopat", "wacc"),
         "chaves": ("EVA", "ROIC", "WACC"),
         "pt": (
@@ -366,7 +382,7 @@ _GUIAS_METRICAS: dict[str, dict[str, object]] = {
         ),
     },
     "ltv": {
-        "aliases": ("ltv", "cac"),
+        "aliases": ("eficiencia comercial", "ltv / cac", "ltv/cac", "ltv", "cac"),
         "termos": ("ltv", "cac", "eficiencia comercial"),
         "chaves": ("LTV", "CAC"),
         "pt": (
@@ -385,14 +401,90 @@ _GUIAS_METRICAS: dict[str, dict[str, object]] = {
             "Would you like me to open CEO / LTV/CAC Efficiency to review the ratio in the current slice?",
         ),
     },
+    "lucro": {
+        "aliases": ("margem liquida", "lucro liquido", "lucro líquido"),
+        "termos": ("lucro liquido", "margem liquida"),
+        "chaves": ("Lucro Liquido", "Margem Liquida"),
+        "pt": (
+            "O lucro líquido é o resultado final da DRE após custos, despesas, juros e impostos. "
+            "A margem líquida é o lucro líquido dividido pela receita líquida.",
+            "Fórmula: Margem Líquida = Lucro Líquido / Receita Líquida.",
+            "Margem líquida maior indica que a concessão converte receita em resultado para os acionistas. "
+            "Queda de margem com receita estável aponta custos, OPEX ou encargos financeiros.",
+            "A visualização está em CEO > DRE Operacional, com lucro líquido e margens por ano.",
+            "Posso abrir CEO / DRE Operacional para você ver lucro líquido e margem líquida no recorte atual.",
+        ),
+        "en": (
+            "Net income is the final P&L result after costs, expenses, interest and taxes. "
+            "Net margin is net income divided by net revenue.",
+            "Net margin = Net Income / Net Revenue.",
+            "A higher net margin means the concession converts revenue into shareholder result. "
+            "A falling margin with stable revenue points to costs, OPEX or financial charges.",
+            "The view is CEO > Operating DRE, with net income and margins by year.",
+            "Would you like me to open CEO / Operating DRE to review net income and net margin in the current slice?",
+        ),
+    },
+    "ativos": {
+        "aliases": ("base de ativos reversiveis", "ativos reversiveis", "ativo total", "ativo reversivel"),
+        "termos": ("ativos reversiveis", "ativo total", "imobilizado", "intangivel"),
+        "chaves": ("Ativo Total", "Imobilizado", "Intangivel"),
+        "pt": (
+            "A base de ativos reversíveis é o conjunto de ativos da concessão que retornam ao Poder Concedente "
+            "ao fim do contrato — em geral imobilizado, intangível e outorga, lidos no ativo total.",
+            "No CTI, a leitura usa o ativo total e as contas de imobilizado, intangível e outorga do balanço.",
+            "Para o concedente, a base mostra se o investimento em infraestrutura está materializado no balanço "
+            "e se o ativo reversível acompanha o plano da concessão.",
+            "A visualização está em Poder Concedente > Ativos Reversíveis.",
+            "Posso abrir Poder Concedente / Ativos Reversíveis para você ver a base no recorte atual.",
+        ),
+        "en": (
+            "The reversible asset base is the concession assets that revert to the Granting Authority at contract end — "
+            "typically PP&E, intangibles and the grant, read through total assets.",
+            "In CTI, the reading uses total assets plus PP&E, intangibles and grant accounts from the balance sheet.",
+            "For the grantor, the base shows whether infrastructure investment sits on the balance sheet "
+            "and whether reversible assets follow the concession plan.",
+            "The view is Granting Authority > Reversible Assets.",
+            "Would you like me to open Granting Authority / Reversible Assets in the current slice?",
+        ),
+    },
+}
+
+_GUIA_NAV = {
+    "ebitda": "ceo_dre",
+    "roic": "acionistas_retorno",
+    "capex": "concedente_capex",
+    "ncg": "capital_giro",
+    "liquidez_geral": "concedente_solvencia",
+    "liquidez_corrente": "faixa",
+    "ciclo": "prazos",
+    "tesouraria": "capital_giro",
+    "break": "ceo_break_even",
+    "wacc": "acionistas_retorno",
+    "eva": "acionistas_eva",
+    "opex": "ceo_dre",
+    "ltv": "ceo_ltv_cac",
+    "lucro": "ceo_dre",
+    "ativos": "concedente_ativos",
 }
 
 
 def _escolher_guia(pergunta: str) -> dict[str, object] | None:
-    for guia in _GUIAS_METRICAS.values():
-        if any(alias in pergunta for alias in guia["aliases"]):
-            return guia
-    return None
+    melhor: dict[str, object] | None = None
+    melhor_id = ""
+    melhor_len = -1
+    for gid, guia in _GUIAS_METRICAS.items():
+        for alias in guia["aliases"]:
+            alvo = _normalizar_texto(str(alias))
+            if alvo and alvo in pergunta and len(alvo) > melhor_len:
+                melhor = guia
+                melhor_id = gid
+                melhor_len = len(alvo)
+    if melhor is None:
+        return None
+    extra = dict(melhor)
+    extra["id"] = melhor_id
+    extra["nav_key"] = _GUIA_NAV.get(melhor_id, "")
+    return extra
 
 
 def _resposta_sem_llm(question: str, extra_context: str, lang: str) -> str:
