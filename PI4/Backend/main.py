@@ -104,9 +104,15 @@ def _log_rotas(application: FastAPI) -> None:
 async def lifespan(_app: FastAPI):
     _log_bind_info()
     _emit("lifespan: init_db()")
-    init_db()
+    try:
+        init_db()
+    except Exception as exc:  # noqa: BLE001
+        _emit(f"aviso init_db ({type(exc).__name__}: {exc}) — API continua")
     _emit("lifespan: seed_usuarios()")
-    seed_usuarios()
+    try:
+        seed_usuarios()
+    except Exception as exc:  # noqa: BLE001
+        _emit(f"aviso seed_usuarios ({type(exc).__name__}: {exc}) — API continua")
     _log_rotas(_app)
     _emit("lifespan: API pronta a aceitar pedidos")
     yield
