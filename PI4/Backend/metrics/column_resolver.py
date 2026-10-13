@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from collections.abc import Iterable
+from functools import lru_cache
 
 import pandas as pd
 
@@ -65,7 +66,7 @@ def resolve_account_name(value: object, official_names: Iterable[str] | None = N
     for sufixo in (" r", " rs", " brl", " pct"):
         if key.endswith(sufixo):
             candidatos.append(key[: -len(sufixo)].strip())
-    oficiais = {normalize_label(nome): str(nome) for nome in official_names or []}
+    oficiais = _official_name_index(tuple(str(nome) for nome in official_names or []))
     amigos = sorted(FRIENDLY_CONTAS.items(), key=lambda item: -len(item[0]))
     for candidato in candidatos:
         if candidato in oficiais:
@@ -80,9 +81,20 @@ def resolve_account_name(value: object, official_names: Iterable[str] | None = N
 
 def normalize_label(text: object) -> str:
     """Normaliza texto removendo acentos, simbolos e espacos redundantes."""
+    return _normalize_label_text(str(text))
+
+
+@lru_cache(maxsize=4096)
+def _normalize_label_text(text: str) -> str:
+    """Reutiliza nomes repetidos num cache limitado, sem reter DataFrames."""
     repaired = repair_mojibake(text).casefold()
     ascii_text = unicodedata.normalize("NFKD", repaired).encode("ascii", "ignore").decode("ascii")
     return re.sub(r"[^a-z0-9]+", " ", ascii_text).strip()
+
+
+@lru_cache(maxsize=64)
+def _official_name_index(names: tuple[str, ...]) -> dict[str, str]:
+    return {normalize_label(name): name for name in names}
 
 
 def resolve_column(df: pd.DataFrame, aliases: Iterable[str], *, required: bool = True) -> str | None:
