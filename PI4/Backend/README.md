@@ -23,11 +23,12 @@ Os comandos de arranque e os endpoints existentes foram preservados.
 Com as dependencias de `requirements.txt` instaladas, a partir desta pasta:
 
 ```sh
-python -m uvicorn main:app --host 127.0.0.1 --port 8081
+python -m uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
 O comando `uvicorn Backend.main:app` continua disponivel a partir de `PI4/`.
-A configuracao de producao da Render permanece nos ficheiros de deploy existentes.
+Na Render, use `uvicorn main:app --host 0.0.0.0 --port $PORT` nesta pasta.
+O blueprint da raiz publica dois servicos; consulte `../README.md`.
 
 ## Verificacao de contratos
 

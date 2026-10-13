@@ -1,9 +1,10 @@
-# Blueprint legado (pasta Backend). Preferir o render.yaml na raiz do repositório.
+# Blueprint apenas da API. Para os dois servicos, use render.yaml na raiz.
 services:
   - type: web
     name: cti-api
     runtime: python
     plan: free
+    rootDir: PI4/Backend
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/v1/health

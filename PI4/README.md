@@ -94,7 +94,37 @@ py -m streamlit run Frontend/app.py
 
 ## Deploy na Render
 
-Na raiz do repositório (`ESC_Semestre4_PI`) estão `requirements.txt`, `Procfile`, `start.sh` e `render.yaml`.
+O `render.yaml` na raiz define dois Web Services independentes, ambos com
+**Root Directory `PI4`**. O Frontend ainda importa modulos e dados de `Backend`
+para os calculos locais; por isso, nao use `PI4/Frontend` como Root Directory.
+A Render nao disponibiliza arquivos fora do Root Directory:
+https://render.com/docs/monorepo-support
 
-- **Um serviço só (recomendado):** Root Directory vazio, Build `pip install -r requirements.txt && chmod +x start.sh`, Start `./start.sh`. O script sobe a API em `127.0.0.1:8081` e o Streamlit na `$PORT` pública.
-- Preencha no painel: `GOOGLE_API_KEY`, SMTP e demais secrets. Não commite `.env`.
+| Servico | Build Command | Start Command |
+| --- | --- | --- |
+| Backend | `pip install -r Backend/requirements.txt` | `cd Backend && uvicorn main:app --host 0.0.0.0 --port $PORT` |
+| Frontend | `pip install -r Frontend/requirements.txt && python Backend/scripts/precompute_cache.py` | `cd Frontend && streamlit run app.py --server.port $PORT --server.address 0.0.0.0` |
+
+O precompute gera o cache no proprio servico do Frontend, sem depender do disco
+do Backend. Os arquivos `Cti.csv`, `documentos/` e `cache/` usam caminhos baseados
+em `__file__`, independentes do diretorio de execucao.
+
+No painel Render, configure:
+
+- **Frontend:** `BACKEND_URL=https://<seu-backend>.onrender.com`.
+  `API_URL` e `CTI_API_URL` tambem sao aceitos, nessa ordem de prioridade apos
+  `BACKEND_URL`. Sem configuracao, usa `http://localhost:8000`.
+- **Backend:** `FRONTEND_URL=https://<seu-frontend>.onrender.com`.
+  `CORS_ORIGINS` aceita outras origens separadas por virgula. O CORS existente
+  continua aceitando HTTPS em `*.onrender.com` e origens locais.
+- Configure as variaveis de banco, IA e SMTP necessarias no servico que as usa.
+  Nao commite `.env`. Variaveis do painel tem prioridade sobre os arquivos `.env`.
+
+Para publicar somente a API com Root Directory `PI4/Backend`, use Build
+`pip install -r requirements.txt` e Start
+`uvicorn main:app --host 0.0.0.0 --port $PORT`.
+O `Backend/Procfile` e o `Backend/render.yaml` documentam essa alternativa.
+
+Verifique o Backend em `/api/v1/health` e o Frontend em `/_stcore/health`.
+O `start.sh` e o `Procfile` da raiz permanecem como alternativa legada de
+servico unificado; nao sao usados pelo novo blueprint.

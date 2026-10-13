@@ -40,9 +40,11 @@ _LOCAL_ORIGINS = [
 def _cors_origins() -> list[str]:
     extras = [item.strip() for item in os.environ.get("CORS_ORIGINS", "").split(",") if item.strip()]
     normalized: list[str] = []
-    for origin in extras + _LOCAL_ORIGINS:
+    frontend_url = (os.environ.get("FRONTEND_URL") or "").strip()
+    for origin in extras + [frontend_url] + _LOCAL_ORIGINS:
         if origin and "://" not in origin:
             origin = f"https://{origin}"
+        origin = origin.rstrip("/")
         if origin and origin not in normalized:
             normalized.append(origin)
     render_url = (os.environ.get("RENDER_EXTERNAL_URL") or "").rstrip("/")
@@ -60,13 +62,9 @@ def _cors_origin_regex() -> str:
 
 def _log_bind_info() -> None:
     public_port = os.environ.get("PORT", "<nao definido>")
-    api_host = os.environ.get("API_HOST", "127.0.0.1")
-    api_port = os.environ.get("API_PORT", "8081")
     _emit(f"processo API a iniciar. cwd={Path.cwd()}")
-    _emit(f"RENDER={os.environ.get('RENDER')} RENDER_EXTERNAL_URL={os.environ.get('RENDER_EXTERNAL_URL')}")
-    _emit(f"PORT publica (Streamlit/Render)={public_port} | API_HOST={api_host} | API_PORT={api_port}")
-    _emit(f"BACKEND_URL={os.environ.get('BACKEND_URL')} CTI_API_URL={os.environ.get('CTI_API_URL')}")
-    _emit("uvicorn deve escutar apenas em API_HOST:API_PORT, nunca na PORT publica")
+    _emit(f"PORT publica (Render)={public_port}")
+    _emit("Web Service Backend: uvicorn main:app --host 0.0.0.0 --port $PORT (cwd=Backend)")
     log_ambiente("fastapi")
 
 
