@@ -28,4 +28,4 @@ app.include_router(email_router)
 app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(chat_router)
-configure_application(app)
+configure_application(app)  # CORS: FRONTEND_URL, CORS_ORIGINS e dominios *.onrender.com.
