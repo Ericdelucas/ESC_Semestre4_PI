@@ -51,7 +51,7 @@ ALL_FILTER_SENTINELS = frozenset({"__all__", "Todos", "All", "All Scenarios", No
 def _valores_unicos(frame: pd.DataFrame, coluna: str) -> list:
     if frame is None or frame.empty or coluna not in frame.columns:
         return []
-    return [valor for valor in frame[coluna].dropna().tolist() if valor is not None and str(valor).strip() not in {"", "None", "nan"}]
+    return [valor for valor in frame[coluna].dropna().drop_duplicates().tolist() if valor is not None and str(valor).strip() not in {"", "None", "nan"}]
 
 
 def _eh_filtro_todos(valor: object) -> bool:

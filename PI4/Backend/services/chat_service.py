@@ -1,17 +1,28 @@
 """Motor RAG e historico de sessoes partilhado pelos pedidos de chat."""
 from __future__ import annotations
 
+from threading import Lock
+from typing import TYPE_CHECKING
+
 from Backend.diag import log_ia
-from Backend.rag_engine import CTIRag
+
+if TYPE_CHECKING:
+    from Backend.rag_engine import CTIRag
 
 _engine: CTIRag | None = None
+_engine_lock = Lock()
 _sessoes: dict[str, list[dict[str, str]]] = {}
 
 
 def _rag() -> CTIRag:
     global _engine
     if _engine is None:
-        _engine = CTIRag()
+        with _engine_lock:
+            if _engine is None:
+                # O RAG e as suas dependencias so sao carregados no primeiro chat.
+                from Backend.rag_engine import CTIRag
+
+                _engine = CTIRag()
     return _engine
 
 
