@@ -2,6 +2,8 @@
 
 Painel financeiro CTI. O dashboard fica em `Frontend` e a API do chat em `Backend`.
 
+A [documentação técnica da Entrega 2](DOCUMENTATION.md) apresenta arquitetura, pipeline de dados, fórmulas dos indicadores e limitações da infraestrutura.
+
 ## Passo a passo para iniciar
 
 Abra dois terminais. Os comandos abaixo partem da pasta `PI4`.
