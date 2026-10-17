@@ -62,6 +62,7 @@ class ApiContractTests(unittest.TestCase):
             '/api/v1/email/status': {'get'},
             '/api/v1/email/riscos': {'get'},
             '/api/v1/email/varrer-risco': {'post'},
+            '/api/v1/relatorio/memorial': {'post'},
         }
         paths = app.openapi()['paths']
         self.assertEqual({path: set(operations) for path, operations in paths.items()}, expected)

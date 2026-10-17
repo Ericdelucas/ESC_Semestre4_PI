@@ -75,6 +75,21 @@ def _enviar_local(destinatario: str, assunto: str, html: str) -> dict[str, objec
 
 
 def _toast_resposta_email(payload: dict[str, object], status: int, sucesso: str, falha: str) -> None:
+    if status == 200 and payload.get("checks") and not payload.get("email_error"):
+        if payload.get("skipped") == "debounce":
+            entrega = "Varredura concluída. Novo e-mail bloqueado pelo intervalo de repetição (45 s por padrão)."
+        elif payload.get("skipped"):
+            entrega = "Varredura concluída. E-mail já enviado nesta sessão de login."
+        elif payload.get("sent"):
+            entrega = "Varredura concluída. E-mail consolidado enviado."
+        elif not payload.get("critical"):
+            entrega = "Varredura concluída sem gatilhos críticos. Nenhum e-mail enviado."
+        else:
+            entrega = "Varredura concluída. Nenhum e-mail enviado."
+        texto = entrega + "\n\n" + str(payload.get("summary") or "")
+        st.session_state[EMAIL_DIAG_KEY] = {"ok": True, "text": texto, "checks": payload["checks"], "risk_payload": payload}
+        st.toast(entrega, icon="✅")
+        return
     if _eh_smtp_ausente(payload):
         toast_smtp()
         st.session_state[EMAIL_DIAG_KEY] = {"ok": False, "text": TOAST_SMTP}
@@ -95,6 +110,30 @@ def _render_diagnostico() -> None:
         return
     if dados.get("ok"):
         st.success(str(dados["text"]))
+        if dados.get("checks"):
+            st.dataframe(
+                [{"Indicador": item.get("label"), "Valor": item.get("value"),
+                  "Limiar": item.get("threshold"), "Estado": item.get("status")}
+                 for item in dados["checks"]],
+                hide_index=True,
+                use_container_width=True,
+            )
+        if dados.get("risk_payload"):
+            if st.button("Gerar relatório da varredura (PDF)", key="ops_risk_pdf_generate"):
+                from Backend.services.risk_report import gerar_relatorio_riscos
+
+                try:
+                    dados["pdf"] = gerar_relatorio_riscos(dados["risk_payload"])
+                except Exception as exc:
+                    st.error(f"Não foi possível gerar o relatório: {exc}")
+            if dados.get("pdf"):
+                st.download_button(
+                    "Baixar relatório de riscos",
+                    data=dados["pdf"],
+                    file_name="Relatorio_Riscos_Financeiros_CTI.pdf",
+                    mime="application/pdf",
+                    key="ops_risk_pdf_download",
+                )
         return
     st.error(str(dados["text"]))
 
@@ -152,12 +191,7 @@ def render_ops_menu() -> None:
                         status = 200
                     if status == 200 and payload.get("ok"):
                         guardar_varredura(payload)
-                    if status == 200 and payload.get("skipped"):
-                        st.toast("Alerta consolidado ja enviado. Novo disparo bloqueado pelo debounce.", icon="⚠️")
-                    elif status == 200 and payload.get("ok") is not False and not payload.get("critical"):
-                        st.toast(t("ops.risk.clear"), icon="✅")
-                    else:
-                        _toast_resposta_email(payload, status, t("ops.risk.sent"), t("ops.risk.fail"))
+                    _toast_resposta_email(payload, status, t("ops.risk.sent"), t("ops.risk.fail"))
                 if st.button(t("ops.risk.simulate"), key="ops_risk_simulate", use_container_width=True):
                     payload, status = post_json(
                         "/api/v1/email/varrer-risco",

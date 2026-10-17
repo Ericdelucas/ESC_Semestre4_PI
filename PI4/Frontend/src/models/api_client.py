@@ -145,3 +145,28 @@ def get_json(
     return get_api_client().request_json(
         "GET", caminho, params=params, timeout=timeout
     )
+
+
+def post_pdf(caminho: str, payload: dict[str, object], timeout: float = 120) -> bytes:
+    """Recebe um arquivo binário da API e propaga o diagnóstico de falha ao painel."""
+    client = get_api_client()
+    req = urllib.request.Request(
+        client._url(caminho),
+        data=json.dumps(payload).encode('utf-8'),
+        method='POST',
+        headers={'Content-Type': 'application/json', 'Accept': 'application/pdf'},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            data = response.read()
+            if response.headers.get_content_type() != 'application/pdf' or not data.startswith(b'%PDF-'):
+                raise ValueError('A API não devolveu um PDF válido.')
+            return data
+    except urllib.error.HTTPError as exc:
+        try:
+            detail = _ler(exc).get('detail', str(exc.reason))
+        except (ValueError, OSError):
+            detail = str(exc.reason)
+        raise RuntimeError(f'Erro na API ({exc.code}): {detail}') from exc
+    except (OSError, TimeoutError) as exc:
+        raise RuntimeError('Não foi possível obter o memorial. Confira se o backend está ativo e tente novamente.') from exc

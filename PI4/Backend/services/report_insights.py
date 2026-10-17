@@ -266,20 +266,15 @@ def build_block_insights(df: pd.DataFrame, scenario: str, *, use_llm: bool = Tru
 
 
 def merge_notes_with_insights(notes: dict[str, str] | None, insights: dict[str, str]) -> dict[str, str]:
-    """Usa o texto do usuario quando ele acrescenta parecer; senão, o insight do Assistente CTI."""
+    """Texto customizado substitui integralmente o automático do mesmo bloco."""
     notes = notes or {}
     merged: dict[str, str] = {}
     for key, insight in insights.items():
         user = str(notes.get(key) or "").strip()
-        if not user or user == insight:
-            merged[key] = insight
-            continue
-        if user in insight or insight in user:
-            merged[key] = user
-            continue
-        merged[key] = f"{user}\n\n{insight}"
+        # Campo vazio ou padrão intacto mantém o parecer automático.
+        merged[key] = insight if not user or user == str(insight).strip() else user
     for key, user in notes.items():
-        merged.setdefault(key, str(user))
+        merged.setdefault(key, str(user or "").strip())
     return merged
 
 

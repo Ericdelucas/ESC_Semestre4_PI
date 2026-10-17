@@ -144,9 +144,9 @@ def _sumario_executivo(checks: list[dict[str, object]], metricas: dict[str, obje
     return base + leitura + extra
 
 
-def varrer_riscos() -> dict[str, object]:
+def varrer_riscos(ranking: pd.DataFrame | None = None) -> dict[str, object]:
     """Avalia todas as metricas primeiro e devolve um payload unico."""
-    ranking = _ranking()
+    ranking = _ranking() if ranking is None else ranking
     caixa = pd.to_numeric(ranking.get("caixa_ano12"), errors="coerce") if not ranking.empty else pd.Series(dtype=float)
     liquidez = pd.to_numeric(ranking.get("liquidez"), errors="coerce") if not ranking.empty else pd.Series(dtype=float)
     p_ruina = probabilidade_caixa_negativo(ranking)
@@ -244,6 +244,7 @@ def varrer_riscos() -> dict[str, object]:
         "share_liquidez_baixa": round(share_liq_baixa, 2),
         "share_selo_ruina": round(share_selo, 2),
         "limiar_ruina": ruina_limiar,
+        "limiar_liquidez": liq_limiar,
     }
     resumo = _sumario_executivo(checks, metricas, False)
     return {

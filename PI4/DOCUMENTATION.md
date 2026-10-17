@@ -494,6 +494,35 @@ O health check `/api/v1/health` retorna informações de banco e RAG; o corpo po
 
 Para a banca, recomenda-se apresentar saída dos testes no ambiente da entrega, versão do CSV, execução do precompute, captura das telas e respostas de saúde dos serviços efetivamente publicados. O enunciado integral e a rubrica da Entrega 2 não estão incorporados ao repositório nesta documentação; a cobertura aqui corresponde às seções solicitadas, sem certificar critérios externos não fornecidos.
 
+### 5.3. Memorial técnico dinâmico via API
+
+O modal **Criar Relatório** oferece **Memorial técnico CTI**. O botão envia
+os filtros atuais para `POST /api/v1/relatorio/memorial`, registrado em
+`Backend/routers/report_router.py`. O corpo recebe `scenario` (identificador
+ou `Todos`) e `year` (inteiro ou `null` para todos os anos). Filtros sem dados
+retornam HTTP 422; indisponibilidade do pipeline retorna HTTP 503.
+
+`Backend/services/memorial_report.py` usa a base retornada pelo pipeline a
+cada requisição e executa `build_dre`, `build_break_even`,
+`calculate_ltv_cac`, `build_financial_statement` e `varrer_riscos(ranking)`.
+O serviço devolve bytes PDF em memória, com cabeçalho de download e
+`Cache-Control: no-store`. O cliente binário `post_pdf` disponibiliza esses
+mesmos bytes por `st.download_button`. O PDF anterior é descartado quando
+os filtros mudam. Não há envio SMTP nessa operação.
+
+O documento segue o layout do modelo do professor: cabeçalho, dados base,
+blocos por seção, tabelas CAMPO/FÓRMULA/RESULTADO, verificações numéricas e
+fórmulas em fonte monospace. O modelo não fornece dados ao cálculo.
+As seções financeiras respeitam cenário/ano; risco usa explicitamente o
+universo consolidado de cenários. O estado favorável/crítico decorre dos
+limiares do CTI. A API utiliza o snapshot local do pipeline; recalcular a
+requisição não sincroniza dados externos nem regenera cache atualizado.
+Bases importadas apenas no Frontend permanecem no fluxo executivo local.
+
+O novo endpoint requer os dados analíticos no Backend, incluindo cache na
+Render. Os testes em `Backend/tests/test_memorial_api.py` cobrem os filtros,
+a resposta binária, erros de fonte e a conexão do botão ao endpoint.
+
 ## 6. Referências externas
 
 As regras de infraestrutura mencionadas estão vinculadas às fontes primárias junto às afirmações. Referências consultadas em 13 de outubro de 2026:

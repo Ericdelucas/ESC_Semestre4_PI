@@ -353,8 +353,53 @@ def render_dialog(cena_sel: str, ano_sel: str | int, cenas: list[str] | None = N
     _dialog()
 
 
+def _render_memorial(cena_sel: str, ano_sel: str | int) -> None:
+    from src.models.api_client import post_pdf
+    from src.controllers.data_input import has_custom_data
+
+    st.caption("Memorial de cálculo com os filtros atuais, gerado pela API CTI.")
+    st.write(f"Cenário: {cena_sel} • Ano: {ano_sel}")
+    st.caption("DRE, cenários, risco e solvência. O risco consolidado considera todos os cenários.")
+    if has_custom_data():
+        st.warning("O memorial da API usa a base CTI do servidor. Selecione a Base Padrão (Original) para gerar com os mesmos dados do dashboard. Para dados importados, utilize o relatório executivo personalizado.")
+        return
+    year = None if str(ano_sel) in {"Todos", "__all__", "All", "all", "None", ""} else int(ano_sel)
+    filters = {"scenario": str(cena_sel), "year": year}
+    snapshot = st.session_state.get("memorial_api_download")
+    if snapshot and snapshot["filters"] != filters:
+        st.session_state.pop("memorial_api_download", None)
+        snapshot = None
+    if st.button("Gerar Memorial CTI (PDF)", key="memorial_api_generate", type="primary"):
+        st.session_state.pop("memorial_api_download", None)
+        snapshot = None
+        try:
+            with st.spinner("Calculando indicadores e gerando memorial no backend…"):
+                data = post_pdf("/api/v1/relatorio/memorial", filters)
+            snapshot = {"filters": filters, "bytes": data}
+            st.session_state["memorial_api_download"] = snapshot
+        except (RuntimeError, ValueError) as exc:
+            st.error(str(exc))
+    if snapshot:
+        st.success("Memorial gerado com os filtros acima. Pronto para download.")
+        st.download_button(
+            "Baixar Memorial CTI",
+            data=snapshot["bytes"],
+            file_name="Memorial_Calculo_CTI.pdf",
+            mime="application/pdf",
+            key="memorial_api_download_button",
+        )
+
+
 def _render_report_body(cena_sel: str, ano_sel: str | int, cenas: list[str] | None) -> None:
-    _ = ano_sel
+    report_type = st.radio(
+        "Tipo de relatório",
+        ["Memorial técnico CTI", "Executivo personalizado"],
+        key="report_document_type",
+        horizontal=True,
+    )
+    if report_type == "Memorial técnico CTI":
+        _render_memorial(cena_sel, ano_sel)
+        return
     st.caption(t("report.caption"))
 
     try:

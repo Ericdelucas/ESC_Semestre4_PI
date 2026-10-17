@@ -533,7 +533,7 @@ def insight_card(title: str, text: str) -> Paragraph:
     """Parecer em paragrafo (parte de linha). Nao usa Table unsplittable."""
     _ = title
     styles = _styles()
-    return Paragraph(_clean_text(clip_insight(text)), styles["insight"])
+    return Paragraph(_clean_text(text), styles["insight"])
 
 
 def section_block(title: str, insight: str, *flowables: Any) -> list[Any]:

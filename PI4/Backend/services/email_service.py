@@ -25,6 +25,7 @@ _SMTP_KEYS = (
     "SMTP_USER",
     "SMTP_PASSWORD",
     "EMAIL_REMETENTE",
+    "EMAIL_SENDER",
     "EMAIL_ALERTA_CEO",
 )
 
@@ -103,7 +104,12 @@ def smtp_configurado() -> bool:
 
 
 def _remetente() -> str:
-    return (os.environ.get("EMAIL_REMETENTE") or os.environ.get("SMTP_USER") or "").strip()
+    return (
+        os.environ.get("EMAIL_SENDER")
+        or os.environ.get("EMAIL_REMETENTE")
+        or os.environ.get("SMTP_USER")
+        or ""
+    ).strip()
 
 
 def validar_email(endereco: str) -> str:
