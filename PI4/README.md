@@ -197,6 +197,12 @@ O precompute gera o cache no proprio servico do Frontend, sem depender do disco
 do Backend. Os arquivos `Cti.csv`, `documentos/` e `cache/` usam caminhos baseados
 em `__file__`, independentes do diretorio de execucao.
 
+Para o servico legado com Root Directory vazio (raiz do repositorio), o Build
+Command `pip install -r requirements.txt && python scripts/precompute_cache.py`
+tambem funciona. A entrada `scripts/precompute_cache.py` encaminha para
+`PI4/Backend/scripts/precompute_cache.py`; o Start Command legado e `./start.sh`.
+Nao misture os caminhos desse modo com os da tabela acima, que parte de `PI4`.
+
 No painel Render, configure:
 
 - **Frontend:** `BACKEND_URL=https://<seu-backend>.onrender.com`.
