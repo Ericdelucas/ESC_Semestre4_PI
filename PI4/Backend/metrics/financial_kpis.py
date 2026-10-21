@@ -345,10 +345,14 @@ def _wide(df: pd.DataFrame, cena: str, contas: list[str]) -> pd.DataFrame:
 
 
 def _conta(dados: pd.DataFrame, nome: str) -> pd.Series:
-    return pd.to_numeric(dados.get(nome, 0.0), errors="coerce").fillna(0.0)
+    """Resolve nomes equivalentes e sempre devolve uma serie alinhada ao recorte."""
+    return _conta_alias(dados, nome)
 
 
 def _conta_alias(dados: pd.DataFrame, *nomes: str) -> pd.Series:
+    for nome in nomes:
+        if nome in dados.columns:
+            return pd.to_numeric(dados[nome], errors="coerce").fillna(0.0)
     index = {normalize_label(col): col for col in dados.columns}
     for nome in nomes:
         col = index.get(normalize_label(nome))
