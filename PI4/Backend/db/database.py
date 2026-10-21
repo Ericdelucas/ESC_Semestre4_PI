@@ -21,7 +21,6 @@ Base = declarative_base()
 _engine = None
 _SessionLocal = None
 
-
 def database_url() -> str:
     return (os.environ.get("DATABASE_URL") or f"sqlite:///{_DEFAULT_SQLITE.as_posix()}").strip().strip("\"'")
 

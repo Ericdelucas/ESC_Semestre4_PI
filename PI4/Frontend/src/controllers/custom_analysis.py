@@ -47,6 +47,8 @@ def custom_key(analysis: dict[str, str]) -> str:
 
 
 def custom_label(analysis: dict[str, str]) -> str:
+    if analysis.get("kind") == "formula":
+        return analysis["label"] + " · KPI"
     metric = analysis.get("metric", "")
     chart = analysis.get("chart_type", "")
     chart_key = CHART_TYPE_I18N.get(chart, chart)
@@ -60,7 +62,12 @@ def insert_custom_tabs(nav_keys: list[str], custom_keys: list[str]) -> list[str]
     return [*nav_keys[:idx], *custom_keys, *nav_keys[idx:]]
 
 
-def _render_custom_analysis_form(persona: str) -> None:
+def _render_custom_analysis_form(persona: str, df=None, ind=None, cena="Todos", ano="Todos") -> None:
+    mode = st.radio("Tipo de análise", ["Métrica existente", "Construtor de Fórmula"], key=f"custom_mode_{persona}")
+    if mode == "Construtor de Fórmula":
+        from src.views.persona_tabs.formula_builder import render_formula_builder
+        render_formula_builder(persona, df, ind, cena, ano)
+        return
     metric_names = sorted(FINANCIAL_METRICS_DICT)
     metric_name = st.selectbox(
         t("custom.metric"),
@@ -89,16 +96,22 @@ def _render_custom_analysis_form(persona: str) -> None:
         st.rerun()
 
 
-def render_custom_analysis_dialog(persona: str) -> None:
+def render_custom_analysis_dialog(persona: str, df=None, ind=None, cena="Todos", ano="Todos") -> None:
     flag = f"show_custom_analysis_dialog_{persona}"
     if not st.session_state.get(flag):
         return
+    st.markdown("""<style>
+    [data-testid="stDialog"] [role="dialog"] {
+        max-height: 90vh !important;
+        overflow-y: auto !important;
+    }
+    </style>""", unsafe_allow_html=True)
     if hasattr(st, "dialog"):
-        @st.dialog(t("custom.dialog"))
+        @st.dialog(t("custom.dialog"), width="large")
         def _dialog() -> None:
-            _render_custom_analysis_form(persona)
+            _render_custom_analysis_form(persona, df, ind, cena, ano)
 
         _dialog()
         return
     with st.expander(t("custom.dialog"), expanded=True):
-        _render_custom_analysis_form(persona)
+        _render_custom_analysis_form(persona, df, ind, cena, ano)

@@ -12,7 +12,11 @@ from src.models.formatting import cena_rotulo
 from src.models.formatting.tables import render_table
 
 
-def render_custom_analysis(df: pd.DataFrame, analysis: dict[str, str], cena: str, ano_sel: str | int) -> None:
+def render_custom_analysis(df: pd.DataFrame, analysis: dict[str, str], cena: str, ano_sel: str | int, ind: pd.DataFrame | None = None) -> None:
+    if analysis.get("kind") == "formula":
+        from .formula_builder import render_formula_kpi
+        render_formula_kpi(df, ind, analysis, cena, ano_sel)
+        return
     metric_name = analysis["metric"]
     chart_type = analysis["chart_type"]
     metric = FINANCIAL_METRICS_DICT[metric_name]

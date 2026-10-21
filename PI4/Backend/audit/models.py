@@ -1,16 +1,23 @@
+# ele define os modelos internos da auditoria, que sao usados para acumular contadores e perfis de colunas em memoria
 """Modelos internos da auditoria."""
 
+# ele importa a anotacao de futuras funcionalidades do python
 from __future__ import annotations
 
+# ele importa o Counter e o defaultdict do modulo collections, que sao usados para contar elementos em iteraveis e criar dicionarios com valores padrao
 from collections import Counter, defaultdict
+# ele importa o dataclass e o field do modulo dataclasses, que sao usados para criar classes de dados com campos padrao
 from dataclasses import dataclass, field
+# essa biblioteca typing e usada para indicar que um valor pode ser de qualquer tipo
 from typing import Any
 
-
+# esse @ e para indicar que a classe ColumnProfile e uma classe de dados, que tem campos padrao e metodos gerados automaticamente
 @dataclass
+# essa classe representa o perfil acumulado de uma coluna auditada, que armazena contadores de valores nulos, strings vazias, tipos de dados, falhas de parse e valores minimos e maximos
 class ColumnProfile:
     """Perfil acumulado de uma coluna auditada."""
 
+    # ele define os campos da classe ColumnProfile, que sao inicializados com valores padrao
     nulls: int = 0
     empty_strings: int = 0
     dtype_samples: Counter[str] = field(default_factory=Counter)
@@ -18,11 +25,12 @@ class ColumnProfile:
     min_value: float | None = None
     max_value: float | None = None
 
-
+# agora ele define a classe AuditAccumulator, que representa o estado incremental da auditoria em chunks, e armazena contadores de linhas, colunas, memoria, perfis de colunas, contadores de duplicidade, contadores de contas, conjuntos de cenarios e anos vistos, e exemplos de erros
 @dataclass
+#essa classe representa o estado incremental da auditoria em chunks, e armazena contadores de linhas, colunas, memoria, perfis de colunas, contadores de duplicidade, contadores de contas, conjuntos de cenarios e anos vistos, e exemplos de erros
 class AuditAccumulator:
     """Estado incremental da auditoria em chunks."""
-
+    # ele define os campos da classe AuditAccumulator, que sao inicializados com valores padrao
     rows: int = 0
     columns: list[str] = field(default_factory=list)
     memory_bytes_estimate: int = 0

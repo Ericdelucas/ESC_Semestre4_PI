@@ -5,7 +5,7 @@ from __future__ import annotations
 import streamlit as st
 
 def configure_page() -> None:
-    st.set_page_config(layout="wide", page_title="ESC | Dashboard CTI", page_icon="🔵")
+    st.set_page_config(layout="wide", page_title="ESC | Dashboard CTI", page_icon="🔵", initial_sidebar_state="auto")
     st.markdown(
         """
     <style>
@@ -71,13 +71,11 @@ div[data-testid="stWidgetLabel"] label {
   line-height: 1.4 !important;
   text-overflow: clip !important;
 }
-section[data-testid="stSidebar"] {
-  min-width: min(23rem, 92vw) !important;
-}
+/* A largura minima da sidebar nao pode impedir o recolhimento nativo. */
 div[data-testid="stHorizontalBlock"] {
   gap: 0.75rem !important;
 }
-div[data-testid="column"] {
+:is(div[data-testid="column"], div[data-testid="stColumn"]) {
   min-width: 0 !important;
 }
 div[data-testid="stDataFrame"],
@@ -183,12 +181,12 @@ div[class*="st-key-cti_subnav_scroll"] div[data-testid="stHorizontalBlock"] {
   max-width: 100% !important;
   align-items: stretch !important;
 }
-div[class*="st-key-cti_subnav_scroll"] div[data-testid="column"]:first-child {
+div[class*="st-key-cti_subnav_scroll"] :is(div[data-testid="column"], div[data-testid="stColumn"]):first-child {
   flex: 1 1 auto !important;
   width: calc(100% - 3.5rem) !important;
   min-width: 0 !important;
 }
-div[class*="st-key-cti_subnav_scroll"] div[data-testid="column"]:last-child {
+div[class*="st-key-cti_subnav_scroll"] :is(div[data-testid="column"], div[data-testid="stColumn"]):last-child {
   flex: 0 0 3rem !important;
   width: 3rem !important;
   min-width: 3rem !important;
@@ -287,12 +285,12 @@ div[data-testid="stMetricValue"] {
     flex-wrap: nowrap !important;
     align-items: center !important;
   }
-  div[class*="st-key-cti_header_bar"] div[data-testid="column"] {
+  div[class*="st-key-cti_header_bar"] :is(div[data-testid="column"], div[data-testid="stColumn"]) {
     flex: 1 1 auto !important;
     width: auto !important;
     min-width: 0 !important;
   }
-  div[class*="st-key-cti_header_bar"] div[data-testid="column"]:last-child {
+  div[class*="st-key-cti_header_bar"] :is(div[data-testid="column"], div[data-testid="stColumn"]):last-child {
     flex: 0 0 3rem !important;
     width: 3rem !important;
     min-width: 3rem !important;
@@ -300,17 +298,17 @@ div[data-testid="stMetricValue"] {
   div[class*="st-key-cti_subnav_scroll"] div[data-testid="stHorizontalBlock"] {
     flex-wrap: nowrap !important;
   }
-  div[data-testid="column"] {
+  :is(div[data-testid="column"], div[data-testid="stColumn"]) {
     flex: 1 1 100% !important;
     width: 100% !important;
     min-width: 100% !important;
   }
-  div[class*="st-key-cti_subnav_scroll"] div[data-testid="column"]:first-child {
+  div[class*="st-key-cti_subnav_scroll"] :is(div[data-testid="column"], div[data-testid="stColumn"]):first-child {
     flex: 1 1 auto !important;
     width: calc(100% - 3.5rem) !important;
     min-width: 0 !important;
   }
-  div[class*="st-key-cti_subnav_scroll"] div[data-testid="column"]:last-child {
+  div[class*="st-key-cti_subnav_scroll"] :is(div[data-testid="column"], div[data-testid="stColumn"]):last-child {
     flex: 0 0 3rem !important;
     width: 3rem !important;
     min-width: 3rem !important;
@@ -352,6 +350,102 @@ div[data-testid="stMetricValue"] {
   div[data-testid="stDownloadButton"] button,
   div[data-testid="stFormSubmitButton"] button {
     width: 100% !important;
+  }
+}
+
+@media (min-width: 769px) {
+  section[data-testid="stSidebar"][aria-expanded="true"] {
+    min-width: 23rem !important;
+  }
+  [data-testid="stMain"] div[class*="st-key-cti_subnav_scroll"] :is([data-testid="column"], [data-testid="stColumn"]):first-child {
+    flex: 1 1 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+  }
+  [data-testid="stMain"] div[class*="st-key-cti_subnav_scroll"] :is([data-testid="column"], [data-testid="stColumn"]):last-child {
+    flex: 0 0 11rem !important;
+    width: 11rem !important;
+    min-width: 11rem !important;
+  }
+}
+/* Regras restritas ao celular; o layout amplo continua com suas proporcoes. */
+@media (max-width: 768px) {
+  [data-testid="stMain"] {
+    min-width: 0 !important;
+    margin-left: 0 !important;
+    transform: none !important;
+  }
+  div[data-testid="stAppViewContainer"] [data-testid="stMainBlockContainer"] {
+    box-sizing: border-box !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 3.75rem 0.85rem 5rem !important;
+    margin: 0 !important;
+  }
+  section[data-testid="stSidebar"] {
+    position: fixed !important;
+    min-width: 0 !important;
+    max-width: 85vw !important;
+  }
+  [data-testid="stSidebarContent"] {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  div[class*="st-key-cti_login_card"] {
+    box-sizing: border-box !important;
+    width: 100% !important;
+    max-width: 28rem !important;
+    margin: 1rem auto 0 !important;
+    padding: 1rem 0.8rem !important;
+  }
+  [data-testid="stMain"] [data-testid="stHorizontalBlock"] {
+    flex-wrap: wrap !important;
+    min-width: 0 !important;
+  }
+  [data-testid="stMain"] :is([data-testid="column"], [data-testid="stColumn"]) {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+  [data-testid="stMain"] div[class*="st-key-cti_header_bar"] [data-testid="stHorizontalBlock"] {
+    flex-wrap: nowrap !important;
+  }
+  [data-testid="stMain"] div[class*="st-key-cti_header_bar"] :is([data-testid="column"], [data-testid="stColumn"]) {
+    flex: 1 1 auto !important;
+    width: auto !important;
+  }
+  [data-testid="stMain"] div[class*="st-key-cti_header_bar"] :is([data-testid="column"], [data-testid="stColumn"]):last-child {
+    flex: 0 0 2.75rem !important;
+  }
+  [data-testid="stMain"] div[class*="st-key-cti_subnav_scroll"] [data-testid="stHorizontalBlock"] {
+    flex-wrap: wrap !important;
+  }
+  [data-testid="stMain"] div[class*="st-key-cti_subnav_scroll"] :is([data-testid="column"], [data-testid="stColumn"]):is(:first-child, :last-child) {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  [data-testid="stMain"] :is([data-testid="stButton"], [data-testid="stFormSubmitButton"], [data-testid="stSegmentedControl"]) button {
+    min-height: 44px !important;
+  }
+  [data-testid="stMain"] :is([data-testid="stVerticalBlock"], [data-testid="stElementContainer"]) {
+    min-width: 0;
+  }
+  [data-testid="stMain"] [data-testid="stSegmentedControl"] {
+    max-width: 100% !important;
+    overflow-x: auto !important;
+  }
+  [data-testid="stMain"] :is(input, textarea, select),
+  [data-testid="stDialog"] :is(input, textarea, select) {
+    font-size: 16px !important; /* evita zoom automatico do teclado no iOS */
+  }
+  [data-testid="stDialog"] [role="dialog"] {
+    box-sizing: border-box !important;
+    width: calc(100vw - 2rem) !important;
+    min-width: 0 !important;
+    max-width: calc(100vw - 2rem) !important;
+    max-height: calc(100dvh - 2rem) !important;
+    overflow-y: auto !important;
   }
 }
 </style>

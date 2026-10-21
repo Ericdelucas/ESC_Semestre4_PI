@@ -216,3 +216,66 @@ O `Backend/Procfile` e o `Backend/render.yaml` documentam essa alternativa.
 Verifique o Backend em `/api/v1/health` e o Frontend em `/_stcore/health`.
 O `start.sh` e o `Procfile` da raiz permanecem como alternativa legada de
 servico unificado; nao sao usados pelo novo blueprint.
+
+### KPIs por fórmula
+
+No painel, clique em **＋ Criar fórmula**. Digite uma expressão livre ou pesquise e selecione uma variável para inseri-la
+automaticamente no campo. Por exemplo:
+
+```text
+(EBITDA - Capex) / 2
+DRE - Ebit / DRE - Receita * 100
+```
+
+Pressione Enter, saia do campo ou clique em **Testar Fórmula** para ver o preview
+numérico antes de **Criar fórmula / Salvar KPI**. Escolha Número, Moeda ou Percentual e as
+casas decimais. Erros são exibidos no formulário e impedem salvar o KPI.
+
+Os nomes são descobertos a partir das contas e métricas carregadas. Maiúsculas,
+acentos, espaços e underscores são normalizados por uma regra geral. O catálogo
+também oferece nomes sem o prefixo contábil e sem a categoria da métrica.
+Não há uma lista de atalhos específicos por métrica.
+
+Quando um nome aparece em várias fontes, a prioridade geral é Financeiro,
+Indicador, CSV e Catálogo. A seção **Variáveis reconhecidas e fontes usadas**
+mostra a referência e o valor utilizados e permite trocar a fonte. A escolha
+fica salva com o KPI. Isso importa para métricas com escalas distintas, como
+ROIC financeiro (fração) e ROIC do catálogo (percentual).
+
+A inclusão pelo catálogo insere `[origem::nome]`, fixando a variável selecionada.
+Referências completas de fórmulas anteriores continuam funcionando. Nomes
+que não existem no catálogo geram erro; a ferramenta não inventa valores ou
+fórmulas para eles. Novas métricas podem ser expressas combinando as variáveis
+existentes no campo livre.
+
+As origens disponíveis são `CSV` (todas as contas do arquivo carregado),
+`Indicador` (colunas numéricas calculadas pelo pipeline), `Financeiro` (DRE,
+ROIC, EVA, dividendos, Capex e break-even) e `Catalogo` (métricas financeiras
+compartilhadas com as análises existentes). Os nomes preservam as contas originais.
+
+Os registros de uma conta são somados por ano/cenário. Com todos os cenários,
+a ferramenta calcula as derivadas em cada cenário e tira a média Monte Carlo
+por ano. Em seguida aplica a consolidação de anos escolhida (média, soma,
+mínimo ou máximo) a cada variável; só então calcula a expressão. Os filtros
+ativos são reaplicados ao abrir o KPI. ROIC financeiro usa fração; ROIC do
+catálogo usa pontos percentuais. O formato percentual só acrescenta `%`.
+
+O resultado é exclusivamente um `st.metric`, com casas decimais e formato
+numérico, monetário ou percentual. Fórmulas ficam na sessão atual, por persona.
+Não há execução de Python: o interpretador aceita apenas números, variáveis,
+parênteses e `+ - * / %`. Dados ausentes, resultados não finitos e divisão por
+zero geram uma mensagem de erro.
+
+Validação: `PYTHONPATH=PI4 python -m unittest discover -s PI4/Backend/tests -p 'test_formula*.py'`
+(executar da raiz, no ambiente virtual do projeto).
+
+
+### Uso no celular
+
+A barra lateral usa o recolhimento nativo do Streamlit e pode ser aberta pelo
+botão no canto superior esquerdo. Até 768 px, login e campos acompanham a largura
+da tela, os KPIs ficam empilhados e o botão de criar fórmula fica abaixo da
+navegação. Menus extensos e tabelas têm rolagem horizontal própria. As modais
+respeitam a largura e a altura disponíveis; campos usam fonte de 16 px para
+evitar zoom automático no iOS. No desktop, os KPIs mantêm suas colunas e a
+barra lateral aberta mantém a largura anterior.

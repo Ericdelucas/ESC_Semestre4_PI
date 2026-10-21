@@ -123,7 +123,7 @@ def render_analises(ctx: AppContext) -> None:
     if pending_nav_key in nav_keys:
         st.session_state[nav_widget_key] = default_label
     with st.container(key=f"cti_subnav_scroll_{ctx.persona}", border=False):
-        col_nav, col_add = st.columns([0.94, 0.06])
+        col_nav, col_add = st.columns([0.78, 0.22])
         with col_nav:
             secao_label = st.segmented_control(
                 "nav",
@@ -133,11 +133,12 @@ def render_analises(ctx: AppContext) -> None:
                 label_visibility="collapsed",
             )
         with col_add:
-            if st.button("+", help=t("nav.add_custom"), key=f"add_analysis_{ctx.persona}"):
+            if st.button("＋ Criar fórmula", help=t("nav.add_custom"), key=f"add_analysis_{ctx.persona}"):
+                st.session_state[f"custom_mode_{ctx.persona}"] = "Construtor de Fórmula"
                 close_chat()
                 close_relatorio()
                 st.session_state[f"show_custom_analysis_dialog_{ctx.persona}"] = True
-    render_custom_analysis_dialog(ctx.persona)
+    render_custom_analysis_dialog(ctx.persona, ctx.df, ctx.ind, ctx.cena_sel, ctx.ano_sel)
     nav_key = label_to_key.get(secao_label or default_label, nav_keys[0])
     st.session_state["nav_key"] = nav_key
     st.session_state["current_tab"] = nav_key
@@ -151,6 +152,7 @@ def render_analises(ctx: AppContext) -> None:
             custom_by_key[nav_key],
             ctx.cena_sel,
             ctx.ano_sel,
+            ctx.ind,
         )
     elif nav_key in renderers:
         safe_render(t(f"nav.{nav_key}") if nav_key in NAV_KEYS else nav_key, renderers[nav_key], ctx)
