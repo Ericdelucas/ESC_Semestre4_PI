@@ -140,7 +140,7 @@ Na prática, a ferramenta automatiza o cálculo de indicadores essenciais como D
 </p>
 <br>
 
-<h3> 📖 Tutorial de como acessar o dashboard</h3>
+## 📖 Tutorial de como acessar o dashboard
 
 <h3>1. Acesso ao repositório</h3>
 <li>Acesse o repositório no README do GitHub</li>
@@ -157,30 +157,109 @@ Na prática, a ferramenta automatiza o cálculo de indicadores essenciais como D
 <li>Clique em “Entrar”</li>
 <br>
 
+## 🎥Demonstração do Projeto
+<p>Assista ao vídeo abaixo para uma demonstração completa das funcionalidades do sistema, incluindo a criação de participantes, equipes e atividades.</p>
+
 ## 💻 Configuração para Desenvolvimento
 
-Descreva como instalar todas as dependências para desenvolvimento e como rodar um test-suite automatizado de algum tipo. Se necessário, faça isso para múltiplas plataformas.
+## Passo a passo para iniciar
 
-Para abrir este projeto você necessita das seguintes ferramentas:
+Abra dois terminais na raiz do repositório (`ESC_Semestre4_PI`) e entre na pasta `PI4` em cada um com `cd PI4`. Depois disso, execute os comandos abaixo dentro de `PI4`.
 
--<a href="https://godotengine.org/download">GODOT</a>
+### 1. Entrar na pasta do projeto
 
-```sh
-make install
-npm test
-Coloque código do prompt de comnando se for necessário
+```bash
+cd PI4
+```
+
+### 2. Instalar as dependências
+
+```bash
+py -m pip install -r Frontend/requirements_dashboard.txt
+py -m pip install -r Backend/requirements.txt
+```
+
+### 3. Configurar a chave da IA (opcional)
+
+Sem a chave o chat ainda responde com trechos dos documentos. Com a chave, o Gemini gera a resposta.
+
+```bash
+copy .env.example .env
+```
+
+Abra `PI4/.env` e preencha:
+
+```text
+GOOGLE_API_KEY=sua_chave_aqui
+```
+
+A chave sai do [Google AI Studio](https://aistudio.google.com/apikey).
+
+### 4. Ligar o backend — API FastAPI (terminal 1)
+
+```bash
+py -m uvicorn Backend.main:app --host 127.0.0.1 --port 8000
+```
+
+Confirme em [http://localhost:8000/](http://localhost:8000/) ou [http://localhost:8000/api/v1/health](http://localhost:8000/api/v1/health). A resposta esperada é `{"status":"online","message":"API CTI Backend Ativa"}`. Deixe esse terminal aberto.
+
+### 5. Ligar o frontend — dashboard Streamlit (terminal 2)
+
+```bash
+py -m streamlit run Frontend/app.py
+```
+
+Ou, de dentro de `Frontend`:
+
+```bash
+cd Frontend
+py -m streamlit run app.py
+```
+
+### 6. Abrir no navegador
+
+O Streamlit mostra o endereço, em geral [http://localhost:8501](http://localhost:8501).
+
+O chat é o botão do robô no canto inferior direito. Ele envia as perguntas para `http://localhost:8000/api/chat`. A primeira pergunta demora mais, porque o índice dos cenários é montado nesse momento.
+
+PDFs e Markdown extras para o assistente ficam em `Backend/documentos/` (incluindo subpastas). O índice RAG varre `**/*.md` e `**/*.pdf`.
+
+## Estrutura
+
+```
+PI4/
+  Backend/     # FastAPI, Cti.csv, documentos, cache
+  Frontend/    # Streamlit, src (config, controllers, models, views)
+```
+
+## Comandos rápidos para ligar o projeto
+
+Após instalar as dependências, abra dois terminais na raiz do repositório.
+
+**Terminal 1 — backend:**
+
+```powershell
+cd PI4
+py -m uvicorn Backend.main:app --host 127.0.0.1 --port 8000
+```
+
+**Terminal 2 — frontend:**
+
+```powershell
+cd PI4
+py -m streamlit run Frontend/app.py
 ```
 
 ## 📋 Licença/License
-Utilize o link <https://chooser-beta.creativecommons.org/> para fazer uma licença CC BY 4.0.
+<a href="https://github.com/2026-2-NCC4/Projeto8">ESC</a> © 2026 by <a href="https://www.linkedin.com/in/eric-de-lucas-silva/">Eric de Lucas Silva</a>,
+<a href ="https://www.linkedin.com/in/stephanie-macedo-da-silva/">Stephanie Macedo da Silva</a>, 
+<a href="https://www.linkedin.com/in/en-hsiang-chien-53b550381/">En Hsiang Chien</a> e
+<a href= "https://www.linkedin.com/school/fecap/posts/?feedView=all"> FECAP </a> is licensed under <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a><img src="https://mirrors.creativecommons.org/presskit/icons/cc.svg" alt="" style="max-width: 1em;max-height:1em;margin-left: .2em;"><img src="https://mirrors.creativecommons.org/presskit/icons/by.svg" alt="" style="max-width: 1em;max-height:1em;margin-left: .2em;">
 
 ## 🎓 Referências
 
 Aqui estão as referências usadas no projeto.
 
-1. <https://github.com/iuricode/readme-template>
-2. <https://github.com/gabrieldejesus/readme-model>
-3. <https://chooser-beta.creativecommons.org/>
-4. <https://freesound.org/>
-5. <https://www.toptal.com/developers/gitignore>
-6. Músicas por: <a href="https://freesound.org/people/DaveJf/sounds/616544/"> DaveJf </a> e <a href="https://freesound.org/people/DRFX/sounds/338986/"> DRFX </a> ambas com Licença CC 0.
+1. <https://ctiglobal.com/>
+2. <https://repositorio.ufersa.edu.br/bitstreams/6e642d4f-ce5d-4270-b88a-e4cf1caf7f6d/download>
+3. <https://repositorio.ufsc.br/bitstream/handle/123456789/274297/O%20Papel%20dos%20Dashboards%20no%20FP&A%20Estrat%C3%A9gico%20Evid%C3%AAncias%20de%20um%20Estudo%20de%20Casos%20M%C3%BAltiplos.pdf?sequence=1>
