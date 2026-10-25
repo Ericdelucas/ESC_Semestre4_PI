@@ -25,59 +25,137 @@ Na prática, a ferramenta automatiza o cálculo de indicadores essenciais como D
 
 ## 🛠 Estrutura de pastas
 
--Raiz<br>
-|<br>
-|-->documentos<br>
-  &emsp;|-->antigos<br>
-  &emsp;|Documentação.docx<br>
-|-->executáveis<br>
-  &emsp;|-->windows<br>
-  &emsp;|-->android<br>
-  &emsp;|-->HTML<br>
-|-->imagens<br>
-|-->src<br>
-  &emsp;|-->Backend<br>
-  &emsp;|-->Frontend<br>
-|readme.md<br>
+<h3>Frontend</h3>
+<details>
+<summary><strong>clique aqui para ver o Tree</strong></summary>
+<pre>
+├── Frontend
+│   ├── analise.ipynb
+│   ├── app.py
+│   ├── chat_component.py
+│   ├── chat_widget.html
+│   ├── organizando.ipynb
+│   ├── Procfile
+│   ├── __pycache__
+│   │   └── chat_component.cpython-314.pyc
+│   ├── requirements_dashboard.txt
+│   ├── requirements.txt
+│   └── src
+│       ├── components
+│       │   ├── header_component.py
+│       │   ├── __init__.py
+│       │   ├── kpi_cards_component.py
+│       │   └── sidebar_filters.py
+│       ├── config
+│       │   ├── glossary.py
+│       │   ├── i18n.py
+│       │   ├── __init__.py
+│       │   └── __pycache__
+│       ├── controllers
+│       │   ├── ai_sidebar_right.py
+│       │   ├── auth.py
+│       │   ├── bootstrap.py
+│       │   ├── charts
+│       │   ├── custom_analysis.py
+│       │   ├── data_input.py
+│       │   ├── headers.py
+│       │   ├── __init__.py
+│       │   ├── kpis
+│       │   ├── local_api.py
+│       │   ├── modals.py
+│       │   ├── navigation.py
+│       │   ├── ops_menu.py
+│       │   ├── page_setup.py
+│       │   ├── __pycache__
+│       │   ├── resilience.py
+│       │   ├── session_cookie.py
+│       │   ├── sidebar.py
+│       │   ├── stability.py
+│       │   └── test_sandbox.py
+│       ├── __init__.py
+│       ├── models
+│       │   ├── analytics
+│       │   ├── api_client.py
+│       │   ├── classifiers.py
+│       │   ├── financial_metrics
+│       │   ├── formatting
+│       │   ├── __init__.py
+│       │   ├── loaders.py
+│       │   ├── __pycache__
+│       │   └── rag_engine
+│       ├── __pycache__
+│       │   └── __init__.cpython-314.pyc
+│       └── views
+│           ├── ai_assistant
+│           ├── capital_giro.py
+│           ├── como_ler.py
+│           ├── comparar.py
+│           ├── distribuicao.py
+│           ├── faixa_risco.py
+│           ├── __init__.py
+│           ├── mapeamento_risco.py
+│           ├── persona_tabs
+│           ├── prazos_ciclo.py
+│           ├── __pycache__
+│           └── report.py
+</details>
+</pre>
 
-A pasta raiz contem dois arquivos que devem ser alterados:
-
-<b>README.MD</b>: Arquivo que serve como guia e explicação geral sobre seu projeto. O mesmo que você está lendo agora.
-
-Há também 4 pastas que seguem da seguinte forma:
-
-<b>documentos</b>: Toda a documentação estará nesta pasta.
-
-<b>executáveis</b>: Binários e executáveis do projeto devem estar nesta pasta.
-
-<b>imagens</b>: Imagens do sistema
-
-<b>src</b>: Pasta que contém o código fonte.
+<h3>Backend</h3>
+<details>
+<summary><strong>clique aqui para ver o Tree</strong></summary>
+<pre>
+│   ├── Backend
+│   │   ├── audit
+│   │   ├── cache
+│   │   ├── Cti.csv
+│   │   ├── data_audit.py
+│   │   ├── data_loader
+│   │   ├── db
+│   │   ├── diag.py
+│   │   ├── documentos
+│   │   ├── __init__.py
+│   │   ├── main.py
+│   │   ├── metrics
+│   │   ├── Procfile
+│   │   ├── __pycache__
+│   │   ├── rag_engine.py
+│   │   ├── README.md
+│   │   ├── relatorios
+│   │   ├── render.yaml
+│   │   ├── requirements.txt
+│   │   ├── routers
+│   │   ├── runtime.py
+│   │   ├── scripts
+│   │   ├── services
+│   │   └── tests
+</details>
+</pre>
+<br>
 
 ## 🛠 Instalação
 
-<b>Android:</b>
+<h2>Site:</h2>
+<p><a href= "https://esc-semestre4-pi.onrender.com/">Click aqui para ir no site</a>
+</p>
+<br>
 
-Faça o Download do JOGO.apk no seu celular.
-Execute o APK e siga as instruções de seu telefone.
+<h3> 📖 Tutorial de como acessar o dashboard</h3>
 
-```sh
-Coloque código do prompt de comnando se for necessário
-```
+<h3>1. Acesso ao repositório</h3>
+<li>Acesse o repositório no README do GitHub</li>
+<li>Navegue até a "🛠instalação" localize o link do site.</li>
 
-<b>Windows:</b>
+<h3>2. Criação de conta</h3>
+<li>Na tela inicial, selecione a opção “Cadastrar”</li>
+<li>Preencha os campos solicitados (ex: e-mail, senha...)</li>
+<li>Confirme o cadastro</li>
 
-Não há instalação! Apenas executável!
-Encontre o JOGO.exe na pasta executáveis e execute-o como qualquer outro programa.
-
-```sh
-Coloque código do prompt de comnando se for necessário
-```
-
-<b>HTML:</b>
-
-Não há instalação!
-Encontre o index.html na pasta executáveis e execute-o como uma página WEB (através de algum browser).
+<h3>3. Login no sistema</h3>
+<li>Retorne à tela de login</li>
+<li>Insira e-mail e senha cadastrados</li>
+<li>Clique em “Entrar”</li>
+<br>
 
 ## 💻 Configuração para Desenvolvimento
 
