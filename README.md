@@ -158,7 +158,63 @@ Na prática, a ferramenta automatiza o cálculo de indicadores essenciais como D
 <br>
 
 ## 🎥Demonstração do Projeto
-<p>Assista ao vídeo abaixo para uma demonstração completa das funcionalidades do sistema, incluindo a criação de participantes, equipes e atividades.</p>
+
+<p><a href= "https://drive.google.com/file/d/1Ujb5-lE7LsLN3bLuT_D8wTVIMSdrcVOs/view?usp=sharing">Click aqui para ver o vídeo</a>
+<p>Assista ao vídeo abaixo para uma demonstração do dashboard e todas as suas funcionalidades.</p>
+
+---
+
+## 🛠️ Como Rodar o Projeto
+
+### Prerequisitos e Ferramentas Necessárias
+
+Antes de começar, certifique-se de ter as seguintes ferramentas instaladas em seu ambiente:
+
+* [Visual Studio Code](https://code.visualstudio.com/) (Editor de código recomendado)
+* [Python 3.10+](https://www.python.org/) (Necessário para o motor FastAPI e Streamlit)
+* [Node.js](https://nodejs.org/) (Caso utilize dependências web auxiliares)
+* [Git](https://git-scm.com/) (Para controle de versão)
+
+---
+
+### Passo a Passo para Execução
+
+1. **Clonar e acessar o repositório:**
+   ```bash
+   git clone <https://github.com/Ericdelucas/ESC_Semestre4_PI.git>
+   cd PI4
+
+   Configurar o ambiente virtual Python:
+Bash
+
+python -m venv .venv
+
+# No Linux / macOS:
+source .venv/bin/activate
+
+# No Windows (PowerShell):
+.\.venv\Scripts\Activate.ps1
+
+Instalar as dependências:
+Bash
+
+pip install -r requirements.txt
+
+Configurar as variáveis de ambiente:
+Certifique-se de que o arquivo .env esteja configurado na raiz do projeto (utilize o .env.example como modelo de referência, se necessário).
+
+Executar a aplicação:
+
+    Execução automática via script:
+    Bash
+
+    bash start.sh
+
+    Ou execução manual dos serviços:
+
+        Backend (FastAPI): uvicorn Backend.main:app --reload
+
+        Frontend (Streamlit): streamlit run main.py
 
 ## 💻 Configuração para Desenvolvimento
 
@@ -166,7 +222,7 @@ Na prática, a ferramenta automatiza o cálculo de indicadores essenciais como D
 
 Abra dois terminais na raiz do repositório (`ESC_Semestre4_PI`) e entre na pasta `PI4` em cada um com `cd PI4`. Depois disso, execute os comandos abaixo dentro de `PI4`.
 
-### 1. Entrar na pasta do projeto
+### 1. Entrar na pasta do projeto( Só para)
 
 ```bash
 cd PI4
@@ -224,6 +280,8 @@ O chat é o botão do robô no canto inferior direito. Ele envia as perguntas pa
 
 PDFs e Markdown extras para o assistente ficam em `Backend/documentos/` (incluindo subpastas). O índice RAG varre `**/*.md` e `**/*.pdf`.
 
+<de>
+
 ## Estrutura
 
 ```
@@ -249,6 +307,42 @@ py -m uvicorn Backend.main:app --host 127.0.0.1 --port 8000
 cd PI4
 py -m streamlit run Frontend/app.py
 ```
+<details>
+<summary><strong>Windows/linux/macOS</strong></summary>
+<pre>
+Configurar o ambiente virtual Python:
+Bash
+
+python -m venv .venv
+
+# No Linux / macOS:
+source .venv/bin/activate
+
+# No Windows (PowerShell):
+.\.venv\Scripts\Activate.ps1
+
+Instalar as dependências:
+Bash
+
+pip install -r requirements.txt
+
+Configurar as variáveis de ambiente:
+Certifique-se de que o arquivo .env esteja configurado na raiz do projeto (utilize o .env.example como modelo de referência, se necessário).
+
+Executar a aplicação:
+
+    Execução automática via script:
+    Bash
+
+    bash start.sh
+
+    Ou execução manual dos serviços:
+
+        Backend (FastAPI): uvicorn Backend.main:app --reload
+
+        Frontend (Streamlit): streamlit run main.py
+</pre>
+</details>
 
 ## 📋 Licença/License
 <a href="https://github.com/2026-2-NCC4/Projeto8">ESC</a> © 2026 by <a href="https://www.linkedin.com/in/eric-de-lucas-silva/">Eric de Lucas Silva</a>,
