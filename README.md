@@ -136,7 +136,7 @@ Na prática, a ferramenta automatiza o cálculo de indicadores essenciais como D
 ## 🛠 Instalação
 
 <h2>Site:</h2>
-<p><a href= "https://esc-semestre4-pi.onrender.com/">Click aqui para ir no site</a>
+<p><a href= "https://esc-semestre4-pi.onrender.com/">Click aqui para ir no dashboard</a>
 </p>
 <br>
 
@@ -309,7 +309,7 @@ py -m streamlit run Frontend/app.py
 ```
 <details>
 <summary><strong>Windows/linux/macOS</strong></summary>
-<pre>
+
 Configurar o ambiente virtual Python:
 Bash
 
@@ -331,17 +331,17 @@ Certifique-se de que o arquivo .env esteja configurado na raiz do projeto (utili
 
 Executar a aplicação:
 
-    Execução automática via script:
-    Bash
+Execução automática via script:
+Bash
 
-    bash start.sh
+bash start.sh
 
-    Ou execução manual dos serviços:
+Ou execução manual dos serviços:
 
-        Backend (FastAPI): uvicorn Backend.main:app --reload
+Backend (FastAPI): uvicorn Backend.main:app --reload
 
-        Frontend (Streamlit): streamlit run main.py
-</pre>
+Frontend (Streamlit): <pre> streamlit run main.py </pre>
+
 </details>
 
 ## 📋 Licença/License
