@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Construtor visual de fórmula</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="editor">
+    <aside aria-label="Paleta de blocos">
+      <h2>Blocos disponíveis</h2>
+      <p>Arraste ou clique para adicionar.</p>
+      <h3>Operadores e grupos</h3>
+      <div id="operators" class="operators"></div>
+      <form id="number-form">
+        <label for="number">Constante numérica</label>
+        <div class="number-row">
+          <input id="number" type="text" inputmode="decimal" value="2" maxlength="64" autocomplete="off">
+          <button type="submit" aria-label="Adicionar número">+</button>
+        </div>
+      </form>
+      <h3>Métricas e contas</h3>
+      <label class="sr-only" for="search">Pesquisar métricas e contas</label>
+      <input id="search" type="search" placeholder="Buscar EBITDA, ROIC, DRE…">
+      <div id="metrics" class="metrics"></div>
+    </aside>
+    <main>
+      <div class="toolbar"><h2>Sua fórmula</h2><button id="clear" type="button">Limpar</button></div>
+      <p>Encaixe os blocos na ordem do cálculo. Use parênteses para agrupar.</p>
+      <div id="canvas" class="canvas" aria-label="Área de montagem da fórmula">
+        <div id="sequence" class="sequence"></div>
+      </div>
+      <p class="hint">Arraste para reordenar. Selecione um bloco para mover ou excluir.</p>
+      <div class="actions" aria-label="Ações do bloco selecionado">
+        <button id="left" type="button" disabled>← Mover</button>
+        <button id="right" type="button" disabled>Mover →</button>
+        <button id="remove" type="button" disabled>Excluir bloco</button>
+      </div>
+      <label for="expression">Expressão gerada automaticamente</label>
+      <pre id="expression" tabindex="0" aria-label="Expressão gerada automaticamente"></pre>
+      <p id="status" role="status" aria-live="polite"></p>
+    </main>
+  </div>
+  <script src="editor.js"></script>
+</body>
+</html>

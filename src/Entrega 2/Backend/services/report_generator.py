@@ -1,0 +1,823 @@
+"""Geracao de relatorio executivo em PDF (padrao C-Level)."""
+
+from __future__ import annotations
+
+from datetime import datetime
+from io import BytesIO
+from pathlib import Path
+import os
+import subprocess
+import sys
+import tempfile
+from typing import Any
+from xml.sax.saxutils import escape
+
+_SKIP_CHARTS = False
+
+import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT, TA_RIGHT
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import cm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen.canvas import Canvas
+from reportlab.platypus import (
+    Image,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
+
+from Backend.metrics import calculate_ltv_cac, summarize_ltv_cac
+from Backend.metrics.column_resolver import series_by_alias
+from Backend.metrics.financial_kpis import build_break_even, build_dre
+
+
+PAGE_WIDTH, PAGE_HEIGHT = A4
+NAVY = colors.HexColor("#0A192F")
+NAVY_MID = colors.HexColor("#1E3A8A")
+SLATE = colors.HexColor("#334155")
+GOLD = colors.HexColor("#D97706")
+ICE = colors.HexColor("#F8FAFC")
+ZEBRA = colors.HexColor("#F1F5F9")
+LINE = colors.HexColor("#CBD5E1")
+WHITE = colors.white
+GRAPHITE = SLATE
+ESC_BLUE = NAVY_MID
+LIGHT_GREY = ZEBRA
+CHART_NAVY = "#0A192F"
+CHART_GOLD = "#D97706"
+CHART_BLUE = "#93C5FD"
+CHART_ICE = "#F8FAFC"
+_KALEIDO_AVAILABLE: bool | None = None
+_FONTS_READY = False
+FONT_SANS = "Helvetica"
+FONT_SANS_BOLD = "Helvetica-Bold"
+FONT_SERIF = "Helvetica-Bold"
+
+
+def _register_fonts() -> None:
+    global _FONTS_READY, FONT_SANS, FONT_SANS_BOLD, FONT_SERIF
+    if _FONTS_READY:
+        return
+    windir = Path(os_fonts_dir())
+    mapping = (
+        ("ESCSans", FONT_SANS, ("calibri.ttf", "Calibri.ttf", "arial.ttf", "Arial.ttf")),
+        ("ESCSans-Bold", FONT_SANS_BOLD, ("calibrib.ttf", "Calibri-Bold.ttf", "arialbd.ttf", "Arialbd.ttf")),
+        ("ESCSerif", FONT_SERIF, ("georgia.ttf", "Georgia.ttf", "times.ttf", "timesbd.ttf")),
+    )
+    registered: dict[str, str] = {}
+    for name, fallback, files in mapping:
+        path = next((windir / file for file in files if (windir / file).is_file()), None)
+        if path is None:
+            registered[name] = fallback
+            continue
+        try:
+            pdfmetrics.registerFont(TTFont(name, str(path)))
+            registered[name] = name
+        except Exception:
+            registered[name] = fallback
+    FONT_SANS = registered["ESCSans"]
+    FONT_SANS_BOLD = registered["ESCSans-Bold"]
+    FONT_SERIF = registered["ESCSerif"]
+    _FONTS_READY = True
+
+
+def os_fonts_dir() -> str:
+    win = Path(r"C:\Windows\Fonts")
+    if win.is_dir():
+        return str(win)
+    return "/usr/share/fonts/truetype"
+
+
+def format_exec_money(value: float | int | None) -> str:
+    """Formata valores monetarios em mi/bi sem notacao cientifica."""
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return "—"
+    numero = float(value)
+    sinal = "-" if numero < 0 else ""
+    absoluto = abs(numero)
+    if absoluto >= 1_000_000_000:
+        corpo, sufixo = absoluto / 1_000_000_000, " bi"
+    elif absoluto >= 1_000_000:
+        corpo, sufixo = absoluto / 1_000_000, " mi"
+    else:
+        corpo, sufixo = absoluto, ""
+    casas = 2 if sufixo or absoluto < 1000 else 2
+    texto = f"{corpo:,.{casas}f}".replace(",", "_").replace(".", ",").replace("_", ".")
+    return f"{sinal}R$ {texto}{sufixo}"
+
+
+def format_exec_pct(value: float | int | None) -> str:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return "—"
+    return f"{float(value) * 100:.1f}%".replace(".", ",")
+
+
+def _money(value: float | int | None) -> str:
+    return format_exec_money(value)
+
+
+def _pct(value: float | int | None) -> str:
+    return format_exec_pct(value)
+
+
+def _clean_text(value: str) -> str:
+    return escape(str(value)).replace("\n", "<br/>")
+
+
+def _series(df: pd.DataFrame, *aliases: str) -> pd.Series:
+    return series_by_alias(df, aliases)
+
+
+def _scale_values(values: list[float] | pd.Series) -> tuple[list[float], str, str]:
+    serie = [float(v) for v in pd.to_numeric(pd.Series(values), errors="coerce").fillna(0).tolist()]
+    pico = max((abs(v) for v in serie), default=0.0)
+    if pico >= 1_000_000_000:
+        return [v / 1_000_000_000 for v in serie], "R$ Bilhões", "bi"
+    if pico >= 1_000_000:
+        return [v / 1_000_000 for v in serie], "R$ Milhões", "mi"
+    return serie, "R$", "rs"
+
+
+def _styles() -> dict[str, ParagraphStyle]:
+    _register_fonts()
+    base = getSampleStyleSheet()
+    return {
+        "title": ParagraphStyle(
+            "ESCReportTitle",
+            parent=base["Title"],
+            fontName=FONT_SERIF,
+            fontSize=16,
+            leading=19,
+            textColor=NAVY,
+            spaceAfter=4,
+            alignment=TA_LEFT,
+        ),
+        "h2": ParagraphStyle(
+            "ESCReportH2",
+            parent=base["Heading2"],
+            fontName=FONT_SANS_BOLD,
+            fontSize=11,
+            leading=13,
+            textColor=NAVY,
+            spaceBefore=4,
+            spaceAfter=2,
+            keepWithNext=0,
+        ),
+        "h3": ParagraphStyle(
+            "ESCReportH3",
+            parent=base["Heading3"],
+            fontName=FONT_SANS_BOLD,
+            fontSize=8,
+            leading=10,
+            textColor=GOLD,
+            spaceBefore=0,
+            spaceAfter=1,
+            keepWithNext=0,
+        ),
+        "body": ParagraphStyle(
+            "ESCReportBody",
+            parent=base["BodyText"],
+            fontName=FONT_SANS,
+            fontSize=8.5,
+            leading=11.5,
+            textColor=SLATE,
+            alignment=TA_JUSTIFY,
+            spaceAfter=3,
+        ),
+        "insight": ParagraphStyle(
+            "ESCReportInsight",
+            parent=base["BodyText"],
+            fontName=FONT_SANS,
+            fontSize=8,
+            leading=11,
+            textColor=SLATE,
+            alignment=TA_JUSTIFY,
+            spaceAfter=0,
+        ),
+        "muted": ParagraphStyle(
+            "ESCReportMuted",
+            parent=base["BodyText"],
+            fontName=FONT_SANS,
+            fontSize=7.5,
+            leading=10,
+            textColor=SLATE,
+            spaceAfter=2,
+        ),
+        "center": ParagraphStyle(
+            "ESCReportCenter",
+            parent=base["BodyText"],
+            alignment=TA_CENTER,
+            fontName=FONT_SANS_BOLD,
+            fontSize=9,
+            leading=11,
+            textColor=NAVY,
+        ),
+        "th": ParagraphStyle(
+            "ESCTh",
+            parent=base["BodyText"],
+            fontName=FONT_SANS_BOLD,
+            fontSize=8,
+            leading=10,
+            textColor=WHITE,
+        ),
+        "td_left": ParagraphStyle(
+            "ESCTdLeft",
+            parent=base["BodyText"],
+            fontName=FONT_SANS,
+            fontSize=8,
+            leading=10,
+            textColor=SLATE,
+            alignment=TA_LEFT,
+        ),
+        "td_right": ParagraphStyle(
+            "ESCTdRight",
+            parent=base["BodyText"],
+            fontName=FONT_SANS,
+            fontSize=8,
+            leading=10,
+            textColor=NAVY,
+            alignment=TA_RIGHT,
+        ),
+        "td_right_bold": ParagraphStyle(
+            "ESCTdRightBold",
+            parent=base["BodyText"],
+            fontName=FONT_SANS_BOLD,
+            fontSize=8,
+            leading=10,
+            textColor=NAVY,
+            alignment=TA_RIGHT,
+        ),
+    }
+
+
+class ExecutiveCanvas(Canvas):
+    """Cabecalho/rodape dinamicos com Pagina X de Y e selo de confidencialidade."""
+
+    report_meta: dict[str, str] = {}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._saved_page_states: list[dict[str, Any]] = []
+
+    def showPage(self) -> None:  # noqa: N802 - API ReportLab
+        self._saved_page_states.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self) -> None:
+        page_count = len(self._saved_page_states)
+        for state in self._saved_page_states:
+            self.__dict__.update(state)
+            self._draw_chrome(page_count)
+            super().showPage()
+        super().save()
+
+    def _draw_chrome(self, page_count: int) -> None:
+        _register_fonts()
+        meta = getattr(self, "report_meta", {}) or {}
+        scenario = str(meta.get("scenario") or "")
+        confidential = str(meta.get("confidential") or "Confidencial — Uso Interno")
+        self.saveState()
+        if self._pageNumber == 1:
+            self.setFillColor(NAVY)
+            self.rect(0, 0, 1.15 * cm, PAGE_HEIGHT, fill=1, stroke=0)
+            self.setFillColor(GOLD)
+            self.rect(1.15 * cm, 0, 0.09 * cm, PAGE_HEIGHT, fill=1, stroke=0)
+            self.setFillColor(NAVY)
+            self.rect(0, 0, PAGE_WIDTH, 1.15 * cm, fill=1, stroke=0)
+            self.setFillColor(GOLD)
+            self.rect(0, 1.15 * cm, PAGE_WIDTH, 0.06 * cm, fill=1, stroke=0)
+            self.setFillColor(WHITE)
+            self.setFont(FONT_SANS, 7.5)
+            self.drawString(1.6 * cm, 0.48 * cm, confidential.upper())
+            self.drawRightString(PAGE_WIDTH - 1.4 * cm, 0.48 * cm, f"Página {self._pageNumber} de {page_count}")
+            self.restoreState()
+            return
+        self.setFillColor(NAVY)
+        self.rect(0, PAGE_HEIGHT - 1.15 * cm, PAGE_WIDTH, 1.15 * cm, fill=1, stroke=0)
+        self.setFillColor(GOLD)
+        self.rect(0, PAGE_HEIGHT - 1.21 * cm, PAGE_WIDTH, 0.06 * cm, fill=1, stroke=0)
+        self.setFillColor(WHITE)
+        self.setFont(FONT_SANS_BOLD, 8)
+        self.drawString(1.6 * cm, PAGE_HEIGHT - 0.72 * cm, "Grupo ESC")
+        self.setFont(FONT_SANS, 8)
+        self.drawRightString(PAGE_WIDTH - 1.6 * cm, PAGE_HEIGHT - 0.72 * cm, scenario)
+        self.setStrokeColor(LINE)
+        self.setLineWidth(0.4)
+        self.line(1.6 * cm, 1.15 * cm, PAGE_WIDTH - 1.6 * cm, 1.15 * cm)
+        self.setFillColor(SLATE)
+        self.setFont(FONT_SANS, 7.5)
+        self.drawString(1.6 * cm, 0.72 * cm, confidential)
+        self.drawCentredString(PAGE_WIDTH / 2, 0.72 * cm, scenario)
+        self.drawRightString(PAGE_WIDTH - 1.6 * cm, 0.72 * cm, f"Página {self._pageNumber} de {page_count}")
+        self.restoreState()
+
+
+def executive_canvas_factory(meta: dict[str, str]):
+    class BoundCanvas(ExecutiveCanvas):
+        report_meta = dict(meta)
+
+    return BoundCanvas
+
+
+def clip_insight(text: str, limit: int = 280) -> str:
+    compacto = " ".join(str(text or "").split())
+    if len(compacto) <= limit:
+        return compacto
+    return compacto[:limit].rsplit(" ", 1)[0] + "…"
+
+
+def masthead(meta: dict[str, str]) -> Table:
+    """Cabecalho em tabela (altura real). Nao e Flowable de pagina inteira."""
+    styles = _styles()
+    company = meta.get("company_name") or "Grupo ESC"
+    issued = meta.get("issued_at") or datetime.now().strftime("%d/%m/%Y %H:%M")
+    marca = Table(
+        [[Paragraph("ESC", styles["center"])]],
+        colWidths=[1.15 * cm],
+        rowHeights=[1.05 * cm],
+    )
+    marca.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), NAVY),
+                ("TEXTCOLOR", (0, 0), (-1, -1), WHITE),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+    bloco_titulo = Table(
+        [
+            [Paragraph(_clean_text(company), styles["h3"])],
+            [Paragraph("Desempenho Financeiro e Leitura de Cenário", styles["title"])],
+            [Paragraph(_clean_text(str(meta.get("scenario") or "")), styles["h2"])],
+        ],
+        colWidths=[15.2 * cm],
+    )
+    bloco_titulo.setStyle(
+        TableStyle(
+            [
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    topo = Table([[marca, bloco_titulo]], colWidths=[1.25 * cm, 15.35 * cm])
+    topo.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+            ]
+        )
+    )
+    meta_row = Table(
+        [
+            [
+                Paragraph(_clean_text(f"Perfil {meta.get('profile') or '—'}  ·  {meta.get('author') or '—'}"), styles["muted"]),
+                Paragraph(_clean_text(f"{issued}  ·  {meta.get('confidential') or 'Confidencial'}"), styles["muted"]),
+            ]
+        ],
+        colWidths=[8.3 * cm, 8.3 * cm],
+    )
+    meta_row.setStyle(
+        TableStyle(
+            [
+                ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 1),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                ("LINEBELOW", (0, 0), (-1, -1), 1.1, GOLD),
+            ]
+        )
+    )
+    capa = Table([[topo], [meta_row]], colWidths=[16.6 * cm])
+    capa.setStyle(
+        TableStyle(
+            [
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+            ]
+        )
+    )
+    return capa
+
+
+CoverPage = masthead
+
+
+def _stack(items: list[Any], width: float) -> Table:
+    rows = [[item] for item in items if item is not None]
+    stacked = Table(rows, colWidths=[width])
+    stacked.setStyle(
+        TableStyle(
+            [
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    return stacked
+
+
+def side_by_side(left_items: list[Any], right_items: list[Any]) -> Table:
+    """Duas secoes na mesma linha — evita saltar de pagina entre elas."""
+    largura = 8.15 * cm
+    grid = Table([[_stack(left_items, largura), _stack(right_items, largura)]], colWidths=[8.3 * cm, 8.3 * cm])
+    grid.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 2),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ]
+        )
+    )
+    return grid
+
+
+def _header_footer(canvas, doc) -> None:
+    """Compatibilidade com o gerador legado; o canvas executivo assume o chrome."""
+    _ = canvas, doc
+
+
+def _esc_mark() -> Table:
+    mark = Table([["ESC"]], colWidths=[1.55 * cm], rowHeights=[1.55 * cm])
+    mark.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), NAVY),
+                ("TEXTCOLOR", (0, 0), (-1, -1), WHITE),
+                ("FONTNAME", (0, 0), (-1, -1), FONT_SANS_BOLD),
+                ("FONTSIZE", (0, 0), (-1, -1), 13),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ]
+        )
+    )
+    return mark
+
+
+def _looks_numeric(value: Any) -> bool:
+    texto = str(value)
+    return any(token in texto for token in ("R$", "%", "x", "bi", "mi")) or texto.replace(".", "").replace(",", "").replace("-", "").replace("—", "").isdigit()
+
+
+def _table(rows: list[list[Any]], widths: list[float] | None = None, *, highlight_labels: set[str] | None = None) -> Table:
+    styles = _styles()
+    highlight_labels = highlight_labels or set()
+    formatted: list[list[Any]] = []
+    for row_idx, row in enumerate(rows):
+        formatted_row = []
+        for col_idx, cell in enumerate(row):
+            if row_idx == 0:
+                formatted_row.append(Paragraph(_clean_text(cell), styles["th"]))
+                continue
+            numeric = col_idx > 0 or _looks_numeric(cell)
+            highlight = str(row[0]) in highlight_labels
+            style = styles["td_right_bold"] if numeric and highlight else styles["td_right"] if numeric else styles["td_left"]
+            formatted_row.append(Paragraph(_clean_text(cell), style))
+        formatted.append(formatted_row)
+    table = Table(formatted, colWidths=widths, hAlign="LEFT", repeatRows=1, splitByRow=1)
+    commands = [
+        ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+        ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
+        ("FONTNAME", (0, 0), (-1, 0), FONT_SANS_BOLD),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 3.5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3.5),
+        ("LINEBELOW", (0, 0), (-1, 0), 1.1, GOLD),
+        ("BOX", (0, 0), (-1, -1), 0.25, LINE),
+        ("ALIGN", (0, 0), (0, -1), "LEFT"),
+    ]
+    if formatted and len(formatted[0]) > 1:
+        commands.append(("ALIGN", (1, 0), (-1, -1), "RIGHT"))
+    for row_idx in range(1, len(formatted)):
+        bg = ICE if row_idx % 2 else ZEBRA
+        commands.append(("BACKGROUND", (0, row_idx), (-1, row_idx), bg))
+        if rows[row_idx] and str(rows[row_idx][0]) in highlight_labels:
+            commands.append(("BACKGROUND", (0, row_idx), (-1, row_idx), colors.HexColor("#E2E8F0")))
+    table.setStyle(TableStyle(commands))
+    return table
+
+
+def insight_card(title: str, text: str) -> Paragraph:
+    """Parecer em paragrafo (parte de linha). Nao usa Table unsplittable."""
+    _ = title
+    styles = _styles()
+    return Paragraph(_clean_text(text), styles["insight"])
+
+
+def section_block(title: str, insight: str, *flowables: Any) -> list[Any]:
+    """Fluxo continuo: sem PageBreak, sem KeepTogether, sem keepWithNext."""
+    styles = _styles()
+    pieces: list[Any] = [Paragraph(title, styles["h2"])]
+    if str(insight or "").strip():
+        pieces.append(insight_card("", insight))
+    for item in flowables:
+        if item is None:
+            continue
+        pieces.append(item)
+    pieces.append(Spacer(1, 0.06 * cm))
+    return pieces
+
+
+def _apply_chart_theme(fig: go.Figure, *, x_title: str, y_title: str, title: str) -> go.Figure:
+    fig.update_layout(
+        template="plotly_dark",
+        paper_bgcolor=CHART_NAVY,
+        plot_bgcolor="#102033",
+        font={"color": CHART_ICE, "family": "Calibri, Arial, sans-serif", "size": 12},
+        title={"text": title, "font": {"size": 15, "color": CHART_ICE}},
+        legend={"orientation": "h", "y": -0.18, "font": {"size": 11}},
+        margin={"l": 64, "r": 28, "t": 56, "b": 72},
+        xaxis_title=x_title,
+        yaxis_title=y_title,
+    )
+    fig.update_xaxes(
+        gridcolor="rgba(248,250,252,0.08)",
+        zeroline=False,
+        tickfont={"size": 11},
+        title_font={"size": 12},
+        separatethousands=True,
+        exponentformat="none",
+        showexponent="none",
+    )
+    fig.update_yaxes(
+        gridcolor="rgba(248,250,252,0.12)",
+        zeroline=False,
+        tickformat=".1f",
+        separatethousands=True,
+        exponentformat="none",
+        showexponent="none",
+        tickfont={"size": 11},
+        title_font={"size": 12},
+    )
+    return fig
+
+
+def _fig_to_image(fig: go.Figure, width: int = 980, height: int = 430):
+    """Renderiza Plotly em PNG de alta resolucao (scale=2 ~ 300 DPI em 16,5 cm)."""
+    global _KALEIDO_AVAILABLE
+    if _KALEIDO_AVAILABLE is False:
+        return _fig_to_matplotlib_image(fig)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        fig_path = Path(tmpdir) / "figure.json"
+        png_path = Path(tmpdir) / "figure.png"
+        fig_path.write_text(fig.to_json(), encoding="utf-8")
+        code = (
+            "from pathlib import Path; "
+            "import plotly.io as pio; "
+            "fig=pio.from_json(Path(r'%s').read_text(encoding='utf-8')); "
+            "fig.write_image(r'%s', format='png', width=%d, height=%d, scale=2)"
+            % (fig_path, png_path, width, height)
+        )
+        try:
+            subprocess.run(
+                [sys.executable, "-c", code],
+                check=True,
+                timeout=4,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception:
+            _KALEIDO_AVAILABLE = False
+            return _fig_to_matplotlib_image(fig)
+        if not png_path.exists():
+            _KALEIDO_AVAILABLE = False
+            return _fig_to_matplotlib_image(fig)
+        _KALEIDO_AVAILABLE = True
+        return Image(BytesIO(png_path.read_bytes()), width=16.2 * cm, height=3.6 * cm)
+
+
+def _fig_to_matplotlib_image(fig: go.Figure):
+    """Fallback local em 300 DPI quando Kaleido nao esta operacional."""
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        from matplotlib.ticker import FuncFormatter
+    except Exception:
+        return None
+
+    data = fig.to_dict().get("data", [])
+    if not data:
+        return None
+    layout = fig.to_dict().get("layout", {})
+    title = layout.get("title", {}).get("text", "") if isinstance(layout.get("title"), dict) else layout.get("title", "")
+    x_title = layout.get("xaxis", {}).get("title", {}).get("text", "") if isinstance(layout.get("xaxis", {}).get("title"), dict) else ""
+    y_title = layout.get("yaxis", {}).get("title", {}).get("text", "") if isinstance(layout.get("yaxis", {}).get("title"), dict) else ""
+
+    fig_mpl, ax = plt.subplots(figsize=(8.6, 3.7), dpi=300)
+    fig_mpl.patch.set_facecolor(CHART_NAVY)
+    ax.set_facecolor("#102033")
+    plotted = False
+    palette = [CHART_ICE, CHART_GOLD, CHART_BLUE, "#FBBF24"]
+    for idx, trace in enumerate(data):
+        x = trace.get("x", [])
+        y = trace.get("y", [])
+        name = trace.get("name") or ""
+        if len(x) == 0 or len(y) == 0:
+            continue
+        color = palette[idx % len(palette)]
+        if trace.get("type") == "bar":
+            ax.bar(x, y, label=name, color=color, alpha=0.88)
+        else:
+            ax.plot(x, y, marker="o", linewidth=2.1, markersize=4, label=name, color=color)
+        plotted = True
+    if not plotted:
+        plt.close(fig_mpl)
+        return None
+    ax.set_title(title or "Gráfico", fontsize=11, fontweight="bold", color=CHART_ICE, loc="left")
+    ax.set_xlabel(x_title or "", color=CHART_ICE)
+    ax.set_ylabel(y_title or "", color=CHART_ICE)
+    ax.tick_params(colors=CHART_ICE, labelsize=8)
+    ax.grid(True, axis="y", alpha=0.18, color=CHART_ICE)
+    for spine in ax.spines.values():
+        spine.set_color("#1E3A8A")
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda val, _pos: f"{val:,.1f}".replace(",", "X").replace(".", ",").replace("X", ".")))
+    try:
+        ax.ticklabel_format(style="plain", axis="x", useOffset=False)
+    except Exception:
+        pass
+    if len(data) > 1:
+        legend = ax.legend(loc="upper left", fontsize=7, frameon=False)
+        for text in legend.get_texts():
+            text.set_color(CHART_ICE)
+    fig_mpl.tight_layout()
+    buffer = BytesIO()
+    fig_mpl.savefig(buffer, format="png", dpi=300, facecolor=fig_mpl.get_facecolor())
+    plt.close(fig_mpl)
+    buffer.seek(0)
+    return Image(buffer, width=16.2 * cm, height=3.6 * cm)
+
+
+def _dre_figure(dre: pd.DataFrame) -> go.Figure:
+    years = pd.to_numeric(dre["ano_num"], errors="coerce").astype(int)
+    receita = _series(dre, "Receita Líquida", "Receita Liquida")
+    ebitda = _series(dre, "EBITDA")
+    pico = max(abs(float(receita.max() or 0)), abs(float(ebitda.max() or 0)))
+    divisor = 1_000_000_000 if pico >= 1_000_000_000 else 1_000_000 if pico >= 1_000_000 else 1
+    unidade = "Receita e EBITDA em R$ Bilhões" if divisor == 1_000_000_000 else "Receita e EBITDA em R$ Milhões" if divisor == 1_000_000 else "Receita e EBITDA em R$"
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=years, y=receita / divisor, mode="lines+markers", name="Receita Líquida", line={"color": CHART_ICE, "width": 3}))
+    fig.add_trace(go.Scatter(x=years, y=ebitda / divisor, mode="lines+markers", name="EBITDA", line={"color": CHART_GOLD, "width": 3}))
+    fig.update_xaxes(tickmode="linear", tick0=1, dtick=1)
+    return _apply_chart_theme(fig, x_title="Ano do horizonte", y_title=unidade, title="Receita Líquida vs EBITDA")
+
+
+def _break_even_figure(be_df: pd.DataFrame) -> go.Figure:
+    be = float(_series(be_df, "Break-Even").mean())
+    margem = float(_series(be_df, "Margem de Contribuição (%)", "Margem de Contribuicao (%)").mean())
+    receita = float(_series(be_df, "Receita Líquida", "Receita Liquida").mean())
+    margem = 0.0 if pd.isna(margem) else margem
+    be = 0.0 if pd.isna(be) else be
+    receita = 0.0 if pd.isna(receita) else receita
+    custo_fixo = be * margem
+    eixo = pd.Series([0.0, be, max(receita, be * 1.15)]).drop_duplicates().sort_values()
+    chart = pd.DataFrame({"Receita": eixo})
+    chart["Receita Total"] = chart["Receita"]
+    chart["Custos Totais"] = custo_fixo + chart["Receita"] * (1 - margem)
+    pico = max(abs(float(chart["Receita Total"].max())), abs(float(chart["Custos Totais"].max())), abs(be))
+    divisor = 1_000_000_000 if pico >= 1_000_000_000 else 1_000_000 if pico >= 1_000_000 else 1
+    unidade = "R$ Bilhões" if divisor == 1_000_000_000 else "R$ Milhões" if divisor == 1_000_000 else "R$"
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=chart["Receita"] / divisor, y=chart["Receita Total"] / divisor, mode="lines+markers", name="Receita Total", line={"color": CHART_ICE, "width": 3}))
+    fig.add_trace(go.Scatter(x=chart["Receita"] / divisor, y=chart["Custos Totais"] / divisor, mode="lines+markers", name="Custos Totais", line={"color": CHART_GOLD, "width": 3}))
+    fig.add_vline(x=be / divisor, line_dash="dash", line_color=CHART_BLUE, annotation_text=f"Break-even {_money(be)}", annotation_font_color=CHART_ICE)
+    return _apply_chart_theme(fig, x_title=f"Receita em {unidade}", y_title=f"Resultado em {unidade}", title="Ponto de Equilíbrio")
+
+
+def _ltv_cac_figure(ltv: pd.DataFrame) -> go.Figure:
+    years = pd.to_numeric(ltv["ano_num"], errors="coerce").astype(int)
+    ltv_s, unidade, _ = _scale_values(ltv["LTV"])
+    cac_s, unidade_cac, _ = _scale_values(ltv["CAC"])
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+    fig.add_bar(x=years, y=ltv_s, name="LTV", marker_color="#1E3A8A")
+    fig.add_scatter(x=years, y=cac_s, name="CAC", mode="lines+markers", line={"color": CHART_GOLD, "width": 3}, secondary_y=True)
+    fig.update_xaxes(tickmode="linear", tick0=1, dtick=1)
+    fig = _apply_chart_theme(fig, x_title="Ano do horizonte", y_title=f"LTV em {unidade}", title="LTV vs CAC por Ano")
+    fig.update_yaxes(title_text=f"LTV em {unidade}", tickformat=".1f", exponentformat="none", showexponent="none", secondary_y=False)
+    fig.update_yaxes(title_text=f"CAC em {unidade_cac}", tickformat=".1f", exponentformat="none", showexponent="none", secondary_y=True)
+    return fig
+
+
+def _add_chart(story: list[Any], fig: go.Figure, styles: dict[str, ParagraphStyle], fallback: str) -> None:
+    """Graficos omitidos de proposito: uma imagem de 7 cm forca uma pagina quase vazia."""
+    _ = story, fig, styles, fallback
+    return
+
+
+def generate_executive_pdf(
+    df: pd.DataFrame,
+    *,
+    scenario: str,
+    year_filter: str | int = "Todos",
+    company_name: str = "Grupo ESC",
+    notes: dict[str, str] | None = None,
+) -> bytes:
+    """Gera um relatorio executivo A4 em PDF."""
+    from Backend.services.report_insights import build_block_insights, merge_notes_with_insights
+
+    notes = merge_notes_with_insights(notes, build_block_insights(df, scenario))
+    dre = build_dre(df, scenario)
+    be_df = build_break_even(df, scenario)
+    ltv = calculate_ltv_cac(df, scenario)
+    ltv_summary = summarize_ltv_cac(df, scenario, year_filter)
+    receita = float(_series(dre, "Receita Líquida", "Receita Liquida").mean()) if not dre.empty else 0.0
+    ebitda = float(_series(dre, "EBITDA").mean()) if not dre.empty else 0.0
+    margem_ebitda = ebitda / receita if receita else 0.0
+    break_even = float(_series(be_df, "Break-Even").mean()) if not be_df.empty else 0.0
+
+    buffer = BytesIO()
+    meta = {
+        "company_name": company_name,
+        "profile": "CEO",
+        "scenario": str(scenario),
+        "author": "Assistente CTI",
+        "issued_at": datetime.now().strftime("%d/%m/%Y %H:%M"),
+        "confidential": "Confidencial — Uso Interno",
+        "title": f"Recorte: {year_filter}",
+    }
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=1.5 * cm,
+        rightMargin=1.5 * cm,
+        topMargin=1.45 * cm,
+        bottomMargin=1.35 * cm,
+        title="Relatório Executivo ESC",
+        allowSplitting=1,
+    )
+    doc.pageBreakQuick = 0
+    story: list[Any] = [masthead(meta)]
+    kpis = _table(
+        [
+            ["Indicador", "Valor"],
+            ["Receita Líquida Média", _money(receita)],
+            ["EBITDA Médio", _money(ebitda)],
+            ["Margem EBITDA", _pct(margem_ebitda)],
+            ["Break-Even Médio", _money(break_even)],
+            ["LTV/CAC Médio", f"{ltv_summary['ratio']:.1f}x"],
+        ],
+        [8.2 * cm, 8.2 * cm],
+        highlight_labels={"EBITDA Médio", "Margem EBITDA"},
+    )
+    story.extend(section_block("Resumo Executivo", notes.get("cover", ""), kpis))
+    dre_rows = [
+        ["Métrica", "Média"],
+        ["Receita Líquida", _money(receita)],
+        ["EBITDA", _money(ebitda)],
+        ["Margem EBITDA", _pct(margem_ebitda)],
+    ]
+    be_rows = [
+        ["Indicador", "Média"],
+        ["Break-Even", _money(break_even)],
+        ["LTV/CAC", f"{ltv_summary['ratio']:.1f}x"],
+    ]
+    dre_tbl = _table(dre_rows, [4.0 * cm, 4.0 * cm], highlight_labels={"EBITDA"})
+    be_tbl = _table(be_rows, [4.0 * cm, 4.0 * cm], highlight_labels={"Break-Even"})
+    story.append(
+        side_by_side(
+            section_block("Análise de EBITDA & DRE", notes.get("financial_dre") or notes.get("dre_analysis", ""), dre_tbl)[:-1],
+            section_block("Ponto de Equilíbrio & Risco", notes.get("break_even", ""), be_tbl)[:-1],
+        )
+    )
+    ltv_bits: list[Any] = []
+    if not ltv.empty:
+        rows = [["Ano", "LTV", "CAC", "LTV/CAC"]]
+        for _, row in ltv.head(6).iterrows():
+            rows.append([int(row["ano_num"]), _money(row["LTV"]), _money(row["CAC"]), f"{float(row['LTV/CAC']):.1f}x"])
+        ltv_bits.append(_table(rows, [2.4 * cm, 4.6 * cm, 4.6 * cm, 4.8 * cm]))
+    story.extend(section_block("Eficiência Comercial", notes.get("commercial") or notes.get("ltv_cac", ""), *ltv_bits))
+    doc.build(story, canvasmaker=executive_canvas_factory(meta))
+    return buffer.getvalue()

@@ -1,0 +1,21 @@
+# Blueprint apenas da API. Para os dois servicos, use render.yaml na raiz.
+services:
+  - type: web
+    name: cti-api
+    runtime: python
+    plan: free
+    rootDir: PI4/Backend
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: RENDER
+        value: "true"
+      - key: CORS_ORIGIN_REGEX
+        value: "https://.*\\.onrender\\.com"
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false

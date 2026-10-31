@@ -1,0 +1,12 @@
+[browser]
+gatherUsageStats = false
+
+[server]
+headless = true
+address = "0.0.0.0"
+enableCORS = false
+enableXsrfProtection = false
+fileWatcherType = "none"
+runOnSave = false
+enableWebsocketCompression = false
+maxMessageSize = 50

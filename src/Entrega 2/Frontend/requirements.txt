@@ -1,0 +1,2 @@
+# O dashboard importa servicos e modelos do Backend para calculos locais.
+-r ../Backend/requirements.txt
