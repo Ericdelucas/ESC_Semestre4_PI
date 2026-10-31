@@ -4,10 +4,14 @@ Painel financeiro CTI. O dashboard fica em `Frontend` e a API do chat em `Backen
 
 A [documentação técnica da Entrega 2](DOCUMENTATION.md) apresenta arquitetura, pipeline de dados, fórmulas dos indicadores e limitações da infraestrutura.
 
+<<<<<<< HEAD
 ## Passo a passo para iniciar no Linux
 
 Use `python3` para criar o ambiente e o Python desse ambiente para instalar e executar.
 No Linux, `py` pode ser outro programa e não aceitar `-m`.
+=======
+Abra dois terminais na raiz do repositório (`ESC_Semestre4_PI`) e entre na pasta `PI4` em cada um com `cd PI4`. Depois disso, execute os comandos abaixo dentro de `PI4`.
+>>>>>>> af6c47b (feat: integrando alteracoes na main)
 
 ### 1. Entrar na pasta do projeto
 
@@ -113,9 +117,13 @@ GOOGLE_API_KEY=sua_chave_aqui
 
 A chave sai do [Google AI Studio](https://aistudio.google.com/apikey).
 
+<<<<<<< HEAD
 ## Diagnóstico rápido
 
 Execute dentro de `PI4`:
+=======
+### 4. Ligar o backend — API FastAPI (terminal 1)
+>>>>>>> af6c47b (feat: integrando alteracoes na main)
 
 ```bash
 .venv/bin/python --version
@@ -130,7 +138,11 @@ Execute dentro de `PI4`:
 - Erro de instalação de uma dependência: guarde a primeira mensagem de erro do
   `pip`; trocar apenas o comando de inicialização não resolve uma instalação incompleta.
 
+<<<<<<< HEAD
 ## Memorial técnico dinâmico no dashboard
+=======
+### 5. Ligar o frontend — dashboard Streamlit (terminal 2)
+>>>>>>> af6c47b (feat: integrando alteracoes na main)
 
 Com a API e o Streamlit ativos, selecione cenário e ano no dashboard e abra
 **Criar Relatório → Memorial técnico CTI → Gerar Memorial CTI (PDF)**.
@@ -180,6 +192,31 @@ PI4/
   Frontend/    # Streamlit, src (config, controllers, models, views)
 ```
 
+<<<<<<< HEAD
+=======
+## Comandos rápidos para ligar o projeto
+
+Após instalar as dependências, abra dois terminais na raiz do repositório.
+
+**Terminal 1 — backend:**
+
+```powershell
+cd PI4
+py -m uvicorn Backend.main:app --host 127.0.0.1 --port 8000
+```
+
+**Terminal 2 — frontend:**
+
+```powershell
+cd PI4
+py -m streamlit run Frontend/app.py
+```
+
+Se o terminal já estiver na pasta `PI4`, pule o comando `cd PI4`.
+
+Acesse o frontend em [http://localhost:8501](http://localhost:8501) e o backend em [http://localhost:8000](http://localhost:8000). Mantenha os dois terminais abertos; para encerrar cada serviço, pressione `Ctrl+C` no respectivo terminal.
+
+>>>>>>> af6c47b (feat: integrando alteracoes na main)
 ## Deploy na Render
 
 O `render.yaml` na raiz define dois Web Services independentes, ambos com
