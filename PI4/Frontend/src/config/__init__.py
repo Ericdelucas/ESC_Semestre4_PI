@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from urllib.parse import urlparse, urlunparse
 
 _FRONTEND = Path(__file__).resolve().parents[2]
+LOGO_PATH = _FRONTEND / "assets" / "logo.png"
 load_dotenv(_FRONTEND / ".env")
 load_dotenv(_FRONTEND.parent / ".env")
 

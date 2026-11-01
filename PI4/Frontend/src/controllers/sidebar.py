@@ -7,7 +7,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from src.config import CSV_PATH, PERSONAS
+from src.config import CSV_PATH, LOGO_PATH, PERSONAS
 from src.config.glossary import help_text
 from src.config.i18n import LANG_OPTIONS, get_lang, set_lang, t, translate_dataset_name
 from src.controllers.auth import allowed_personas, can_access_persona
@@ -23,15 +23,7 @@ def render_language_selector() -> str:
     idx = codes.index(atual) if atual in codes else 0
 
     with st.sidebar:
-        st.markdown(
-            """
-<div style="display:flex;align-items:center;gap:0.65rem;margin:0.15rem 0 0.9rem 0;">
-  <div style="width:2.25rem;height:2.25rem;border-radius:999px;background:var(--primary-color);color:var(--background-color);display:flex;align-items:center;justify-content:center;font-weight:800;letter-spacing:0.02em;">ESC</div>
-  <div style="font-weight:750;line-height:1.1;">Grupo ESC<br><span style="font-size:0.8rem;font-weight:500;opacity:0.75;">Dashboard CTI</span></div>
-</div>
-""",
-            unsafe_allow_html=True,
-        )
+        st.image(str(LOGO_PATH), use_container_width=True)
         escolha = st.selectbox(
             t("lang.label"),
             options=labels,

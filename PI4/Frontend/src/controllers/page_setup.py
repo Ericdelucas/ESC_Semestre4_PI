@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import streamlit as st
 
+from src.config import LOGO_PATH
+
 def configure_page() -> None:
-    st.set_page_config(layout="wide", page_title="ESC | Dashboard CTI", page_icon="🔵", initial_sidebar_state="auto")
+    st.set_page_config(layout="wide", page_title="ESC | Dashboard CTI", page_icon=str(LOGO_PATH), initial_sidebar_state="auto")
     st.markdown(
         """
     <style>

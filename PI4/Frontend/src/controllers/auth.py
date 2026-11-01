@@ -21,7 +21,7 @@ def _login_emit(message: str) -> None:
     print(f"[login-ui] {message}", flush=True)
     _log_auth.info(message)
 
-from src.config import resolve_api_base_url
+from src.config import LOGO_PATH, resolve_api_base_url
 from src.config.i18n import get_lang, t
 from src.controllers.session_cookie import (
     COOKIE_NAME,
@@ -274,6 +274,7 @@ def render_login() -> None:
     ensure_auth_state()
     st.markdown(_LOGIN_CSS, unsafe_allow_html=True)
     with st.container(key="cti_login_card"):
+        st.image(str(LOGO_PATH), use_container_width=True)
         st.title(t("login.title"))
         st.caption(t("login.subtitle"))
         with st.form("cti_login_form", clear_on_submit=False):
