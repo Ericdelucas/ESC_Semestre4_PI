@@ -23,6 +23,7 @@ from Backend.routers.health_router import router as health_router
 from Backend.routers.auth_router import router as auth_router
 from Backend.routers.chat_router import router as chat_router
 from Backend.routers.report_router import router as report_router
+from Backend.routers.formula_router import router as formula_router
 
 app = FastAPI(title="CTI Assistente", lifespan=lifespan)
 app.include_router(users_router)
@@ -31,4 +32,5 @@ app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(chat_router)
 app.include_router(report_router)
+app.include_router(formula_router)
 configure_application(app)  # CORS: FRONTEND_URL, CORS_ORIGINS e dominios *.onrender.com.

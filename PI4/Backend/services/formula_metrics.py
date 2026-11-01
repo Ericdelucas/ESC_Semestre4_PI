@@ -119,14 +119,14 @@ def variable_reference(key: str, variables: dict[str, float]) -> str:
     return f'[{key}]'
 
 
-def evaluate_formula(expression: str, variables: dict[str, float], *,
-                     choices: dict[str, str] | None = None,
-                     resolved: dict[str, str] | None = None) -> float:
-    """Interpreta nomes livres ou entre colchetes e aritmetica via AST restrita."""
+def bind_variables(expression: str, variables: dict[str, float], *,
+                   choices: dict[str, str] | None = None,
+                   resolved: dict[str, str] | None = None) -> tuple[str, list[str]]:
+    """Troca cada nome reconhecido por __metric_N; devolve o texto e as chaves por N."""
     if not expression.strip() or len(expression) > 4000:
         raise FormulaError('Informe uma formula com ate 4000 caracteres.')
     aliases = variable_aliases(variables)
-    bindings = {}
+    keys: list[str] = []
     choices = choices or {}
     # Faz o matching dos nomes completos antes dos nomes curtos.
     patterns = [re.escape(_plain(key)) for key in variables]
@@ -149,13 +149,20 @@ def evaluate_formula(expression: str, variables: dict[str, float], *,
             raise FormulaError(f'Fonte invalida para {name}.')
         if resolved is not None:
             resolved[name] = key
-        alias = f'__metric_{len(bindings)}'
-        bindings[alias] = variables[key]
-        return alias
+        keys.append(key)
+        return f'__metric_{len(keys) - 1}'
 
     if '__metric_' in expression:
         raise FormulaError('Nome de variavel reservado.')
-    source = re.sub(pattern, substitute, _plain(expression)).strip()
+    return re.sub(pattern, substitute, _plain(expression)).strip(), keys
+
+
+def evaluate_formula(expression: str, variables: dict[str, float], *,
+                     choices: dict[str, str] | None = None,
+                     resolved: dict[str, str] | None = None) -> float:
+    """Interpreta nomes livres ou entre colchetes e aritmetica via AST restrita."""
+    source, keys = bind_variables(expression, variables, choices=choices, resolved=resolved)
+    bindings = {f'__metric_{index}': variables[key] for index, key in enumerate(keys)}
     try:
         tree = ast.parse(source, mode='eval')
         if sum(1 for _ in ast.walk(tree)) > 256:

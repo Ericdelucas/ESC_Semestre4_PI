@@ -3,7 +3,9 @@ from uuid import uuid4
 
 import streamlit as st
 
+from Backend.services.formula_blocks import block_palette, expression_to_blocks
 from Backend.services.formula_metrics import FormulaError, evaluate_formula, formula_variables, format_formula_value, variable_reference, variable_aliases, _name
+from src.components.formula_blocks_component import edited_formula, formula_blocks_editor
 
 
 # Compartilha o catalogo entre o dialogo e os KPIs durante a sessao.
@@ -15,8 +17,17 @@ def render_formula_builder(persona, df, ind, cena, ano):
         return
     expression_key = f'formula_expression_{persona}'
     selection_key = f'formula_var_{persona}'
+    blocks_key = f'formula_blocks_{persona}'
     name = st.text_input('Nome da nova fórmula', value='Minha fórmula', key=f'formula_name_{persona}')
-    expression = st.text_input('Escreva sua fórmula aqui', key=expression_key,
+    # Preenchido no fim, com o resultado; o callback corre antes do text_input existir.
+    blocks_slot = st.container()
+
+    def apply_blocks():
+        edited = edited_formula(blocks_key)
+        if edited is not None:
+            st.session_state[expression_key] = edited['expression']
+
+    expression = st.text_input('Ou escreva a fórmula em texto (sincronizada com os blocos)', key=expression_key,
                                placeholder='Ex.: (EBITDA - Capex) / 2',
                                help='Use +, -, *, /, parênteses e nomes de métricas. Exemplo de teste: 10 + 20 / 2.')
     test = st.button('Testar Fórmula', key=f'formula_test_{persona}', type='primary')
@@ -54,6 +65,7 @@ def render_formula_builder(persona, df, ind, cena, ano):
     if load_error:
         st.warning(load_error + ' Você ainda pode testar expressões com números.')
     result = None
+    error = None
     choices = {}
     if expression.strip():
         try:
@@ -75,11 +87,24 @@ def render_formula_builder(persona, df, ind, cena, ano):
             result = evaluate_formula(expression, variables, choices=choices)
             preview.metric('Resultado do teste', format_formula_value(result, style, decimals))
         except FormulaError as exc:
-            preview.error(str(exc))
+            error = str(exc)
+            preview.error(error)
     elif test:
         preview.info('Digite uma fórmula para testar. Exemplo: 10 + 20 / 2.')
     else:
         preview.caption('Digite a expressão e clique em Testar Fórmula para conferir o número antes de criar.')
+    blocks, sync_error = [], None
+    if expression.strip():
+        try:
+            blocks = expression_to_blocks(expression, variables, choices=choices)
+        except FormulaError as exc:
+            blocks, sync_error = None, str(exc)
+    status = ({'ok': True, 'text': '= ' + format_formula_value(result, style, decimals)} if result is not None
+              else {'ok': False, 'text': error} if error else None)
+    with blocks_slot:
+        formula_blocks_editor(key=blocks_key, palette=block_palette(variables), blocks=blocks,
+                              expression=expression, status=status, sync_error=sync_error,
+                              on_change=apply_blocks)
     if st.button('Criar fórmula / Salvar KPI', disabled=result is None or not name.strip(), key=f'formula_save_{persona}'):
         from src.controllers.custom_analysis import custom_analyses, custom_key
         analysis = dict(id=uuid4().hex, kind='formula', label=name.strip(), expression=expression,
@@ -98,3 +123,5 @@ def render_formula_kpi(df, ind, analysis, cena, ano):
         st.error(str(exc))
         return
     st.metric(analysis['label'], format_formula_value(result, analysis['style'], analysis['decimals']))
+    # Code span: * e _ da expressao nao viram Markdown; formulas salvas nunca contem crases.
+    st.caption(f"Fórmula: `{analysis['expression']}`")
