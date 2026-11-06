@@ -6,9 +6,40 @@
 
 # ESC
 
----
+## Integrantes 
 
-## Integrantes: <a href="https://www.linkedin.com/in/eric-de-lucas-silva/">Eric De Lucas Silva</a>, <a href="https://www.linkedin.com/in/stephanie-macedo-da-silva/">Stephanie Macedo da Silva</a> e <a href="https://www.linkedin.com/in/en-hsiang-chien-53b550381/">En Hsiang Chien</a>.
+<p align="center">
+  <img src="imagens/integrantes/logo.png" width="400" alt="Logo ESC Dashboard CTI">
+</p>
+
+
+
+
+<center>
+<table width="600">
+  <tr>
+    <td align="center" valign="top" width="200">
+      <a href="https://www.linkedin.com/in/eric-de-lucas-silva/">
+        <img src="imagens/integrantes/eric.svg.png" width="150" height="150" alt="Imagem provisória de Eric De Lucas Silva"><br>
+        <strong>Eric De Lucas Silva</strong>
+      </a>
+    </td>
+    <td align="center" valign="top" width="200">
+      <a href="https://www.linkedin.com/in/stephanie-macedo-da-silva/">
+        <img src="imagens/integrantes/Stepha.jpeg" width="150" height="150" alt="Imagem provisória de Stephanie Macedo da Silva"><br>
+        <strong>Stephanie Macedo da Silva</strong>
+      </a>
+    </td>
+    <td align="center" valign="top" width="200">
+      <a href="https://www.linkedin.com/in/en-hsiang-chien-53b550381/">
+        <img src="imagens/integrantes/chien.jpeg" width="150" height="150" alt="Imagem provisória de En Hsiang Chien"><br>
+        <strong>En Hsiang Chien</strong>
+      </a>
+    </td>
+  </tr>
+</table>
+
+</center>
 
 ## Professores Orientadores: <a href="https://www.linkedin.com/in/eduardo-savino/">Eduardo Savino Gomes</a>, <a href="https://www.linkedin.com/in/luisspires/">Luis Fernando dos Santos Pires</a>, <a href="https://www.linkedin.com/in/professorrodnil/">Rodnil da Silva Moreira Lisboa</a> e Mauricio Lopes Da Cunha.
 
@@ -32,92 +63,42 @@ Na prática, a ferramenta automatiza o cálculo de indicadores essenciais como D
 
 ## 🛠 Estrutura de Pastas
 <pre>
-C:.
-├───documentos
-│   ├───Entrega 1
-│   │   ├───Análise Inferencial de Dados
-│   │   ├───Contabilidade e Finanças
-│   │   ├───Engenharia de Software e Arquitetura de Sistemas
-│   │   │   └───ES e ML
-│   │   └───Projeto Interdisciplinar Ciência de Dados
-│   └───Entrega 2
-│       ├───Análise Inferencial de Dados
-│       ├───Contabilidade e Finanças
-│       ├───Engenharia de Software e Arquitetura de Sistemas
-│       └───Projeto Interdisciplinar Ciência de Dados
-├───imagens
-└───src
-    ├───Entrega 1
-    │   ├───Backend
-    │   │   ├───cache
-    │   │   └───documentos
-    │   └───Frontend
-    │       ├───.streamlit
-    │       └───src
-    │           ├───config
-    │           ├───controllers
-    │           ├───models
-    │           └───views
-    └───Entrega 2
-        ├───Backend
-        │   ├───audit
-        │   ├───cache
-        │   ├───data_loader
-        │   │   └───__pycache__
-        │   ├───db
-        │   │   └───__pycache__
-        │   ├───documentos
-        │   │   ├───balanco
-        │   │   ├───cenarios
-        │   │   ├───dre
-        │   │   ├───fluxo_caixa
-        │   │   ├───graficos
-        │   │   ├───ia
-        │   │   ├───indicadores
-        │   │   └───visao_geral
-        │   ├───metrics
-        │   │   └───__pycache__
-        │   ├───relatorios
-        │   ├───routers
-        │   │   └───__pycache__
-        │   ├───scripts
-        │   ├───services
-        │   │   └───__pycache__
-        │   ├───tests
-        │   │   └───__pycache__
-        │   └───__pycache__
-        └───Frontend
-            ├───.streamlit
-            ├───src
-            │   ├───components
-            │   │   ├───formula_blocks
-            │   │   └───__pycache__
-            │   ├───config
-            │   │   └───__pycache__
-            │   ├───controllers
-            │   │   ├───charts
-            │   │   │   └───__pycache__
-            │   │   ├───kpis
-            │   │   │   └───__pycache__
-            │   │   └───__pycache__
-            │   ├───models
-            │   │   ├───analytics
-            │   │   │   └───__pycache__
-            │   │   ├───financial_metrics
-            │   │   │   └───__pycache__
-            │   │   ├───formatting
-            │   │   │   └───__pycache__
-            │   │   ├───rag_engine
-            │   │   │   └───__pycache__
-            │   │   └───__pycache__
-            │   ├───views
-            │   │   ├───ai_assistant
-            │   │   │   └───__pycache__
-            │   │   ├───persona_tabs
-            │   │   │   └───__pycache__
-            │   │   └───__pycache__
-            │   └───__pycache__
-            └───__pycache__
+.
+├── documentos
+│   ├── Banner_FECAP_CCOMP4_ESC.pptx
+│   ├── Documento - Projeto de Extensão - COM Empresa - 2026_2.docx
+│   ├── Entrega 1
+│   │   ├── Análise Inferencial de Dados
+│   │   ├── Contabilidade e Finanças
+│   │   ├── Engenharia de Software e Arquitetura de Sistemas
+│   │   └── Projeto Interdisciplinar Ciência de Dados
+│   ├── Entrega 2
+│   │   ├── Análise Inferencial de Dados
+│   │   ├── Contabilidade e Finanças
+│   │   ├── Engenharia de Software e Arquitetura de Sistemas
+│   │   └── Projeto Interdisciplinar Ciência de Dados
+│   ├── README.md
+│   └── Venha para a FECAP!.txt
+├── imagens
+│   ├── Captura de tela 2026-10-31 114755.png
+│   ├── Captura de tela 2026-10-31 114829.png
+│   ├── Captura de tela 2026-10-31 114905.png
+│   ├── Captura de tela 2026-10-31 114923.png
+│   ├── Captura de tela 2026-10-31 115013.png
+│   ├── Captura de tela 2026-10-31 115034.png
+│   ├── Captura de tela 2026-10-31 115052.png
+│   └── Captura de tela 2026-10-31 115115.png
+├── README copy.md
+├── README.md
+└── src
+    ├── Entrega 1
+    │   ├── Backend
+    │   ├── Frontend
+    │   └── Venha para a FECAP!.txt
+    └── Entrega 2
+        ├── Backend
+        ├── Frontend
+        └── Venha para a FECAP!.txt
 </pre>
 
 
