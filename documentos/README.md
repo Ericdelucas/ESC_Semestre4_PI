@@ -48,7 +48,7 @@
 
 ### Análise Inferencial de Dados
 
-| **Aluno(s) Responsável(veis)**       | Stephanie Macedo da Silva                                                                       |
+| **Aluno(s) Responsável(veis)**       |  En Hsiang Chien                                                                      |
 | :------------------------------------------ | :---------------------------------------------------------------------------------------------- |
 | **Ferramenta utilizada**              | Gemini                                                                                          |
 | **Versão/modelo**                    | Gemini 3(auto)                                                                                        |
@@ -61,37 +61,51 @@
 ## Entrega 2
 
 
-### Disciplina 1
+### Projeto Interdisciplinar: Ciência de Dados
 
 | **Aluno(s) Responsável(veis)**       | Eric De Lucas Silva                                                |
 | :------------------------------------------ | :----------------------------------------------------------------- |
 | **Ferramenta utilizada**              | Gemini                                                             |
 | **Versão/modelo**                    | Gemini 3                                                           |
 | **Disciplina / Trabalho**             | Projeto Interdisciplinar: Ciência de Dados                        |
-| **Finalidade de uso**                 | Ajuda para a entrega de ciências de dados.                        |
-| ***Prompts* principais utilizados** | Me auxilia este trabalho com base do que você sabe do projeto.    |
-| **Trechos ou entregas afetadas**      | Conseguiu formatar para deixar com bom visual em algumas escritas. |
+| **Finalidade de uso**                 | Ajuste de formatação e entendimento de como deve ser a explicação                         |
+| ***Prompts* principais utilizados** | Vamos lá agora saindo do projeto em si vamos na documentação dessa maldiçao , vamos ter que fazer um documento para o meu professor sobre esses requisitos: Formato de entrega: script em Python e dashboard publicado na nuvem Objetivo: disponibilizar um painel de indicadores capaz de apoiar decisões estratégicas e operacionais. Entrega 2:● Dashboard funcional e publicado.● No mínimo cinco indicadores.● Filtros, comparações e visualizações adequadas ao problema.● Integração com os dados preparados na Entrega 1. ● Documentação de execução, fontes, fórmulas e limitações. Quero que voce me fale o passo a passo de como eu devo construir esse documento word e principalmente suas etapas seguindo a estrutura do que ele pede e para a entrega ficar perfeita quero que na hora de avaliar o que eu vou escrever aqui voce assuma um papel de professor rigido implacavel de nivel senior com muitos anos de esperiencia. |
+| **Trechos ou entregas afetadas**      |Foi feito a perte escrita com auxilio da IA e construção de de suas formulas (tem foto de formulas pq o word online nao permite colocar algumas) estruturação de como deveria ser o documento e por fim sua revisão. |
+
+### Contabilidade e Finanças
 
 | **Aluno(s) Responsável(veis)**       | Stephanie Macedo da Silva                                                                       |
 | :------------------------------------------ | :---------------------------------------------------------------------------------------------- |
 | **Ferramenta utilizada**              | Gemini                                                                                          |
 | **Versão/modelo**                    | Gemini 3                                                                                        |
 | **Disciplina / Trabalho**             | Contabilidade e Finanças                                                                       |
-| **Finalidade de uso**                 | Ajuda para a entrega de contabilidade.                                                          |
-| ***Prompts* principais utilizados** | Me ajuda a fazer esta planilha do excel com todas as coisas que  falei.                         |
-| **Trechos ou entregas afetadas**      | Conseguiu ajudar em elaboração de contas, criação de graficos e comparações de cenários. |
+| **Finalidade de uso**                 | Usado para fazer os graficos e suas formulas e organização                                                        |
+| ***Prompts* principais utilizados** | E o seguinte temos mais uma entrega de contabilidade e temos que fazer mais graficos já estou com a tabela de excel aqui aberta para voce me horientar de como deve ser a entrega: Entrega 02 – Painel financeiro operacional Implementar no dashboard uma visão financeira com margem, ticket, evolução, metas e demais indicadores definidos. Realizar análises de sensibilidade simples, como o impacto de desconto ou cupom na margem, ou de outra variável pertinente ao conjunto de dados. Os resultados devem ser consistentes com o dicionário e com a planilha de validação. quero que me fale devagar um passo a passo de como fazer esse coiso mulhe                        |
+| **Trechos ou entregas afetadas**      | Tudo que foi de grafico e a explicações dos dados e construçoes de formulas. |
 
-### Disciplina 3
+### Engenharia de Software e Arquitetura de Sistemas 
 
 | **Aluno(s) Responsável(veis)**       | En Hsiang Chien                                                  |
 | :------------------------------------------ | :--------------------------------------------------------------- |
 | **Ferramenta utilizada**              | Gemini                                                           |
 | **Versão/modelo**                    | Gemini 3                                                         |
 | **Disciplina / Trabalho**             | Engenharia de Software e Arquitetura de Sistemas                 |
-| **Finalidade de uso**                 | Ajuda para a entrega de engenharia de software.                  |
-| ***Prompts* principais utilizados** | Me ajuda a fazer este relatório com todas as coisas que  falei. |
-| **Trechos ou entregas afetadas**      | Conseguiu ajudar na criação de relatórios.                    |
+| **Finalidade de uso**                 |Ajudar a escrever tudo que a de explicaçoes de diagramas e suas a formatação deles .                  |
+| ***Prompts* principais utilizados** | Cara agora temos outro desafio agora temos que fazer uma entrega de relatorio gigante o erick ate me falou para começarmos antes pq e real gigante e ela tem que ter esses requisitos : Aplicação de design de software e diagramas UML no PI Entregar um documento PDF com o nome do projeto, o professor orientador e os nomes dos integrantes do grupo. O documento deve apresentar o design de software e pelo menos dois diagramas UML, os resultados aplicados ao projeto — determinando entradas, processamento e saídas — e observações reflexivas do grupo. O PDF deve ficar em uma pasta denominada “ES e ML” no GitHub do projeto. Objetivo: aplicar design de software e UML em projeto real, analisando divergências, mudanças e melhorias necessárias para a entrega do PI.. e isso tudo na porra do word ou seja quero que me ajude na estrutura e explicaçoes desses diagramas que me mandaram do nosso projetp |
+| **Trechos ou entregas afetadas**      | Explicaçoes de diagramas e sua dinamica de projeto para suas funcionalidades e descriçoes detalhadas.                    |
 
 ***Declaro que o uso acima descrito está em conformidade com o GUIA PARA O USO RESPONSÁVEL DE
 INTELIGÊNCIA ARTIFICIAL NA FECAP e que o conteúdo final é de minha plena responsabilidade
 autoral.***
+
+
+### Análise Inferencial de Dados
+
+| **Aluno(s) Responsável(veis)**       | En Hsiang Chien                                                                         |
+| :------------------------------------------ | :---------------------------------------------------------------------------------------------- |
+| **Ferramenta utilizada**              | Gemini                                                                                          |
+| **Versão/modelo**                    | Gemini 3(auto)                                                                                        |
+| **Disciplina / Trabalho**             | Análise Inferencial de Dados                                                                       |
+| **Finalidade de uso**                 | ENtendimento de daods e suas ajuda na contrução de seus graficos e explicações                                                          |
+| ***Prompts* principais utilizados** | E o seguinte temos mais uma entrega daquele cara de estatistica e agora temos que fazer outra entrega e mais uma vez no documento word: Entrega 02 – Análise de Regressão dos Dados Após a análise descritiva, os alunos devem conduzir uma análise de regressão, ajustando um modelo de regressão linear ou outro modelo compatível com a natureza dos dados para explorar relações entre variáveis. Devem interpretar os coeficientes, avaliar a qualidade do ajuste, apresentar métricas e diagnósticos adequados e registrar as limitações da análise. Formato sugerido: notebook/Colab e relatório técnico com resultados. .                         |
+| **Trechos ou entregas afetadas**      | Tudo teve relação a construçoes de graficos e suas explicaçoes de seus dados.  |
