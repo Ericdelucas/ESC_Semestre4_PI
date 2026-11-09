@@ -68,6 +68,7 @@
 | **Trechos ou entregas afetadas** | Conseguimos fazer mais metricas e ainda fazer uma boa divisão de entre os cargos no qual faz sentido cada um deles ser monstrado cada metrica para que nao tenha informações de cargos diferentes ou tipos de confusao de dados e um construtor de formulas caso o usuario nao sinta-se satisfeito com a quantidade de formulas que colocamos entao criamos um modelo de contrução de formula no modo drag-and-drop. |
 
 ### Disciplina 2
+### Implantação de ferramentas de ambientes corporativos 
 
 | **Aluno(s) Responsável(veis)** | Eric De Lucas Silva |
 | :--- | :--- |
